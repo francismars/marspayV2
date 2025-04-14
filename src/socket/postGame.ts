@@ -11,7 +11,6 @@ import {
 } from '../manager/lnurlManager';
 import { PlayerRole } from '../types/game';
 import { createLNURLW } from '../lnurlw/calls';
-import { LNURLW } from '../types/lnurlw';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
 
 export function postGameInfo(socket: Socket) {
@@ -20,7 +19,6 @@ export function postGameInfo(socket: Socket) {
     `${dateNow()} [${sessionID}] Requested P2P postGame information.`
   );
   const gameInfos = getGameInfoFromID(sessionID);
-  console.log(getGameInfoFromID(sessionID));
   if (gameInfos && gameInfos.winners) {
     console.log(`${dateNow()} [${sessionID}] Sending P2P postGame info.`);
     const response = serializeGameInfoFromID(sessionID);
@@ -63,10 +61,7 @@ export async function createWithdrawalPostGame(socket: Socket) {
       console.log(
         `${dateNow()} [${sessionID}] Creating LNRURLw with ${amount} sats and ${maxWithdrawals} uses.`
       );
-      const lnurlw = (await createLNURLW(
-        Math.floor(amount),
-        maxWithdrawals
-      )) as LNURLW;
+      const lnurlw = await createLNURLW(Math.floor(amount), maxWithdrawals);
       if (lnurlw) {
         console.log(`${dateNow()} [${sessionID}] Created LNURLw ${lnurlw.id}.`);
         setIDToLNURLW(sessionID, lnurlw.lnurl);
