@@ -2,7 +2,8 @@ import { Server, Socket } from 'socket.io';
 import middleware from './middleware';
 import { dateNow } from '../utils/time';
 import { getP2PMenuInfos } from './P2PMenu';
-import { gameFinished, gameInfos, postGame } from './game';
+import { gameFinished, gameInfos } from './game';
+import { createWithdrawalPostGame, postGameInfo } from './postGame';
 
 export default function registerSocketHandlers(io: Server) {
   io.on('connection', (socket: Socket) => {
@@ -18,6 +19,7 @@ export default function registerSocketHandlers(io: Server) {
       getP2PMenuInfos(socket);
     });
 
+    // TODO: Change to getGameInfos
     socket.on('getDuelInfos', () => {
       gameInfos(socket);
     });
@@ -27,7 +29,11 @@ export default function registerSocketHandlers(io: Server) {
     });
 
     socket.on('postGameInfoRequest', () => {
-      postGame(socket);
+      postGameInfo(socket);
+    });
+
+    socket.on('createWithdrawalPostGame', async () => {
+      createWithdrawalPostGame(socket);
     });
 
     socket.on('disconnect', () => {

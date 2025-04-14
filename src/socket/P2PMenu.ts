@@ -5,7 +5,7 @@ import {
   getGameInfoFromID,
   serializeGameInfoFromID,
 } from '../manager/gameManager';
-import { newLNURLPsP2P } from '../lnurl';
+import { newLNURLPsP2P } from '../lnurlp';
 
 export async function getP2PMenuInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -27,57 +27,6 @@ export async function getP2PMenuInfos(socket: Socket) {
       );
       await newLNURLPsP2P(sessionID);
     } else if (LNURLPs) {
-      /*
-      const lnurlpCount = LNURLPs.length;
-      if (LNURLPs.length === 2) {
-        const gameInfo = getGameInfoFromID(sessionID);
-        if (gameInfo) {
-          console.log(
-            dateNow() +
-              " [" +
-              sessionID +
-              "] Previous deposits found. Sending existing information."
-          );
-          socket.emit("updatePayments", gameInfo);
-
-          if (gameInfo.winners) {
-            console.log(
-              dateNow() +
-                " [" +
-                sessionID +
-                "] Winners from previous games found."
-            );
-            let winnerList = gameInfo.winners;
-            previousWinner = winnerList.slice(-1);
-            winnersListLength = winnerList.length;
-          }
-          if (
-            !previousWinner ||
-            (previousWinner && lnurlpCount > winnersListLength * 2)
-          ) {
-            console.log(
-              dateNow() +
-                " [" +
-                sessionID +
-                "] LNRURLPs found. Sending existing ones."
-            );
-          } else if (previousWinner && lnurlpCount <= winnersListLength * 2) {
-            console.log(
-              dateNow() +
-                " [" +
-                sessionID +
-                "] Found " +
-                lnurlpCount +
-                " LNRURLPs but requires more than " +
-                winnersListLength * 2 +
-                ". Creating new ones."
-            );
-            await newLNURLPsP2P(sessionID, previousWinner);
-          }
-        }
-        
-      }
-    */
       console.log(`${dateNow()} [${sessionID}] Found existing LNRURLPs.`);
     }
     console.log(`${dateNow()} [${sessionID}] Sending LNRURLPs to client.`);

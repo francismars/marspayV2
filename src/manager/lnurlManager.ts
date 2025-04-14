@@ -1,6 +1,7 @@
 import { LNURLP, Payment } from '../types/lnurlp';
 
 const IDToLNURLW = new Map<string, string>();
+const LNURLWToID = new Map<string, string>();
 const IDToLNURLPs = new Map<string, Array<LNURLP>>();
 const LNURLPToID = new Map<string, string>();
 
@@ -10,6 +11,14 @@ export function setIDToLNURLW(sessionId: string, lnurlw: string) {
 
 export function getLNURLWFromID(sessionId: string) {
   return IDToLNURLW.get(sessionId);
+}
+
+export function setLNURLWToID(lnurlw: string, sessionId: string) {
+  LNURLWToID.set(lnurlw, sessionId);
+}
+
+export function getIDFromLNURLW(lnurlw: string) {
+  return LNURLWToID.get(lnurlw);
 }
 
 export function appendLNURLPToID(sessionId: string, lnurlp: LNURLP) {
@@ -45,7 +54,8 @@ export function appendPaymentToLNURLPFromId(
       console.error('LNURLP not found');
       return;
     }
-    if (!lnurlp.payments) lnurlp.payments = [payment];
-    else lnurlp.payments.push(payment);
+    lnurlp.payments
+      ? lnurlp.payments.push(payment)
+      : (lnurlp.payments = [payment]);
   }
 }
