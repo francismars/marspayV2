@@ -1,12 +1,12 @@
-import { Server, Socket } from "socket.io";
-import { getSocketFromID, setIDToSocket } from "./sessionManager";
-import { ALLOWEDEMOJIS } from "../consts/emojis";
-import { v4 as uuidv4 } from "uuid";
-import { dateNow } from "../utils/time";
+import { Server, Socket } from 'socket.io';
+import { getSocketFromID, setIDToSocket } from '../manager/sessionManager';
+import { ALLOWEDEMOJIS } from '../consts/emojis';
+import { v4 as uuidv4 } from 'uuid';
+import { dateNow } from '../utils/time';
 
 export default function middleware(io: Server) {
   io.use((socket: Socket, next) => {
-    console.log("🔌 Middleware ran for socket:", socket.id);
+    console.log('🔌 Middleware ran for socket:', socket.id);
     const sessionID = socket.handshake.auth.sessionID;
     if (sessionID) {
       const socketID = getSocketFromID(sessionID);
@@ -28,7 +28,7 @@ export default function middleware(io: Server) {
         socket.data.sessionID
       }] Created new sessionID for client.`
     );
-    socket.emit("session", {
+    socket.emit('session', {
       sessionID: socket.data.sessionID,
     });
     return next();

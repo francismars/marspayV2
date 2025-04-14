@@ -4,7 +4,7 @@ import {
   getGameInfoFromID,
   serializeGameInfoFromID,
   setValueToGameInfoFromID,
-} from './sessionManager';
+} from '../manager/gameManager';
 import { dateNow } from '../utils/time';
 import { PlayerRole } from '../types/game';
 
