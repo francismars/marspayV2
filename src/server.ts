@@ -8,6 +8,7 @@ import paidLNURL from "./routes/paidLNURL";
 const app = express();
 const port = 3000;
 
+app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 app.use("/api/paidLNURL", paidLNURL);
 const httpServer = http.createServer(app);
