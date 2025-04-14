@@ -1,10 +1,11 @@
-import { Server, Socket } from "socket.io";
-import middleware from "./middleware";
-import { dateNow } from "../utils/time";
-import { getP2PMenuInfos } from "./P2PMenu";
+import { Server, Socket } from 'socket.io';
+import middleware from './middleware';
+import { dateNow } from '../utils/time';
+import { getP2PMenuInfos } from './P2PMenu';
+import { getGameInfoFromID, serializeGameInfoFromID } from './sessionManager';
 
 export default function registerSocketHandlers(io: Server) {
-  io.on("connection", (socket: Socket) => {
+  io.on('connection', (socket: Socket) => {
     middleware(io);
 
     const realIP = socket.handshake.address; // change when NGINX is set up
@@ -13,11 +14,27 @@ export default function registerSocketHandlers(io: Server) {
     );
 
     // TODO: Change to getP2PMenuInfos
-    socket.on("getGameMenuInfos", async () => {
+    socket.on('getGameMenuInfos', async () => {
       getP2PMenuInfos(socket);
     });
 
-    socket.on("disconnect", () => {
+    socket.on('getDuelInfos', () => {
+      const gameInfo = getGameInfoFromID(socket.data.sessionID);
+      if (gameInfo) {
+        console.log(
+          `dateNow() [${socket.data.sessionID}] Requested P2P information for game.`
+        );
+        console.log(
+          `dateNow() [${socket.data.sessionID}] Sending game P2P information.`
+        );
+        socket.emit(
+          'resGetDuelInfos',
+          serializeGameInfoFromID(socket.data.sessionID)
+        );
+      }
+    });
+
+    socket.on('disconnect', () => {
       console.log(`${dateNow()} [${socket.data.sessionID}] Disconnected.`);
     });
   });
