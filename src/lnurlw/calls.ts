@@ -1,15 +1,11 @@
 import dotenv from 'dotenv';
 import { dateNow } from '../utils/time';
-import { LNURLW } from '../types/lnurlw';
 
-export async function createLNURLW(
-  amount: number,
-  maxWithdrawals: number
-): Promise<LNURLW | null> {
+export async function createLNURLW(amount: number, maxWithdrawals: number) {
   dotenv.config();
   const lnbitsURL = process.env.LNBITS_URL;
   const lnbitsKEY = process.env.LNBITS_KEY;
-  const lnbitsHook = process.env.LNBITS_DEPOSITHOOK;
+  const lnbitsHook = process.env.LNBITS_WITHDRAWHOOK;
 
   if (!lnbitsURL || !lnbitsKEY || !lnbitsHook) {
     console.error(`${dateNow()} Missing LNbits environment variables`);
@@ -37,7 +33,6 @@ export async function createLNURLW(
     throw new Error(`LNbits responded with status ${response.status}`);
   }
 
-  const data: LNURLW = await response.json();
-  console.log(data);
-  return data;
+  const data = await response.json();
+  return { id: data.id, lnurl: data.lnurl };
 }
