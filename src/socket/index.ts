@@ -2,7 +2,7 @@ import { Server, Socket } from 'socket.io';
 import middleware from './middleware';
 import { dateNow } from '../utils/time';
 import { getP2PMenuInfos } from './P2PMenu';
-import { getGameInfoFromID, serializeGameInfoFromID } from './sessionManager';
+import { gameFinished, gameInfos, postGame } from './game';
 
 export default function registerSocketHandlers(io: Server) {
   io.on('connection', (socket: Socket) => {
@@ -19,19 +19,15 @@ export default function registerSocketHandlers(io: Server) {
     });
 
     socket.on('getDuelInfos', () => {
-      const gameInfo = getGameInfoFromID(socket.data.sessionID);
-      if (gameInfo) {
-        console.log(
-          `dateNow() [${socket.data.sessionID}] Requested P2P information for game.`
-        );
-        console.log(
-          `dateNow() [${socket.data.sessionID}] Sending game P2P information.`
-        );
-        socket.emit(
-          'resGetDuelInfos',
-          serializeGameInfoFromID(socket.data.sessionID)
-        );
-      }
+      gameInfos(socket);
+    });
+
+    socket.on('gameFinished', async (winnerP) => {
+      gameFinished(socket, winnerP);
+    });
+
+    socket.on('postGameInfoRequest', () => {
+      postGame(socket);
     });
 
     socket.on('disconnect', () => {

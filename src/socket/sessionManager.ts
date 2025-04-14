@@ -120,6 +120,37 @@ export function getPlayerValueFromGameSession(
   return playerInfo.value;
 }
 
+export function appendWinnerToGameInfo(sessionId: string, winner: PlayerRole) {
+  const gameInfo = IDToGameInfo.get(sessionId);
+  if (!gameInfo) {
+    console.error('gameInfo not found.');
+    return;
+  }
+  gameInfo!.winners
+    ? gameInfo!.winners!.push(winner)
+    : (gameInfo!.winners = [winner]);
+}
+
+export function setValueToGameInfoFromID(
+  sessionId: string,
+  player: PlayerRole,
+  value: number
+) {
+  const gameInfo = IDToGameInfo.get(sessionId);
+  if (!gameInfo) {
+    console.error('gameInfo not found.');
+    return;
+  }
+  const playerInfo = gameInfo.players.get(player);
+  if (!playerInfo) {
+    console.error('player not found.');
+    return;
+  }
+  playerInfo.value = value;
+  gameInfo.players.set(player, playerInfo);
+  IDToGameInfo.set(sessionId, gameInfo);
+}
+
 export function serializeGameInfoFromID(sessionId: string) {
   const gameInfo = IDToGameInfo.get(sessionId);
   if (!gameInfo) {
@@ -129,5 +160,6 @@ export function serializeGameInfoFromID(sessionId: string) {
   return {
     players: Object.fromEntries(gameInfo.players),
     gamemode: gameInfo.gamemode,
+    winners: gameInfo.winners,
   };
 }
