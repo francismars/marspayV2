@@ -38,10 +38,6 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
     const loserP = getOpponent(winnerP);
     const winnerValue = gameInfo.players.get(winnerP)?.value;
     const loserValue = gameInfo.players.get(loserP)?.value;
-    console.log('winner:', winnerP);
-    console.log('loser:', loserP);
-    console.log('winnerValue:', winnerValue);
-    console.log('loserValue:', loserValue);
     setValueToGameInfoFromID(
       socket.data.sessionID,
       winnerP,
@@ -49,26 +45,6 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
     );
     setValueToGameInfoFromID(socket.data.sessionID, loserP, 0);
   }
-}
-
-export function postGame(socket: Socket) {
-  console.log(
-    `${dateNow()} [${
-      socket.data.sessionID
-    }] Requested P2P postGame information.`
-  );
-  const gameInfos = getGameInfoFromID(socket.data.sessionID);
-  console.log(getGameInfoFromID(socket.data.sessionID));
-  if (gameInfos && gameInfos.winners) {
-    console.log(
-      `${dateNow()} [${socket.data.sessionID}] Sending P2P postGame info.`
-    );
-    const response = serializeGameInfoFromID(socket.data.sessionID);
-    socket.emit('resPostGameInfoRequest', response);
-  } else
-    console.log(
-      `${dateNow()} [${socket.data.sessionID}] has no associated postGame info.`
-    );
 }
 
 export function getOpponent(role: PlayerRole): PlayerRole {
