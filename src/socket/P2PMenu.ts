@@ -1,12 +1,10 @@
 import { Socket } from 'socket.io';
 import { dateNow } from '../utils/time';
+import { getLNURLWFromID, getLNURLPsFromID } from '../manager/lnurlManager';
 import {
-  getLNURLWFromID,
-  getLNURLPsFromID,
   getGameInfoFromID,
-  getSocketFromID,
   serializeGameInfoFromID,
-} from './sessionManager';
+} from '../manager/gameManager';
 import { newLNURLPsP2P } from '../lnurl';
 
 export async function getP2PMenuInfos(socket: Socket) {

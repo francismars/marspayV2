@@ -8,7 +8,7 @@ export default function registerSocketHandlers(io: Server) {
   io.on('connection', (socket: Socket) => {
     middleware(io);
 
-    const realIP = socket.handshake.address; // change when NGINX is set up
+    const realIP = socket.handshake.address; // TODO: change when NGINX is set up
     console.log(
       `${dateNow()} [${socket.data.sessionID}] connected with IP ${realIP}.`
     );

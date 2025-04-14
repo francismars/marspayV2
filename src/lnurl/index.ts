@@ -1,13 +1,14 @@
-import { BUYINMAX, BUYINMIN, BUYINMINWINNER } from "../consts/values";
-import { appendLNURLPToID, setLNURLPToID } from "../socket/sessionManager";
-import { dateNow } from "../utils/time";
-import { createLNURLP } from "./calls";
+import { BUYINMAX, BUYINMIN, BUYINMINWINNER } from '../consts/values';
+import { appendLNURLPToID, setLNURLPToID } from '../manager/lnurlManager';
+import { PlayerRole } from '../types/game';
+import { dateNow } from '../utils/time';
+import { createLNURLP } from './calls';
 
 export async function newLNURLPsP2P(
   sessionID: string,
-  previousWinner = null
+  previousWinner: PlayerRole | null = null
 ): Promise<void> {
-  const playersDescriptions = ["Player 1", "Player 2"];
+  const playersDescriptions = ['Player 1', 'Player 2'];
   for (const description of playersDescriptions) {
     const reqInDescription = description;
     const buyInMax = BUYINMAX;
@@ -27,7 +28,7 @@ export async function newLNURLPsP2P(
     }
     console.log(`${dateNow()} [${sessionID}] Created LNURLp ${lnurlinfo.id}.`);
     setLNURLPToID(lnurlinfo.id, sessionID);
-    lnurlinfo["mode"] = "P2P";
+    lnurlinfo['mode'] = 'P2P';
     appendLNURLPToID(sessionID, lnurlinfo);
   }
 }

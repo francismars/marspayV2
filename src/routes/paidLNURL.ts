@@ -1,17 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { dateNow } from '../utils/time';
+import { getSocketFromID } from '../manager/sessionManager';
 import {
   appendPaymentToLNURLPFromId,
-  getGameInfoFromID,
   getIDFromLNURLP,
   getLNURLPsFromID,
-  getPlayerInfoFromIDToGame,
+} from '../manager/lnurlManager';
+import {
   getPlayerValueFromGameSession,
-  getSocketFromID,
   serializeGameInfoFromID,
   setPlayerInfoInGameByID,
-} from '../socket/sessionManager';
-import { GameInfo, GameMode, PlayerInfo, PlayerRole } from '../types/game';
+} from '../manager/gameManager';
+import { GameMode, PlayerInfo, PlayerRole } from '../types/game';
 import { io } from '../server';
 
 const router = Router();
