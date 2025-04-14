@@ -4,10 +4,10 @@ export interface LNURLP {
   description: string;
   min: number;
   mode?: string;
-  payments?: [Payment]
+  payments?: [Payment];
 }
 
 export interface Payment {
-  amount:number, 
-  note:string | null
+  amount: number;
+  note: string | null;
 }

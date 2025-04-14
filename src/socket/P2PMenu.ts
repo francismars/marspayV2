@@ -1,11 +1,13 @@
-import { Socket } from "socket.io";
-import { dateNow } from "../utils/time";
+import { Socket } from 'socket.io';
+import { dateNow } from '../utils/time';
 import {
   getLNURLWFromID,
   getLNURLPsFromID,
   getGameInfoFromID,
-} from "./sessionManager";
-import { newLNURLPsP2P } from "../lnurl";
+  getSocketFromID,
+  serializeGameInfoFromID,
+} from './sessionManager';
+import { newLNURLPsP2P } from '../lnurl';
 
 export async function getP2PMenuInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -81,10 +83,14 @@ export async function getP2PMenuInfos(socket: Socket) {
       console.log(`${dateNow()} [${sessionID}] Found existing LNRURLPs.`);
     }
     console.log(`${dateNow()} [${sessionID}] Sending LNRURLPs to client.`);
-    socket.emit("resGetGameMenuInfos", getLNURLPsFromID(sessionID));
+    socket.emit('resGetGameMenuInfos', getLNURLPsFromID(sessionID));
+    const gameInfo = getGameInfoFromID(sessionID);
+    if (gameInfo) {
+      socket.emit('updatePayments', serializeGameInfoFromID(sessionID));
+    }
   } else if (LNURW) {
     console.log(`${dateNow()} [${sessionID}] Found associated LNURLW.`);
     const response = { lnurlw: LNURW };
-    socket.emit("resGetGameMenuInfos", response);
+    socket.emit('resGetGameMenuInfos', response);
   }
 }
