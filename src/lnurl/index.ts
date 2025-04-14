@@ -7,7 +7,7 @@ export async function newLNURLPsP2P(
   sessionID: string,
   previousWinner = null
 ): Promise<void> {
-  const playersDescriptions = ["Player1", "Player2"];
+  const playersDescriptions = ["Player 1", "Player 2"];
   for (const description of playersDescriptions) {
     const reqInDescription = description;
     const buyInMax = BUYINMAX;

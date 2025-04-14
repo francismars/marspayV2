@@ -1,18 +1,19 @@
 import dotenv from "dotenv";
 import { LNURLP } from "../types/lnurlp";
-dotenv.config();
+import { dateNow } from "../utils/time";
 
 export async function createLNURLP(
   description: string,
   buyInMin: number,
   buyInMax: number
 ): Promise<LNURLP | null> {
+  dotenv.config();
   const lnbitsURL = process.env.LNBITS_URL;
   const lnbitsKEY = process.env.LNBITS_KEY;
   const lnbitsHook = process.env.LNBITS_DEPOSITHOOK;
 
   if (!lnbitsURL || !lnbitsKEY || !lnbitsHook) {
-    console.error("Missing LNbits environment variables");
+    console.error(`${dateNow()} Missing LNbits environment variables`)
     return null;
   }
 

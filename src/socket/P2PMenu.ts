@@ -2,7 +2,7 @@ import { Socket } from "socket.io";
 import { dateNow } from "../utils/time";
 import {
   getLNURLWFromID,
-  getLNURPsFromID,
+  getLNURLPsFromID,
   getGameInfoFromID,
 } from "./sessionManager";
 import { newLNURLPsP2P } from "../lnurl";
@@ -20,7 +20,7 @@ export async function getP2PMenuInfos(socket: Socket) {
   let winnersListLength;
   const LNURW = getLNURLWFromID(sessionID);
   if (!LNURW) {
-    const LNURLPs = getLNURPsFromID(sessionID);
+    const LNURLPs = getLNURLPsFromID(sessionID);
     if (!LNURLPs) {
       console.log(
         `${dateNow()} [${sessionID}] There are no associated LNRURLPs. Creating new ones.`
@@ -81,7 +81,7 @@ export async function getP2PMenuInfos(socket: Socket) {
       console.log(`${dateNow()} [${sessionID}] Found existing LNRURLPs.`);
     }
     console.log(`${dateNow()} [${sessionID}] Sending LNRURLPs to client.`);
-    socket.emit("resGetGameMenuInfos", getLNURPsFromID(sessionID));
+    socket.emit("resGetGameMenuInfos", getLNURLPsFromID(sessionID));
   } else if (LNURW) {
     console.log(`${dateNow()} [${sessionID}] Found associated LNURLW.`);
     const response = { lnurlw: LNURW };
