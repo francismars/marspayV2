@@ -7,3 +7,10 @@ export function setIDToSocket(sessionId: string, socketId: string) {
 export function getSocketFromID(sessionId: string) {
   return IDToSocket.get(sessionId);
 }
+
+export function deleteSocketFromSession(sessionId: string) {
+  const socketId = getSocketFromID(sessionId);
+  if (socketId) {
+    IDToSocket.delete(sessionId);
+  }
+}

@@ -135,3 +135,12 @@ export function serializeGameInfoFromID(sessionId: string) {
     winners: gameInfo.winners,
   };
 }
+
+export function deleteGameInfoByID(sessionId: string) {
+  const gameInfo = IDToGameInfo.get(sessionId);
+  if (!gameInfo) {
+    console.error('gameInfo not found.');
+    return;
+  }
+  IDToGameInfo.delete(sessionId);
+}
