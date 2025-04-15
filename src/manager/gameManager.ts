@@ -55,6 +55,23 @@ export function getPlayerValueFromGameSession(
   return playerInfo.value;
 }
 
+export function getPlayerNameFromGameSession(
+  sessionId: string,
+  player: PlayerRole
+) {
+  const gameInfo = IDToGameInfo.get(sessionId);
+  if (!gameInfo) {
+    console.error('gameInfo not found.');
+    return;
+  }
+  const playerInfo = gameInfo.players.get(player);
+  if (!playerInfo) {
+    console.error('player not found.');
+    return;
+  }
+  return playerInfo.name;
+}
+
 export function appendWinnerToGameInfo(sessionId: string, winner: PlayerRole) {
   const gameInfo = IDToGameInfo.get(sessionId);
   if (!gameInfo) {

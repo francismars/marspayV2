@@ -7,6 +7,7 @@ import {
   getLNURLPsFromID,
 } from '../manager/lnurlManager';
 import {
+  getPlayerNameFromGameSession,
   getPlayerValueFromGameSession,
   serializeGameInfoFromID,
   setPlayerInfoInGameByID,
@@ -43,7 +44,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 
   const amount = reqBody.amount / 1000;
-  const comment = reqBody.comment == null ? null : reqBody.comment[0];
+  const comment = reqBody.comment?.[0] ?? null;
   console.log(
     `${dateNow()} [${sessionID}] Paid LNURLp ${reqLNURLP} with ${amount} sats and note ${comment}.`
   );
@@ -60,8 +61,11 @@ router.post('/', (req: Request, res: Response) => {
       sessionID
     );
     const value = getPlayerValueFromGameSession(sessionID, playerRole) ?? 0;
+    const prevName =
+      getPlayerNameFromGameSession(sessionID, playerRole) ?? null;
+    const playerName = comment?.trim() ?? prevName ?? playerRole;
     const playerInfo: PlayerInfo = {
-      name: comment?.trim() ?? playerRole,
+      name: playerName,
       value: value + amount,
     };
     const gameMode = 'P2P' as GameMode;
