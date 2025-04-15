@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getIDFromLNURLW } from '../state/lnurlState';
+import { getIDFromLNURLW } from '../state/lnurlwState';
 import { getSocketFromID } from '../state/sessionState';
 import { getGameInfoFromID } from '../state/gameState';
 import { dateNow } from '../utils/time';
