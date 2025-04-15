@@ -1,6 +1,6 @@
-import dotenv from "dotenv";
-import { LNURLP } from "../types/lnurlp";
-import { dateNow } from "../utils/time";
+import dotenv from 'dotenv';
+import { LNURLP } from '../types/lnurlp';
+import { dateNow } from '../utils/time';
 
 export async function createLNURLP(
   description: string,
@@ -13,17 +13,17 @@ export async function createLNURLP(
   const lnbitsHook = process.env.LNBITS_DEPOSITHOOK;
 
   if (!lnbitsURL || !lnbitsKEY || !lnbitsHook) {
-    console.error(`${dateNow()} Missing LNbits environment variables`)
+    console.error(`${dateNow()} Missing LNbits environment variables`);
     return null;
   }
 
   try {
-    const response = await fetch(lnbitsURL + "/lnurlp/api/v1/links", {
-      method: "POST",
+    const response = await fetch(lnbitsURL + '/lnurlp/api/v1/links', {
+      method: 'POST',
       headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-Api-Key": lnbitsKEY,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Api-Key': lnbitsKEY,
       },
       body: JSON.stringify({
         description: description,
@@ -46,7 +46,7 @@ export async function createLNURLP(
       min: data.min,
     };
   } catch (error) {
-    console.error("Failed to create LNURLP link:", error);
+    console.error('Failed to create LNURLP link:', error);
     return null;
   }
 }
