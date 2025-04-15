@@ -6,9 +6,11 @@ import { gameFinished, gameInfos } from './game';
 import { createWithdrawalPostGame, postGameInfo } from './postGame';
 
 export default function registerSocketHandlers(io: Server) {
-  io.on('connection', (socket: Socket) => {
-    middleware(io);
+  io.use((socket: Socket, next) => {
+    middleware(io, socket, next);
+  });
 
+  io.on('connection', (socket: Socket) => {
     const realIP = socket.handshake.address; // TODO: change when NGINX is set up
     console.log(
       `${dateNow()} [${socket.data.sessionID}] connected with IP ${realIP}.`

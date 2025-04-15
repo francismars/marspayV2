@@ -3,11 +3,8 @@ import { dateNow } from '../utils/time';
 import { getSocketFromID } from '../state/sessionState';
 import { getIDFromLNURLP, getLNURLPsFromID } from '../state/lnurlpState';
 import {
-  getPlayerNameFromGameSession,
-  getPlayerValueFromGameSession,
   serializeGameInfoFromID,
   setPlayerInfoInGameByID,
-  appendPaymentToGameById,
   getPlayerInfoFromIDToGame,
 } from '../state/gameState';
 import { GameMode, Payment, PlayerInfo, PlayerRole } from '../types/game';

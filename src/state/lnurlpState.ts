@@ -25,12 +25,20 @@ export function appendLNURLPToID(sessionId: string, lnurlp: LNURLP) {
 }
 
 export function deleteLNURLPsFromSession(sessionId: string) {
-  IDToLNURLPs.delete(sessionId);
   const lnurlps = getLNURLPsFromID(sessionId);
   if (lnurlps) {
     for (const lnurlp of lnurlps) {
-      LNURLPToID.delete(lnurlp.lnurlp);
-      deleteLNURLP(lnurlp.lnurlp);
+      LNURLPToID.delete(lnurlp.id);
+      deleteLNURLP(lnurlp.id);
     }
   }
+  IDToLNURLPs.delete(sessionId);
+}
+
+export function getAllLNURLPtoID() {
+  return LNURLPToID;
+}
+
+export function getAllIDtoLNURLPs() {
+  return IDToLNURLPs;
 }

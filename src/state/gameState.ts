@@ -136,6 +136,17 @@ export function serializeGameInfoFromID(sessionId: string) {
   };
 }
 
+export function serializeIDToGameInfo() {
+  const serializedIDToGameInfo: Record<string, any> = {};
+  for (const [sessionID, gameInfo] of IDToGameInfo.entries()) {
+    serializedIDToGameInfo[sessionID] = {
+      ...gameInfo,
+      players: Object.fromEntries(gameInfo.players),
+    };
+  }
+  return serializedIDToGameInfo;
+}
+
 export function deleteGameInfoByID(sessionId: string) {
   const gameInfo = IDToGameInfo.get(sessionId);
   if (!gameInfo) {
@@ -143,4 +154,8 @@ export function deleteGameInfoByID(sessionId: string) {
     return;
   }
   IDToGameInfo.delete(sessionId);
+}
+
+export function getAllIDtoGameInfo() {
+  return IDToGameInfo;
 }

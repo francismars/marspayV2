@@ -11,7 +11,6 @@ import {
 } from '../state/gameState';
 import { dateNow } from '../utils/time';
 import { io } from '../server';
-import { GameInfo } from '../types/game';
 import { promises as fs } from 'fs';
 import path from 'path';
 import deleteLNURLW from '../calls/deleteLNURLW';
