@@ -1,12 +1,9 @@
 import { Socket } from 'socket.io';
 import { dateNow } from '../utils/time';
-import { getLNURLWFromID, getLNURLPsFromID } from '../manager/lnurlManager';
-import {
-  getGameInfoFromID,
-  serializeGameInfoFromID,
-} from '../manager/gameManager';
+import { getLNURLWFromID, getLNURLPsFromID } from '../state/lnurlState';
+import { getGameInfoFromID, serializeGameInfoFromID } from '../state/gameState';
 import { BUYINMAX, BUYINMIN, BUYINMINWINNER } from '../consts/values';
-import { appendLNURLPToID, setLNURLPToID } from '../manager/lnurlManager';
+import { appendLNURLPToID, setLNURLPToID } from '../state/lnurlState';
 import { GameMode, PlayerRole } from '../types/game';
 import createLNURLP from '../calls/createLNURLP';
 

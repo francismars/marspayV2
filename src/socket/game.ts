@@ -4,10 +4,10 @@ import {
   getGameInfoFromID,
   serializeGameInfoFromID,
   setValueToGameInfoFromID,
-} from '../manager/gameManager';
+} from '../state/gameState';
 import { dateNow } from '../utils/time';
 import { PlayerRole } from '../types/game';
-import { deleteLNURLPsFromSession } from '../manager/lnurlManager';
+import { deleteLNURLPsFromSession } from '../state/lnurlState';
 
 export function gameInfos(socket: Socket) {
   const gameInfo = getGameInfoFromID(socket.data.sessionID);

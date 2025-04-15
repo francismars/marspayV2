@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { getSocketFromID, setIDToSocket } from '../manager/sessionManager';
+import { getSocketFromID, setIDToSocket } from '../state/sessionState';
 import { ALLOWEDEMOJIS } from '../consts/emojis';
 import { v4 as uuidv4 } from 'uuid';
 import { dateNow } from '../utils/time';
