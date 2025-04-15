@@ -24,9 +24,8 @@ export default async function deleteLNURLW(lnurl: string) {
       throw new Error(`LNbits responded with status ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log(data);
-    return; //{ id: data.id, lnurl: data.lnurl };
+    const data = await response.json(); // data = { success: true }
+    return;
   } catch (error) {
     console.error('Failed to delete LNURLw:', error);
     return null;

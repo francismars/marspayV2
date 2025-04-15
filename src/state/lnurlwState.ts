@@ -16,3 +16,11 @@ export function setLNURLWToID(lnurlw: string, sessionId: string) {
 export function getIDFromLNURLW(lnurlw: string) {
   return LNURLWToID.get(lnurlw);
 }
+
+export function deleteLNURLWFromSession(sessionId: string) {
+  const lnurlw = getLNURLWFromID(sessionId);
+  if (lnurlw) {
+    IDToLNURLW.delete(sessionId);
+    LNURLWToID.delete(lnurlw);
+  }
+}
