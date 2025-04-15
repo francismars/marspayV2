@@ -24,3 +24,11 @@ export function deleteLNURLWFromSession(sessionId: string) {
     LNURLWToID.delete(lnurlw);
   }
 }
+
+export function getAllIDtoLNURLW() {
+  return IDToLNURLW;
+}
+
+export function getAllLNURLWtoID() {
+  return LNURLWToID;
+}

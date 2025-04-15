@@ -14,3 +14,7 @@ export function deleteSocketFromSession(sessionId: string) {
     IDToSocket.delete(sessionId);
   }
 }
+
+export function getAllIDtoSocket() {
+  return IDToSocket;
+}
