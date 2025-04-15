@@ -7,8 +7,8 @@ import {
 } from '../manager/gameManager';
 import { BUYINMAX, BUYINMIN, BUYINMINWINNER } from '../consts/values';
 import { appendLNURLPToID, setLNURLPToID } from '../manager/lnurlManager';
-import { PlayerRole } from '../types/game';
-import { createLNURLP } from '../calls/lnurlp';
+import { GameMode, PlayerRole } from '../types/game';
+import createLNURLP from '../calls/createLNURLP';
 
 export async function getP2PMenuInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -43,22 +43,20 @@ export async function getP2PMenuInfos(socket: Socket) {
   }
 }
 
-async function newLNURLPsP2P(
-  sessionID: string,
-  previousWinner: PlayerRole | null = null
-): Promise<void> {
+async function newLNURLPsP2P(sessionID: string): Promise<void> {
   const playersDescriptions = ['Player 1', 'Player 2'];
+  const gameInfo = getGameInfoFromID(sessionID);
+  const winnerP = gameInfo?.winners?.slice(-1)[0];
   for (const description of playersDescriptions) {
-    const reqInDescription = description;
-    const buyInMax = BUYINMAX;
-    const buyInMin = BUYINMIN;
-    if (previousWinner) {
-      //description == previousWinner ? buyInMin = BUYINMINWINNER : buyInMin = app.sessionidsGameInfo[sessionID][previousWinner].value
-    }
+    const amount = winnerP
+      ? winnerP === description
+        ? BUYINMINWINNER
+        : gameInfo.players.get(winnerP)!.value
+      : BUYINMIN;
     console.log(
-      `${dateNow()} [${sessionID}] Requesting new LNURLp with description ${reqInDescription} from ${buyInMin} to ${buyInMax} sats.`
+      `${dateNow()} [${sessionID}] Requesting new LNURLp with description ${description} from ${amount} to ${BUYINMAX} sats.`
     );
-    const lnurlinfo = await createLNURLP(description, buyInMin, buyInMax);
+    const lnurlinfo = await createLNURLP(description, amount, BUYINMAX);
     if (!lnurlinfo) {
       console.log(
         `${dateNow()} [${sessionID}] It wasn't possible to create LNURLp.`
@@ -67,7 +65,7 @@ async function newLNURLPsP2P(
     }
     console.log(`${dateNow()} [${sessionID}] Created LNURLp ${lnurlinfo.id}.`);
     setLNURLPToID(lnurlinfo.id, sessionID);
-    lnurlinfo['mode'] = 'P2P';
+    lnurlinfo.mode = GameMode.P2P;
     appendLNURLPToID(sessionID, lnurlinfo);
   }
 }

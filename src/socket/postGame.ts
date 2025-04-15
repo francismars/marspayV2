@@ -10,7 +10,7 @@ import {
   setLNURLWToID,
 } from '../manager/lnurlManager';
 import { PlayerRole } from '../types/game';
-import { createLNURLW } from '../calls/lnurlw';
+import createLNURLW from '../calls/createLNURLW';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
 
 export function postGameInfo(socket: Socket) {

@@ -1,4 +1,5 @@
-import { LNURLP, Payment } from '../types/lnurlp';
+import { LNURLP } from '../types/lnurlp';
+import deleteLNURLP from '../calls/deleteLNURLP';
 
 const IDToLNURLW = new Map<string, string>();
 const LNURLWToID = new Map<string, string>();
@@ -41,21 +42,13 @@ export function getIDFromLNURLP(lnurlp: string) {
   return LNURLPToID.get(lnurlp);
 }
 
-export function appendPaymentToLNURLPFromId(
-  payment: Payment,
-  lnurlPID: string,
-  sessionId: string
-) {
-  if (IDToLNURLPs.has(sessionId)) {
-    const lnurlp = IDToLNURLPs.get(sessionId)?.find(
-      (lnurl) => lnurl.id === lnurlPID
-    );
-    if (!lnurlp) {
-      console.error('LNURLP not found');
-      return;
+export function deleteLNURLPsFromSession(sessionId: string) {
+  IDToLNURLPs.delete(sessionId);
+  const lnurlps = getLNURLPsFromID(sessionId);
+  if (lnurlps) {
+    for (const lnurlp of lnurlps) {
+      LNURLPToID.delete(lnurlp.lnurlp);
+      deleteLNURLP(lnurlp.lnurlp);
     }
-    lnurlp.payments
-      ? lnurlp.payments.push(payment)
-      : (lnurlp.payments = [payment]);
   }
 }

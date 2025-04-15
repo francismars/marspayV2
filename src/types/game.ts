@@ -1,6 +1,7 @@
 export interface PlayerInfo {
   name: string;
   value: number;
+  payments?: Payment[];
 }
 
 export enum PlayerRole {
@@ -18,4 +19,9 @@ export interface GameInfo {
   players: PlayerInfoFromRole;
   gamemode: GameMode;
   winners?: PlayerRole[];
+}
+
+export interface Payment {
+  amount: number;
+  note: string | null;
 }

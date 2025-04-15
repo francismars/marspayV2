@@ -1,18 +1,24 @@
 import dotenv from 'dotenv';
+import { LNURLP } from '../types/lnurlp';
 import { dateNow } from '../utils/time';
 
-export async function createLNURLW(amount: number, maxWithdrawals: number) {
+export default async function createLNURLP(
+  description: string,
+  buyInMin: number,
+  buyInMax: number
+): Promise<LNURLP | null> {
   dotenv.config();
   const lnbitsURL = process.env.LNBITS_URL;
   const lnbitsKEY = process.env.LNBITS_KEY;
-  const lnbitsHook = process.env.LNBITS_WITHDRAWHOOK;
+  const lnbitsHook = process.env.LNBITS_DEPOSITHOOK;
 
   if (!lnbitsURL || !lnbitsKEY || !lnbitsHook) {
     console.error(`${dateNow()} Missing LNbits environment variables`);
     return null;
   }
+
   try {
-    const response = await fetch(lnbitsURL + '/withdraw/api/v1/links', {
+    const response = await fetch(lnbitsURL + '/lnurlp/api/v1/links', {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -20,23 +26,27 @@ export async function createLNURLW(amount: number, maxWithdrawals: number) {
         'X-Api-Key': lnbitsKEY,
       },
       body: JSON.stringify({
-        title: 'Chain Duel Prize',
-        min_withdrawable: amount,
-        max_withdrawable: amount,
-        uses: maxWithdrawals,
-        wait_time: 1,
-        is_unique: false,
+        description: description,
+        min: buyInMin,
+        max: buyInMax,
+        comment_chars: 10,
         webhook_url: lnbitsHook,
       }),
     });
+
     if (!response.ok) {
       throw new Error(`LNbits responded with status ${response.status}`);
     }
 
     const data = await response.json();
-    return { id: data.id, lnurl: data.lnurl };
+    return {
+      id: data.id,
+      lnurlp: data.lnurl,
+      description: data.description,
+      min: data.min,
+    };
   } catch (error) {
-    console.error('Failed to create LNURLW link:', error);
+    console.error('Failed to create LNURLP link:', error);
     return null;
   }
 }

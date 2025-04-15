@@ -1,18 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { dateNow } from '../utils/time';
 import { getSocketFromID } from '../manager/sessionManager';
-import {
-  appendPaymentToLNURLPFromId,
-  getIDFromLNURLP,
-  getLNURLPsFromID,
-} from '../manager/lnurlManager';
+import { getIDFromLNURLP, getLNURLPsFromID } from '../manager/lnurlManager';
 import {
   getPlayerNameFromGameSession,
   getPlayerValueFromGameSession,
   serializeGameInfoFromID,
   setPlayerInfoInGameByID,
+  appendPaymentToGameById,
+  getPlayerInfoFromIDToGame,
 } from '../manager/gameManager';
-import { GameMode, PlayerInfo, PlayerRole } from '../types/game';
+import { GameMode, Payment, PlayerInfo, PlayerRole } from '../types/game';
 import { io } from '../server';
 
 const router = Router();
@@ -55,20 +53,19 @@ router.post('/', (req: Request, res: Response) => {
       return;
     }
     const playerRole: PlayerRole = lnurl.description as PlayerRole;
-    appendPaymentToLNURLPFromId(
-      { amount: amount, note: comment },
-      reqLNURLP,
-      sessionID
-    );
-    const value = getPlayerValueFromGameSession(sessionID, playerRole) ?? 0;
-    const prevName =
-      getPlayerNameFromGameSession(sessionID, playerRole) ?? null;
+    const playerInfos = getPlayerInfoFromIDToGame(sessionID, playerRole);
+    const value = playerInfos?.value ?? 0;
+    const prevName = playerInfos?.name ?? null;
+    const prevPayments = playerInfos?.payments ?? [];
     const playerName = comment?.trim() ?? prevName ?? playerRole;
+    const payment: Payment = { amount: amount, note: comment };
     const playerInfo: PlayerInfo = {
       name: playerName,
       value: value + amount,
+      payments: [...prevPayments, payment],
     };
     const gameMode = 'P2P' as GameMode;
+
     setPlayerInfoInGameByID(sessionID, playerRole, playerInfo, gameMode);
     const socketID = getSocketFromID(sessionID);
     if (!socketID) {
