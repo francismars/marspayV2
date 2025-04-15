@@ -1,14 +1,18 @@
 import { PlayerInfo, PlayerRole, GameInfo, GameMode } from '../types/game';
+import { Payment } from '../types/game';
 
 const IDToGameInfo = new Map<string, GameInfo>();
 
-export function getPlayerInfoFromIDToGame(sessionId: string) {
+export function getPlayerInfoFromIDToGame(
+  sessionId: string,
+  player: PlayerRole
+) {
   const gameInfo = IDToGameInfo.get(sessionId);
   if (!gameInfo) {
     console.error('gameInfo not found.');
     return;
   }
-  return gameInfo.players;
+  return gameInfo.players.get(player);
 }
 
 export function getGameInfoFromID(sessionId: string) {
@@ -28,8 +32,6 @@ export function setPlayerInfoInGameByID(
       players: new Map<PlayerRole, PlayerInfo>(),
       gamemode: GameMode.P2P,
     });
-    const gameInfoByPlayerRole = IDToGameInfo.get(sessionId)!.players;
-    gameInfoByPlayerRole.set(player, info);
     IDToGameInfo.get(sessionId)!.players.set(player, info);
     return;
   } else if (gameInfo) {
@@ -101,6 +103,24 @@ export function setValueToGameInfoFromID(
   playerInfo.value = value;
   gameInfo.players.set(player, playerInfo);
   IDToGameInfo.set(sessionId, gameInfo);
+}
+
+export function appendPaymentToGameById(
+  payment: Payment,
+  playerRole: PlayerRole,
+  sessionId: string
+) {
+  const gameInfo = IDToGameInfo.get(sessionId);
+  if (!gameInfo) {
+    return console.error('gameInfo not found.');
+  }
+  const playerInfo = gameInfo.players.get(playerRole);
+  if (!playerInfo) {
+    console.error('playerInfo not found.');
+    return;
+  }
+  if (!playerInfo.payments) playerInfo.payments = [payment];
+  else playerInfo.payments.push(payment);
 }
 
 export function serializeGameInfoFromID(sessionId: string) {

@@ -7,6 +7,7 @@ import {
 } from '../manager/gameManager';
 import { dateNow } from '../utils/time';
 import { PlayerRole } from '../types/game';
+import { deleteLNURLPsFromSession } from '../manager/lnurlManager';
 
 export function gameInfos(socket: Socket) {
   const gameInfo = getGameInfoFromID(socket.data.sessionID);
@@ -27,24 +28,32 @@ export function gameInfos(socket: Socket) {
 }
 
 export function gameFinished(socket: Socket, winnerP: PlayerRole) {
+  const gameInfo = getGameInfoFromID(socket.data.sessionID);
+  if (!gameInfo) {
+    console.error(
+      `${dateNow()} [${socket.data.sessionID}] Game info not found.`
+    );
+    return;
+  }
   console.log(
     `${dateNow()} [${
       socket.data.sessionID
     }] Game is finished. Winner is ${winnerP}.`
   );
-  const gameInfo = getGameInfoFromID(socket.data.sessionID);
-  if (gameInfo) {
-    appendWinnerToGameInfo(socket.data.sessionID, winnerP);
-    const loserP = getOpponent(winnerP);
-    const winnerValue = gameInfo.players.get(winnerP)?.value;
-    const loserValue = gameInfo.players.get(loserP)?.value;
-    setValueToGameInfoFromID(
-      socket.data.sessionID,
-      winnerP,
-      Math.floor((winnerValue! + loserValue!) * 0.95)
-    );
-    setValueToGameInfoFromID(socket.data.sessionID, loserP, 0);
-  }
+  appendWinnerToGameInfo(socket.data.sessionID, winnerP);
+  const loserP = getOpponent(winnerP);
+  const winnerValue = gameInfo.players.get(winnerP)?.value;
+  const loserValue = gameInfo.players.get(loserP)?.value;
+  setValueToGameInfoFromID(
+    socket.data.sessionID,
+    winnerP,
+    Math.floor((winnerValue! + loserValue!) * 0.95)
+  );
+  setValueToGameInfoFromID(socket.data.sessionID, loserP, 0);
+  console.log(
+    `${dateNow()} [${socket.data.sessionID}] Deleting LNURLPs from Session.`
+  );
+  deleteLNURLPsFromSession(socket.data.sessionID);
 }
 
 export function getOpponent(role: PlayerRole): PlayerRole {
