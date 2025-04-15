@@ -7,7 +7,7 @@ import {
 } from '../state/gameState';
 import { dateNow } from '../utils/time';
 import { PlayerRole } from '../types/game';
-import { deleteLNURLPsFromSession } from '../state/lnurlState';
+import { deleteLNURLPsFromSession } from '../state/lnurlpState';
 
 export function gameInfos(socket: Socket) {
   const gameInfo = getGameInfoFromID(socket.data.sessionID);

@@ -5,7 +5,7 @@ import {
   getLNURLWFromID,
   setIDToLNURLW,
   setLNURLWToID,
-} from '../state/lnurlState';
+} from '../state/lnurlwState';
 import { PlayerRole } from '../types/game';
 import createLNURLW from '../calls/createLNURLW';
 import { P2PMAXWITHDRAWALS } from '../consts/values';

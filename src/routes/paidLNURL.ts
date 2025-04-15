@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { dateNow } from '../utils/time';
 import { getSocketFromID } from '../state/sessionState';
-import { getIDFromLNURLP, getLNURLPsFromID } from '../state/lnurlState';
+import { getIDFromLNURLP, getLNURLPsFromID } from '../state/lnurlpState';
 import {
   getPlayerNameFromGameSession,
   getPlayerValueFromGameSession,
