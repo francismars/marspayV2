@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { getIDFromLNURLW } from '../manager/lnurlManager';
-import { getSocketFromID } from '../manager/sessionManager';
-import { getGameInfoFromID } from '../manager/gameManager';
+import { getIDFromLNURLW } from '../state/lnurlState';
+import { getSocketFromID } from '../state/sessionState';
+import { getGameInfoFromID } from '../state/gameState';
 import { dateNow } from '../utils/time';
 import { io } from '../server';
 

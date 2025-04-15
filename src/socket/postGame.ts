@@ -1,14 +1,11 @@
 import { Socket } from 'socket.io';
 import { dateNow } from '../utils/time';
-import {
-  getGameInfoFromID,
-  serializeGameInfoFromID,
-} from '../manager/gameManager';
+import { getGameInfoFromID, serializeGameInfoFromID } from '../state/gameState';
 import {
   getLNURLWFromID,
   setIDToLNURLW,
   setLNURLWToID,
-} from '../manager/lnurlManager';
+} from '../state/lnurlState';
 import { PlayerRole } from '../types/game';
 import createLNURLW from '../calls/createLNURLW';
 import { P2PMAXWITHDRAWALS } from '../consts/values';

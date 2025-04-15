@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { dateNow } from '../utils/time';
-import { getSocketFromID } from '../manager/sessionManager';
-import { getIDFromLNURLP, getLNURLPsFromID } from '../manager/lnurlManager';
+import { getSocketFromID } from '../state/sessionState';
+import { getIDFromLNURLP, getLNURLPsFromID } from '../state/lnurlState';
 import {
   getPlayerNameFromGameSession,
   getPlayerValueFromGameSession,
@@ -9,7 +9,7 @@ import {
   setPlayerInfoInGameByID,
   appendPaymentToGameById,
   getPlayerInfoFromIDToGame,
-} from '../manager/gameManager';
+} from '../state/gameState';
 import { GameMode, Payment, PlayerInfo, PlayerRole } from '../types/game';
 import { io } from '../server';
 
@@ -64,7 +64,7 @@ router.post('/', (req: Request, res: Response) => {
       value: value + amount,
       payments: [...prevPayments, payment],
     };
-    const gameMode = 'P2P' as GameMode;
+    const gameMode = lnurl.mode as GameMode;
 
     setPlayerInfoInGameByID(sessionID, playerRole, playerInfo, gameMode);
     const socketID = getSocketFromID(sessionID);
