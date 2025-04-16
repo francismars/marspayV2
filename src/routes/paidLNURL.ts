@@ -10,8 +10,14 @@ import {
 import { GameMode, Payment, PlayerInfo, PlayerRole } from '../types/game';
 import { io } from '../server';
 import { ExtendedError } from 'socket.io';
+import dotenv from 'dotenv';
+import { DESIGNERPERCENT, DEVPERCENT, HOSTPERCENT } from '../consts/splits';
+import getLNURLCallback from '../calls/getLNURLCallback';
+import getInvoiceFromCallback from '../calls/getInvoiceFromCallback';
+import payInvoice from '../calls/payInvoice';
 
 const router = Router();
+dotenv.config();
 
 interface LNURLPReqBody {
   payment_hash: string;
@@ -84,9 +90,51 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
       console.error("Couldn't find SocketID to send notification of payment");
       return;
     }
+    paySplits(sessionID, amount);
     io.to(socketID!).emit('updatePayments', serializeGameInfoFromID(sessionID));
     res.status(200).send('OK');
   }
 });
+
+function paySplits(sessionID: string, amount: number) {
+  const devLN = process.env.DEVELOPER_LNADDRESS;
+  const designerLN = process.env.DESIGNER_LNADDRESS;
+  const hostLN = process.env.HOST_LNADDRESS;
+  const devPercent = DEVPERCENT;
+  const designerPercent = DESIGNERPERCENT;
+  const hostPercent = HOSTPERCENT;
+  if (!devLN || !designerLN || !hostLN) {
+    console.error(`${dateNow()} [${sessionID}] Split address is missing.`);
+  }
+  const feeSplit: Split[] = [
+    { lnaddress: devLN!, percent: devPercent, role: 'developer' },
+    { lnaddress: hostLN!, percent: hostPercent, role: 'host' },
+    { lnaddress: designerLN!, percent: designerPercent, role: 'designer' },
+  ];
+  for (const split of feeSplit) {
+    const splitedAmount = Math.floor(amount * split.percent);
+    console.log(
+      `${dateNow()} [${sessionID}] Sending ${
+        split.percent
+      } split of ${splitedAmount} sats to ${split.lnaddress}`
+    );
+    paySplit(split.lnaddress as string, splitedAmount).catch((error) => {
+      console.log(
+        `${dateNow()} [${sessionID} Couldn't send split to ${split.role}: ${
+          error.message
+        }`
+      );
+    });
+  }
+}
+
+async function paySplit(lnAddress: string, satsAmount: number) {
+  const [userLN, domainLN] = lnAddress.split('@');
+  const LNurl = `https://${domainLN}/.well-known/lnurlp/${userLN}`;
+
+  const callback = await getLNURLCallback(LNurl);
+  const invoice = await getInvoiceFromCallback(callback, satsAmount);
+  const respayment = await payInvoice(invoice);
+}
 
 export default router;
