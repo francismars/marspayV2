@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { LNURLP } from '../types/lnurlp';
 import { dateNow } from '../utils/time';
+import { PAYURL } from '../consts/lnbits';
 
 export default async function createLNURLP(
   description: string,
@@ -18,7 +19,7 @@ export default async function createLNURLP(
   }
 
   try {
-    const response = await fetch(lnbitsURL + '/lnurlp/api/v1/links', {
+    const response = await fetch(lnbitsURL + PAYURL, {
       method: 'POST',
       headers: {
         Accept: 'application/json',
