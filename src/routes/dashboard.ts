@@ -3,15 +3,11 @@ import { getAllIDtoSocket } from '../state/sessionState';
 import dotenv from 'dotenv';
 import { getAllIDtoLNURLW, getAllLNURLWtoID } from '../state/lnurlwState';
 import { getAllIDtoLNURLPs, getAllLNURLPtoID } from '../state/lnurlpState';
-import {
-  getAllIDtoGameInfo,
-  serializeGameInfoFromID,
-  serializeIDToGameInfo,
-} from '../state/gameState';
+import { serializeIDToGameInfo } from '../state/gameState';
 
 const router = Router();
 
-router.get('/', function (req, res, next) {
+router.get('/', function (req, res) {
   dotenv.config();
   const passwordDash = process.env.ADMIN_PASSWORD;
   if (req.query.password && req.query.password == passwordDash) {

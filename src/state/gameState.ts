@@ -76,9 +76,10 @@ export function appendWinnerToGameInfo(sessionId: string, winner: PlayerRole) {
     console.error('gameInfo not found.');
     return;
   }
-  gameInfo!.winners
-    ? gameInfo!.winners!.push(winner)
-    : (gameInfo!.winners = [winner]);
+  if (!gameInfo.winners) {
+    gameInfo.winners = [];
+  }
+  gameInfo!.winners!.push(winner);
 }
 
 export function setValueToGameInfoFromID(
@@ -133,7 +134,14 @@ export function serializeGameInfoFromID(sessionId: string) {
 }
 
 export function serializeIDToGameInfo() {
-  const serializedIDToGameInfo: Record<string, any> = {};
+  const serializedIDToGameInfo: Record<
+    string,
+    {
+      players: Record<string, PlayerInfo>;
+      gamemode: GameMode;
+      winners?: PlayerRole[];
+    }
+  > = {};
   for (const [sessionID, gameInfo] of IDToGameInfo.entries()) {
     serializedIDToGameInfo[sessionID] = {
       ...gameInfo,
