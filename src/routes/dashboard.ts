@@ -3,7 +3,7 @@ import { getAllIDtoSocket } from '../state/sessionState';
 import dotenv from 'dotenv';
 import { getAllIDtoLNURLW, getAllLNURLWtoID } from '../state/lnurlwState';
 import { getAllIDtoLNURLPs, getAllLNURLPtoID } from '../state/lnurlpState';
-import { serializeIDToGameInfo } from '../state/gameState';
+import { getSerializedIDToGameInfo } from '../state/gameState';
 
 const router = Router();
 
@@ -16,7 +16,7 @@ router.get('/', function (req, res) {
     const LNURLWToID = Object.fromEntries(getAllLNURLWtoID());
     const LNURLPToID = Object.fromEntries(getAllLNURLPtoID());
     const IDToLNURLPs = Object.fromEntries(getAllIDtoLNURLPs());
-    const IDtoGameInfo = serializeIDToGameInfo();
+    const IDtoGameInfo = getSerializedIDToGameInfo();
     res.json({
       IDtoSocket: IDtoSocket,
       IDToLNURLW: IDToLNURLW,

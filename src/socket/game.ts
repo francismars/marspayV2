@@ -10,50 +10,55 @@ import { PlayerRole } from '../types/game';
 import { deleteLNURLPsFromSession } from '../state/lnurlpState';
 
 export function gameInfos(socket: Socket) {
-  const gameInfo = getGameInfoFromID(socket.data.sessionID);
-  if (gameInfo) {
-    console.log(
-      `${dateNow()} [${
-        socket.data.sessionID
-      }] Requested P2P information for game.`
-    );
-    console.log(
-      `${dateNow()} [${socket.data.sessionID}] Sending game P2P information.`
-    );
-    socket.emit(
-      'resGetDuelInfos',
-      serializeGameInfoFromID(socket.data.sessionID)
-    );
+  const sessionID = socket.data.sessionID;
+  if (!sessionID) {
+    console.error(`${dateNow()} [${sessionID}] Session ID not found.`);
+    return;
   }
-}
-
-export function gameFinished(socket: Socket, winnerP: PlayerRole) {
-  const gameInfo = getGameInfoFromID(socket.data.sessionID);
+  const gameInfo = getGameInfoFromID(sessionID);
   if (!gameInfo) {
-    console.error(
-      `${dateNow()} [${socket.data.sessionID}] Game info not found.`
-    );
+    console.error(`${dateNow()} [${sessionID}] Game info not found.`);
     return;
   }
   console.log(
-    `${dateNow()} [${
-      socket.data.sessionID
-    }] Game is finished. Winner is ${winnerP}.`
+    `${dateNow()} [${sessionID}] Requested information for P2P game.`
   );
-  appendWinnerToGameInfo(socket.data.sessionID, winnerP);
+  console.log(`${dateNow()} [${sessionID}] Sending game P2P information.`);
+  socket.emit('resGetDuelInfos', serializeGameInfoFromID(sessionID));
+}
+
+export function gameFinished(socket: Socket, winnerP: PlayerRole) {
+  const sessionID = socket.data.sessionID;
+  if (!sessionID) {
+    console.error(`${dateNow()} [${sessionID}] Session ID not found.`);
+    return;
+  }
+  const gameInfo = getGameInfoFromID(sessionID);
+  if (!gameInfo) {
+    console.error(`${dateNow()} [${sessionID}] Game info not found.`);
+    return;
+  }
+  console.log(
+    `${dateNow()} [${sessionID}] Game is finished. Winner is ${winnerP}.`
+  );
   const loserP = getOpponent(winnerP);
   const winnerValue = gameInfo.players.get(winnerP)?.value;
   const loserValue = gameInfo.players.get(loserP)?.value;
-  setValueToGameInfoFromID(
-    socket.data.sessionID,
-    winnerP,
-    Math.floor((winnerValue! + loserValue!) * 0.95)
-  );
-  setValueToGameInfoFromID(socket.data.sessionID, loserP, 0);
-  console.log(
-    `${dateNow()} [${socket.data.sessionID}] Deleting LNURLPs from Session.`
-  );
-  deleteLNURLPsFromSession(socket.data.sessionID);
+  const newWinnerValue =
+    winnerValue && loserValue
+      ? Math.floor((winnerValue + loserValue) * 0.95)
+      : undefined;
+  if (!newWinnerValue) {
+    console.error(
+      `${dateNow()} [${sessionID}] Error calculating new winner value.`
+    );
+    return;
+  }
+  appendWinnerToGameInfo(sessionID, winnerP);
+  setValueToGameInfoFromID(sessionID, winnerP, newWinnerValue);
+  setValueToGameInfoFromID(sessionID, loserP, 0);
+  console.log(`${dateNow()} [${sessionID}] Deleting LNURLPs from Session.`);
+  deleteLNURLPsFromSession(sessionID);
 }
 
 export function getOpponent(role: PlayerRole): PlayerRole {

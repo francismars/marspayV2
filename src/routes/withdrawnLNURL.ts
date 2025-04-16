@@ -44,11 +44,6 @@ router.post('/', (req: Request, res: Response) => {
 
 function handleEndOfSession(sessionID: string, lnurlw: string) {
   console.log(`${dateNow()} [${sessionID}] Ending session.`);
-  const gameInfos = getGameInfoFromID(sessionID);
-  if (!gameInfos) {
-    console.error(`${dateNow()} [${sessionID}] Game info not found.`);
-    return;
-  }
   appendGameInfotoJSON(sessionID);
   deleteLNURLW(lnurlw);
   deleteLNURLWFromSession(sessionID);
