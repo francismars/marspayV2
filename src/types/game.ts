@@ -1,6 +1,6 @@
 export interface GameInfo {
-  players: PlayerInfoFromRole;
   gamemode: GameMode;
+  players: PlayerInfoFromRole;
   winners?: PlayerRole[];
 }
 
