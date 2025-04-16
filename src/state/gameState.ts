@@ -9,7 +9,6 @@ export function getPlayerInfoFromIDToGame(
 ) {
   const gameInfo = IDToGameInfo.get(sessionId);
   if (!gameInfo) {
-    console.error('gameInfo not found.');
     return;
   }
   return gameInfo.players.get(player);
@@ -27,7 +26,6 @@ export function setPlayerInfoInGameByID(
 ) {
   const gameInfo = IDToGameInfo.get(sessionId);
   if (!gameInfo && mode) {
-    console.error('gameInfo not found. creating new one.');
     IDToGameInfo.set(sessionId, {
       players: new Map<PlayerRole, PlayerInfo>(),
       gamemode: GameMode.P2P,
@@ -46,12 +44,10 @@ export function getPlayerValueFromGameSession(
 ) {
   const gameInfo = IDToGameInfo.get(sessionId);
   if (!gameInfo) {
-    console.error('gameInfo not found.');
     return;
   }
   const playerInfo = gameInfo.players.get(player);
   if (!playerInfo) {
-    console.error('player not found.');
     return;
   }
   return playerInfo.value;

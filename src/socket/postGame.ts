@@ -61,7 +61,7 @@ export async function createWithdrawalPostGame(socket: Socket) {
       const lnurlw = await createLNURLW(Math.floor(amount), maxWithdrawals);
       if (lnurlw) {
         console.log(`${dateNow()} [${sessionID}] Created LNURLw ${lnurlw.id}.`);
-        setIDToLNURLW(sessionID, lnurlw.lnurl);
+        setIDToLNURLW(sessionID, { id: lnurlw.id, lnurlw: lnurlw.lnurl });
         setLNURLWToID(lnurlw.id, sessionID);
         socket.emit('resCreateWithdrawalPostGame', lnurlw.lnurl);
       }
