@@ -1,5 +1,5 @@
 import { LNURLP } from '../types/lnurlp';
-import deleteLNURLP from '../calls/deleteLNURLP';
+import deleteLNURLP from '../calls/LNBits/deleteLNURLP';
 
 const LNURLPToID = new Map<string, string>();
 const IDToLNURLPs = new Map<string, Array<LNURLP>>();

@@ -1,8 +1,8 @@
-import { WITHDRAWURL } from '../consts/lnbits';
-import { dateNow } from '../utils/time';
+import { PAYURL } from '../../consts/lnbits';
+import { dateNow } from '../../utils/time';
 import dotenv from 'dotenv';
 
-export default async function deleteLNURLW(lnurl: string) {
+export default async function deleteLNURLP(lnurl: string) {
   dotenv.config();
   const lnbitsURL = process.env.LNBITS_URL;
   const lnbitsKEY = process.env.LNBITS_KEY;
@@ -12,7 +12,7 @@ export default async function deleteLNURLW(lnurl: string) {
     return null;
   }
   try {
-    const response = await fetch(lnbitsURL + WITHDRAWURL + lnurl, {
+    const response = await fetch(lnbitsURL + PAYURL + lnurl, {
       method: 'DELETE',
       headers: {
         'X-Api-Key': lnbitsKEY,
@@ -24,13 +24,13 @@ export default async function deleteLNURLW(lnurl: string) {
 
     const data = await response.json();
     if (data.success) {
-      console.log(`${dateNow()} LNBits deleted LNURLw: ${lnurl}`);
+      console.log(`${dateNow()} LNBits deleted LNURLp: ${lnurl}`);
     } else {
-      console.error(`${dateNow()} LNBits failed to delete LNURLw: ${lnurl}`);
+      console.error(`${dateNow()} LNBits failed to delete LNURLp: ${lnurl}`);
     }
     return;
   } catch (error) {
-    console.error('Failed to delete LNURLw:', error);
+    console.error('Failed to delete LNURLp:', error);
     return null;
   }
 }

@@ -12,9 +12,9 @@ import { io } from '../server';
 import { ExtendedError } from 'socket.io';
 import dotenv from 'dotenv';
 import { DESIGNERPERCENT, DEVPERCENT, HOSTPERCENT } from '../consts/splits';
-import getLNURLCallback from '../calls/getLNURLCallback';
-import getInvoiceFromCallback from '../calls/getInvoiceFromCallback';
-import payInvoice from '../calls/payInvoice';
+import getLNURLCallback from '../calls/LNAddress/getLNURLCallback';
+import getInvoiceFromCallback from '../calls/LNAddress/getInvoiceFromCallback';
+import payInvoice from '../calls/LNBits/payInvoice';
 import { Split } from '../types/split';
 
 const router = Router();
