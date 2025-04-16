@@ -1,7 +1,9 @@
-const IDToLNURLW = new Map<string, string>();
+import { LNURLW } from '../types/lnurlw';
+
+const IDToLNURLW = new Map<string, LNURLW>();
 const LNURLWToID = new Map<string, string>();
 
-export function setIDToLNURLW(sessionId: string, lnurlw: string) {
+export function setIDToLNURLW(sessionId: string, lnurlw: LNURLW) {
   IDToLNURLW.set(sessionId, lnurlw);
 }
 
@@ -21,7 +23,7 @@ export function deleteLNURLWFromSession(sessionId: string) {
   const lnurlw = getLNURLWFromID(sessionId);
   if (lnurlw) {
     IDToLNURLW.delete(sessionId);
-    LNURLWToID.delete(lnurlw);
+    LNURLWToID.delete(lnurlw.id);
   }
 }
 
