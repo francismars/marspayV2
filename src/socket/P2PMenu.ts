@@ -26,6 +26,12 @@ export async function getP2PMenuInfos(socket: Socket) {
       );
       await newLNURLPsP2P(sessionID);
     } else if (LNURLPs) {
+      if (LNURLPs[0].mode !== GameMode.P2P) {
+        console.log(
+          `${dateNow()} [${sessionID}] Found existing LNRURLPs but they are not P2P.`
+        );
+        return;
+      }
       console.log(`${dateNow()} [${sessionID}] Found existing LNRURLPs.`);
     }
     console.log(`${dateNow()} [${sessionID}] Sending LNRURLPs to client.`);
