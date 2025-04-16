@@ -133,7 +133,7 @@ export function serializeGameInfoFromID(sessionId: string) {
   };
 }
 
-export function serializeIDToGameInfo() {
+export function getSerializedIDToGameInfo() {
   const serializedIDToGameInfo: Record<
     string,
     {
