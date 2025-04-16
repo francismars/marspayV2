@@ -15,6 +15,7 @@ import { DESIGNERPERCENT, DEVPERCENT, HOSTPERCENT } from '../consts/splits';
 import getLNURLCallback from '../calls/getLNURLCallback';
 import getInvoiceFromCallback from '../calls/getInvoiceFromCallback';
 import payInvoice from '../calls/payInvoice';
+import { Split } from '../types/split';
 
 const router = Router();
 dotenv.config();
