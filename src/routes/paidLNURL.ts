@@ -9,6 +9,7 @@ import {
 } from '../state/gameState';
 import { GameMode, Payment, PlayerInfo, PlayerRole } from '../types/game';
 import { io } from '../server';
+import { ExtendedError } from 'socket.io';
 
 const router = Router();
 
@@ -22,7 +23,21 @@ interface LNURLPReqBody {
   body: string;
 }
 
-router.post('/', (req: Request, res: Response) => {
+function ipFilter(
+  req: Request,
+  res: Response,
+  next: (err?: ExtendedError) => void
+) {
+  const requestIp = req.ip?.replace('::ffff:', '');
+  const allowedServerIp = process.env.LNBITS_IP;
+  if (requestIp === allowedServerIp) {
+    next();
+  } else {
+    res.status(403).send('Access denied');
+  }
+}
+
+router.post('/', ipFilter, (req: Request, res: Response) => {
   const reqBody = req.body as LNURLPReqBody;
   const reqLNURLP = reqBody.lnurlp;
 
