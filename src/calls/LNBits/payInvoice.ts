@@ -1,4 +1,4 @@
-import { dateNow } from '../utils/time';
+import { dateNow } from '../../utils/time';
 
 export default async function payInvoice(invoice: string) {
   const lnbitsURL = process.env.LNBITS_URL;

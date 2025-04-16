@@ -6,7 +6,7 @@ import { getGameInfoFromID, serializeGameInfoFromID } from '../state/gameState';
 import { BUYINMAX, BUYINMIN, BUYINMINWINNER } from '../consts/values';
 import { appendLNURLPToID, setLNURLPToID } from '../state/lnurlpState';
 import { GameMode } from '../types/game';
-import createLNURLP from '../calls/createLNURLP';
+import createLNURLP from '../calls/LNBits/createLNURLP';
 
 export async function getP2PMenuInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;

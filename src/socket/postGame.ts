@@ -7,7 +7,7 @@ import {
   setLNURLWToID,
 } from '../state/lnurlwState';
 import { PlayerRole } from '../types/game';
-import createLNURLW from '../calls/createLNURLW';
+import createLNURLW from '../calls/LNBits/createLNURLW';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
 
 export function postGameInfo(socket: Socket) {
@@ -51,7 +51,7 @@ export async function createWithdrawalPostGame(socket: Socket) {
         dateNow() +
           `${dateNow()} [${sessionID}] Requested to create LNURLW with 0 sats. Deleting Session data.`
       );
-      //socket.emit('resCreateWithdrawalPostGame', 'pass');
+      socket.emit('resCreateWithdrawalPostGame', 'pass');
       //deleteSessionData(sessionid);
     } else if (amount > 0) {
       const maxWithdrawals = P2PMAXWITHDRAWALS;

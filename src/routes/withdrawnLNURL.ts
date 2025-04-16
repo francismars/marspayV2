@@ -13,7 +13,7 @@ import { dateNow } from '../utils/time';
 import { io } from '../server';
 import { promises as fs } from 'fs';
 import path from 'path';
-import deleteLNURLW from '../calls/deleteLNURLW';
+import deleteLNURLW from '../calls/LNBits/deleteLNURLW';
 
 const router = Router();
 
