@@ -4,6 +4,7 @@ import { dateNow } from '../utils/time';
 import { getP2PMenuInfos } from './P2PMenu';
 import { gameFinished, gameInfos } from './game';
 import { createWithdrawalPostGame, postGameInfo } from './postGame';
+import { cancelP2P } from './cancelP2P';
 
 export default function registerSocketHandlers(io: Server) {
   io.use((socket: Socket, next) => {
@@ -19,6 +20,10 @@ export default function registerSocketHandlers(io: Server) {
     // TODO: Change to getP2PMenuInfos
     socket.on('getGameMenuInfos', async () => {
       getP2PMenuInfos(socket);
+    });
+
+    socket.on('cancelp2p', () => {
+      cancelP2P(socket);
     });
 
     // TODO: Change to getGameInfos
