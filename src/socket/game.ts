@@ -6,8 +6,9 @@ import {
   setValueToGameInfoFromID,
 } from '../state/gameState';
 import { dateNow } from '../utils/time';
-import { PlayerRole } from '../types/game';
+import { GameMode, PlayerRole } from '../types/game';
 import { deleteLNURLPsFromSession } from '../state/lnurlpState';
+import { BUYINMINPRACTICE } from '../consts/values';
 
 export function gameInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -41,22 +42,39 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
   console.log(
     `${dateNow()} [${sessionID}] Game is finished. Winner is ${winnerP}.`
   );
-  const loserP = getOpponent(winnerP);
-  const winnerValue = gameInfo.players.get(winnerP)?.value;
-  const loserValue = gameInfo.players.get(loserP)?.value;
-  const newWinnerValue =
-    winnerValue && loserValue
-      ? Math.floor((winnerValue + loserValue) * 0.95)
-      : undefined;
-  if (!newWinnerValue) {
-    console.error(
-      `${dateNow()} [${sessionID}] Error calculating new winner value.`
-    );
-    return;
+  if (gameInfo.gamemode == GameMode.P2P) {
+    const loserP = getOpponent(winnerP);
+    const winnerValue = gameInfo.players.get(winnerP)?.value;
+    const loserValue = gameInfo.players.get(loserP)?.value;
+    const newWinnerValue =
+      winnerValue && loserValue
+        ? Math.floor((winnerValue + loserValue) * 0.95)
+        : undefined;
+    if (!newWinnerValue) {
+      console.error(
+        `${dateNow()} [${sessionID}] Error calculating new winner value.`
+      );
+      return;
+    }
+    setValueToGameInfoFromID(sessionID, winnerP, newWinnerValue);
+    setValueToGameInfoFromID(sessionID, loserP, 0);
+  } else if (gameInfo.gamemode == GameMode.PRACTICE) {
+    if (winnerP != PlayerRole.Player1) {
+      const p1Value = gameInfo.players.get(PlayerRole.Player1)?.value;
+      if (!p1Value) {
+        console.error(
+          `${dateNow()} [${sessionID}] Error calculating Player 1 value.`
+        );
+        return;
+      }
+      setValueToGameInfoFromID(
+        sessionID,
+        PlayerRole.Player1,
+        p1Value - BUYINMINPRACTICE
+      );
+    }
   }
   appendWinnerToGameInfo(sessionID, winnerP);
-  setValueToGameInfoFromID(sessionID, winnerP, newWinnerValue);
-  setValueToGameInfoFromID(sessionID, loserP, 0);
   console.log(`${dateNow()} [${sessionID}] Deleting LNURLPs from Session.`);
   deleteLNURLPsFromSession(sessionID);
 }

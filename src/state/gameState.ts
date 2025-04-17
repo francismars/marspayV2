@@ -22,13 +22,13 @@ export function setPlayerInfoInGameByID(
   sessionId: string,
   player: PlayerRole,
   info: PlayerInfo,
-  mode?: GameMode
+  mode: GameMode
 ) {
   const gameInfo = IDToGameInfo.get(sessionId);
   if (!gameInfo && mode) {
     IDToGameInfo.set(sessionId, {
       players: new Map<PlayerRole, PlayerInfo>(),
-      gamemode: GameMode.P2P,
+      gamemode: mode,
     });
     IDToGameInfo.get(sessionId)!.players.set(player, info);
     return;
