@@ -1,10 +1,11 @@
-import { Server, Socket } from 'socket.io';
+import { DefaultEventsMap, Server, Socket } from 'socket.io';
 import middleware from './middleware';
 import { dateNow } from '../utils/time';
 import { getP2PMenuInfos } from './P2PMenu';
 import { gameFinished, gameInfos } from './game';
 import { createWithdrawalPostGame, postGameInfo } from './postGame';
 import { cancelP2P } from './cancelP2P';
+import { getPracticeMenuInfos } from './practiceMenu';
 
 export default function registerSocketHandlers(io: Server) {
   io.use((socket: Socket, next) => {
@@ -19,7 +20,7 @@ export default function registerSocketHandlers(io: Server) {
 
     // TODO: Change to getP2PMenuInfos
     socket.on('getGameMenuInfos', async () => {
-      getP2PMenuInfos(socket);
+      await getP2PMenuInfos(socket);
     });
 
     socket.on('cancelp2p', () => {
@@ -31,6 +32,10 @@ export default function registerSocketHandlers(io: Server) {
       gameInfos(socket);
     });
 
+    socket.on('getPracticeMenuInfos', async () => {
+      await getPracticeMenuInfos(socket);
+    });
+
     socket.on('gameFinished', async (winnerP) => {
       gameFinished(socket, winnerP);
     });
@@ -40,7 +45,7 @@ export default function registerSocketHandlers(io: Server) {
     });
 
     socket.on('createWithdrawalPostGame', async () => {
-      createWithdrawalPostGame(socket);
+      await createWithdrawalPostGame(socket);
     });
 
     socket.on('disconnect', () => {

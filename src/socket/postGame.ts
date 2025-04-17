@@ -6,7 +6,7 @@ import {
   setIDToLNURLW,
   setLNURLWToID,
 } from '../state/lnurlwState';
-import { PlayerRole } from '../types/game';
+import { GameMode, PlayerRole } from '../types/game';
 import createLNURLW from '../calls/LNBits/createLNURLW';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
 
@@ -38,18 +38,21 @@ export async function createWithdrawalPostGame(socket: Socket) {
       console.log(
         `${dateNow()} [${sessionID}] Tried to create withdrawal link but didn't make any deposits`
       );
+      return;
     }
     if (!gameInfo?.winners) {
       console.log(
         `${dateNow()} [${sessionID}] Tried to create withdrawal link but there are no winners`
       );
+      return;
     }
     const winner: PlayerRole = gameInfo!.winners!.slice(-1)[0];
-    const amount = gameInfo!.players!.get(winner)!.value;
+    const valueFrom =
+      gameInfo.gamemode == GameMode.P2P ? winner : PlayerRole.Player1;
+    const amount = gameInfo!.players!.get(valueFrom)!.value;
     if (amount == 0) {
       console.log(
-        dateNow() +
-          `${dateNow()} [${sessionID}] Requested to create LNURLW with 0 sats. Deleting Session data.`
+        `${dateNow()} [${sessionID}] Requested to create LNURLW with 0 sats. Deleting Session data.`
       );
       socket.emit('resCreateWithdrawalPostGame', 'pass');
       //deleteSessionData(sessionid);

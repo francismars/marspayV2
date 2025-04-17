@@ -14,6 +14,7 @@ export interface PlayerInfo {
 
 export enum GameMode {
   P2P = 'P2P',
+  PRACTICE = 'PRACTICE',
 }
 
 export enum PlayerRole {
