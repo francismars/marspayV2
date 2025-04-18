@@ -6,6 +6,7 @@ import { gameFinished, gameInfos } from './game';
 import { createWithdrawalPostGame, postGameInfo } from './postGame';
 import { cancelP2P } from './cancelP2P';
 import { getPracticeMenuInfos } from './practiceMenu';
+import { normalizeIP } from '../utils/ip';
 
 export default function registerSocketHandlers(io: Server) {
   io.use((socket: Socket, next) => {
@@ -13,7 +14,7 @@ export default function registerSocketHandlers(io: Server) {
   });
 
   io.on('connection', (socket: Socket) => {
-    const realIP = socket.handshake.address; // TODO: change when NGINX is set up
+    const realIP = normalizeIP(socket.handshake.address); // TODO: change when NGINX is set up
     console.log(
       `${dateNow()} [${socket.data.sessionID}] connected with IP ${realIP}.`
     );

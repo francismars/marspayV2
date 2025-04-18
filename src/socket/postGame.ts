@@ -6,10 +6,19 @@ import {
   setIDToLNURLW,
   setLNURLWToID,
 } from '../state/lnurlwState';
-import { GameMode, PlayerRole } from '../types/game';
+import { GameMode, PlayerInfo, PlayerRole } from '../types/game';
 import createLNURLW from '../calls/LNBits/createLNURLW';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
 import { handleEndOfSession } from '../state/cleanupState';
+
+interface Response {
+  gamemode: GameMode;
+  players: {
+    [k: string]: PlayerInfo;
+  };
+  winners: PlayerRole[] | undefined;
+  lnurlw?: string;
+}
 
 export function postGameInfo(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -19,7 +28,12 @@ export function postGameInfo(socket: Socket) {
   const gameInfos = getGameInfoFromID(sessionID);
   if (gameInfos && gameInfos.winners) {
     console.log(`${dateNow()} [${sessionID}] Sending P2P postGame info.`);
-    const response = serializeGameInfoFromID(sessionID);
+    const response: Response | undefined = serializeGameInfoFromID(sessionID);
+    const LNURLW = getLNURLWFromID(sessionID);
+    if (LNURLW) {
+      console.log(`${dateNow()} [${sessionID}] Sending existing LNRURLw.`);
+      response!.lnurlw = LNURLW.lnurlw;
+    }
     socket.emit('resPostGameInfoRequest', response);
   } else
     console.log(`${dateNow()} [${sessionID}] has no associated postGame info.`);
@@ -30,8 +44,7 @@ export async function createWithdrawalPostGame(socket: Socket) {
   console.log(`${dateNow()} [${sessionID}] Requested LNRURLw.`);
   const LNURLW = getLNURLWFromID(sessionID);
   if (LNURLW) {
-    console.log(`${dateNow()} [${sessionID}] Sending existing LNRURLw.`);
-    socket.emit('resCreateWithdrawalPostGame', LNURLW);
+    console.log(`${dateNow()} [${sessionID}] LNRURLw sent previously.`);
   } else if (!LNURLW) {
     console.log(`${dateNow()} [${sessionID}] No associated LNRURLw.`);
     const gameInfo = getGameInfoFromID(sessionID);
