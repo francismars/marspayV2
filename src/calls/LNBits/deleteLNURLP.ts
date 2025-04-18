@@ -23,9 +23,7 @@ export default async function deleteLNURLP(lnurl: string) {
     }
 
     const data = await response.json();
-    if (data.success) {
-      console.log(`${dateNow()} LNBits deleted LNURLp: ${lnurl}`);
-    } else {
+    if (!data.success) {
       console.error(`${dateNow()} LNBits failed to delete LNURLp: ${lnurl}`);
     }
     return;
