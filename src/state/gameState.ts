@@ -1,5 +1,4 @@
 import { PlayerInfo, PlayerRole, GameInfo, GameMode } from '../types/game';
-import { Payment } from '../types/game';
 
 const IDToGameInfo = new Map<string, GameInfo>();
 
@@ -18,22 +17,16 @@ export function getGameInfoFromID(sessionId: string) {
   return IDToGameInfo.get(sessionId);
 }
 
-export function setPlayerInfoInGameByID(
-  sessionId: string,
-  player: PlayerRole,
-  info: PlayerInfo,
-  mode: GameMode
-) {
+export function setGameInfoByID(sessionId: string, newGameInfo: GameInfo) {
   const gameInfo = IDToGameInfo.get(sessionId);
-  if (!gameInfo && mode) {
-    IDToGameInfo.set(sessionId, {
-      players: new Map<PlayerRole, PlayerInfo>(),
-      gamemode: mode,
-    });
-    IDToGameInfo.get(sessionId)!.players.set(player, info);
+  if (!gameInfo) {
+    IDToGameInfo.set(sessionId, newGameInfo);
     return;
   } else if (gameInfo) {
-    gameInfo.players?.set(player, info);
+    for (const [playerRole, playerInfo] of newGameInfo.players) {
+      gameInfo.players?.set(playerRole, playerInfo);
+    }
+
     return;
   }
 }
@@ -73,13 +66,13 @@ export function setValueToGameInfoFromID(
 export function serializeGameInfoFromID(sessionId: string) {
   const gameInfo = IDToGameInfo.get(sessionId);
   if (!gameInfo) {
-    console.error('gameInfo not found.');
     return;
   }
   return {
     gamemode: gameInfo.gamemode,
     players: Object.fromEntries(gameInfo.players),
     winners: gameInfo.winners,
+    numberOfPlayers: gameInfo.numberOfPlayers
   };
 }
 

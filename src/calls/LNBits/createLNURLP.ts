@@ -7,15 +7,14 @@ export default async function createLNURLP(
   description: string,
   buyInMin: number,
   buyInMax: number
-): Promise<LNURLP | null> {
+): Promise<LNURLP> {
   dotenv.config();
   const lnbitsURL = process.env.LNBITS_URL;
   const lnbitsKEY = process.env.LNBITS_KEY;
   const lnbitsHook = process.env.LNBITS_DEPOSITHOOK;
 
   if (!lnbitsURL || !lnbitsKEY || !lnbitsHook) {
-    console.error(`${dateNow()} Missing LNbits environment variables`);
-    return null;
+    throw new Error(`${dateNow()} Missing LNbits environment variables`);
   }
 
   try {
@@ -36,7 +35,9 @@ export default async function createLNURLP(
     });
 
     if (!response.ok) {
-      throw new Error(`LNbits responded with status ${response.status}`);
+      throw new Error(
+        `${dateNow()} LNbits responded with status ${response.status}`
+      );
     }
 
     const data = await response.json();
@@ -47,7 +48,6 @@ export default async function createLNURLP(
       min: data.min,
     };
   } catch (error) {
-    console.error('Failed to create LNURLP link:', error);
-    return null;
+    throw new Error(`${dateNow()} Failed to create LNURLP link: ${error}`);
   }
 }
