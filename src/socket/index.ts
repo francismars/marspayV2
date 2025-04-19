@@ -7,6 +7,7 @@ import { createWithdrawalPostGame, postGameInfo } from './postGame';
 import { cancelP2P } from './cancelP2P';
 import { getPracticeMenuInfos } from './practiceMenu';
 import { normalizeIP } from '../utils/ip';
+import { getTournamentMenuInfos } from './tournament';
 
 export default function registerSocketHandlers(io: Server) {
   io.use((socket: Socket, next) => {
@@ -36,6 +37,13 @@ export default function registerSocketHandlers(io: Server) {
     socket.on('getPracticeMenuInfos', async () => {
       await getPracticeMenuInfos(socket);
     });
+
+    socket.on(
+      'getTournamentInfos',
+      async (data?: { buyin: number; players: number }) => {
+        await getTournamentMenuInfos(socket, data);
+      }
+    );
 
     socket.on('gameFinished', async (winnerP) => {
       gameFinished(socket, winnerP);
