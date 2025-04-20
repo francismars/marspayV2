@@ -71,7 +71,7 @@ export async function getTournamentMenuInfos(
     console.log(`${dateNow()} [${sessionID}] Sending LNRURLP to client.`);
     const gameInfo = serializeGameInfoFromID(sessionID);
     socket.emit('resGetTournamentInfos', {
-      gameInfo,
+      gameInfo: gameInfo,
       lnurlp: newLNURLPs![0].lnurlp,
       min: newLNURLPs![0].min,
     });
@@ -92,7 +92,7 @@ export async function getTournamentMenuInfos(
       return;
     }
     socket.emit('resGetTournamentInfos', {
-      gameInfo,
+      gameInfo: gameInfo,
       lnurlw: LNURLW.lnurlw,
       min: LNURLPs![0].min,
     });

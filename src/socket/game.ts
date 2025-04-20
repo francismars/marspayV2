@@ -75,8 +75,13 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
     }
   }
   appendWinnerToGameInfo(sessionID, winnerP);
-  console.log(`${dateNow()} [${sessionID}] Deleting LNURLPs from Session.`);
-  deleteLNURLPsFromSession(sessionID);
+  if (
+    gameInfo.gamemode != GameMode.TOURNAMENT ||
+    gameInfo.winners?.length === gameInfo.numberOfPlayers
+  ) {
+    console.log(`${dateNow()} [${sessionID}] Deleting LNURLPs from Session.`);
+    deleteLNURLPsFromSession(sessionID);
+  }
 }
 
 export function getOpponent(role: PlayerRole): PlayerRole {
