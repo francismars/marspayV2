@@ -50,7 +50,12 @@ export async function cancelTournament(socket: Socket) {
           console.log(
             `${dateNow()} [${sessionID}] Created LNURLw ${lnurlw.id}.`
           );
-          setIDToLNURLW(sessionID, { id: lnurlw.id, lnurlw: lnurlw.lnurl });
+          setIDToLNURLW(sessionID, {
+            id: lnurlw.id,
+            lnurlw: lnurlw.lnurl,
+            maxWithdrawals: depositcount,
+            claimedCount: 0,
+          });
           setLNURLWToID(lnurlw.id, sessionID);
           response.lnurlw = lnurlw.lnurl;
         }

@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { getIDFromLNURLW } from '../state/lnurlwState';
+import { getIDFromLNURLW, getLNURLWFromID } from '../state/lnurlwState';
 import { getSocketFromID } from '../state/sessionState';
 import { dateNow } from '../utils/time';
 import { io } from '../server';
 import { handleEndOfSession } from '../state/cleanupState';
+import { gameInfos } from '../socket/game';
+import { getGameInfoFromID } from '../state/gameState';
 
 const router = Router();
 
@@ -29,7 +31,21 @@ router.post('/', (req: Request, res: Response) => {
   console.log(`${dateNow()} [${sessionID}] Claimed LNURLw ${lnurlw}.`);
   io.to(socketID).emit('prizeWithdrawn');
   res.send({ body: 'Withdrawn' });
-  handleEndOfSession(sessionID);
+  const gameInfos = getGameInfoFromID(sessionID);
+  const LNURLW = getLNURLWFromID(sessionID);
+  if (
+    gameInfos &&
+    gameInfos.gamemode === 'TOURNAMENT' &&
+    LNURLW &&
+    LNURLW.claimedCount! < LNURLW.maxWithdrawals!
+  ) {
+    LNURLW.claimedCount = LNURLW.claimedCount! + 1;
+    console.log(
+      `${dateNow()} [${sessionID}] Updated claimed count to ${
+        LNURLW.claimedCount
+      }.`
+    );
+  } else handleEndOfSession(sessionID);
 });
 
 export default router;
