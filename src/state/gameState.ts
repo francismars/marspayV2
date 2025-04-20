@@ -70,9 +70,9 @@ export function serializeGameInfoFromID(sessionId: string) {
   }
   return {
     gamemode: gameInfo.gamemode,
+    numberOfPlayers: gameInfo.numberOfPlayers,
     players: Object.fromEntries(gameInfo.players),
     winners: gameInfo.winners,
-    numberOfPlayers: gameInfo.numberOfPlayers
   };
 }
 
@@ -81,6 +81,7 @@ export function getSerializedIDToGameInfo() {
     string,
     {
       gamemode: GameMode;
+      numberOfPlayers?: number;
       players: Record<string, PlayerInfo>;
       winners?: PlayerRole[];
     }

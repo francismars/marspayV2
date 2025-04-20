@@ -174,8 +174,6 @@ function decidePlayerRole(lnurlp: LNURLP, sessionID: string) {
       0,
       gameInfos.numberOfPlayers ?? 1
     );
-    console.log(assignedRoles);
-    console.log(allRoles);
     const availableRoles = allRoles.filter(
       (role) => !assignedRoles.includes(role as PlayerRole)
     );
