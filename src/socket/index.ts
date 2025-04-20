@@ -8,6 +8,7 @@ import { cancelP2P } from './cancelP2P';
 import { getPracticeMenuInfos } from './practiceMenu';
 import { normalizeIP } from '../utils/ip';
 import { getTournamentMenuInfos } from './tournament';
+import { cancelTournament } from './cancelTournament';
 
 export default function registerSocketHandlers(io: Server) {
   io.use((socket: Socket, next) => {
@@ -27,6 +28,10 @@ export default function registerSocketHandlers(io: Server) {
 
     socket.on('cancelp2p', () => {
       cancelP2P(socket);
+    });
+
+    socket.on('canceltournament', async () => {
+      await cancelTournament(socket);
     });
 
     // TODO: Change to getGameInfos
