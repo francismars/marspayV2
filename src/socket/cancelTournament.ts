@@ -14,7 +14,6 @@ export async function cancelTournament(socket: Socket) {
   console.log(`dateNow() [${sessionID}] Attempting to cancel tournament.`);
   const response: {
     depositcount: number;
-    playersList?: string[];
     lnurlw?: string;
   } = { depositcount: 0 };
   const tournamentInfo = getGameInfoFromID(sessionID);
@@ -30,9 +29,6 @@ export async function cancelTournament(socket: Socket) {
     const players = tournamentInfo.players;
     response.depositcount = depositcount;
     if (depositcount > 0) {
-      response.playersList = Array.from(players.values()).map(
-        (playerInfo) => playerInfo.name
-      );
       const lastLNURLPtournament = getLNURLPsFromID(sessionID);
       if (
         lastLNURLPtournament &&
