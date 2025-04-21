@@ -23,57 +23,7 @@ export async function getTournamentMenuInfos(
     `${dateNow()} [${sessionID}] Requested necessary informations for Tournament Menu.`
   );
   const LNURLW = getLNURLWFromID(sessionID);
-  if (!LNURLW) {
-    const LNURLPs = getLNURLPsFromID(sessionID);
-    if (!LNURLPs) {
-      if (!data?.buyin || !data?.players) {
-        console.log(
-          `${dateNow()} [${sessionID}] No data provided. Cannot create LNURLP.`
-        );
-        return;
-      }
-      console.log(
-        `${dateNow()} [${sessionID}] There is no associated LNRURLP. Creating new one.`
-      );
-      try {
-        await newLNURLPTournament(sessionID, data.buyin);
-        const gameMode = GameMode.TOURNAMENT;
-        const players: PlayerInfoFromRole = new Map();
-        const numberOfPlayers = data.players;
-        const newGameInfo: GameInfo = {
-          gamemode: gameMode,
-          players: players,
-          numberOfPlayers: numberOfPlayers,
-        };
-        setGameInfoByID(sessionID, newGameInfo);
-      } catch (error) {
-        console.error(
-          `${dateNow()} [${sessionID}] Error creating LNURLP: ${error}`
-        );
-        return error;
-      }
-    } else if (LNURLPs) {
-      if (LNURLPs[0].mode !== GameMode.TOURNAMENT) {
-        console.log(
-          `${dateNow()} [${sessionID}] Found existing LNRURLPs but they are not TOURNAMENT.`
-        );
-        return;
-      }
-      console.log(`${dateNow()} [${sessionID}] Found existing LNRURLP.`);
-    }
-    const newLNURLPs = getLNURLPsFromID(sessionID);
-    if (!newLNURLPs) {
-      console.log(`${dateNow()} [${sessionID}] LNURLP doesn't exist.`);
-      return;
-    }
-    console.log(`${dateNow()} [${sessionID}] Sending LNRURLP to client.`);
-    const gameInfo = serializeGameInfoFromID(sessionID);
-    socket.emit('resGetTournamentInfos', {
-      gameInfo: gameInfo,
-      lnurlp: newLNURLPs![0].lnurlp,
-      min: newLNURLPs![0].min,
-    });
-  } else if (LNURLW) {
+  if (LNURLW) {
     console.log(
       `${dateNow()} [${sessionID}] Found existing LNRURLW. Sending to client.`
     );
@@ -86,7 +36,7 @@ export async function getTournamentMenuInfos(
     }
     const LNURLPs = getLNURLPsFromID(sessionID);
     if (!LNURLPs) {
-      console.log(`${dateNow()} [${sessionID}] Tournament already started.`);
+      console.log(`${dateNow()} [${sessionID}] LNURLP doesn't exist.`);
       return;
     }
     socket.emit('resGetTournamentInfos', {
@@ -95,7 +45,57 @@ export async function getTournamentMenuInfos(
       min: LNURLPs![0].min,
       claimedCount: LNURLW.claimedCount,
     });
+    return;
   }
+  const LNURLPs = getLNURLPsFromID(sessionID);
+  if (!LNURLPs) {
+    if (!data?.buyin || !data?.players) {
+      console.log(
+        `${dateNow()} [${sessionID}] No data provided. Cannot create LNURLP.`
+      );
+      return;
+    }
+    console.log(
+      `${dateNow()} [${sessionID}] There is no associated LNRURLP. Creating new one.`
+    );
+    try {
+      await newLNURLPTournament(sessionID, data.buyin);
+      const gameMode = GameMode.TOURNAMENT;
+      const players: PlayerInfoFromRole = new Map();
+      const numberOfPlayers = data.players;
+      const newGameInfo: GameInfo = {
+        gamemode: gameMode,
+        players: players,
+        numberOfPlayers: numberOfPlayers,
+      };
+      setGameInfoByID(sessionID, newGameInfo);
+    } catch (error) {
+      console.error(
+        `${dateNow()} [${sessionID}] Error creating LNURLP: ${error}`
+      );
+      return error;
+    }
+  } else if (LNURLPs) {
+    if (LNURLPs[0].mode !== GameMode.TOURNAMENT) {
+      console.log(
+        `${dateNow()} [${sessionID}] Found existing LNRURLPs but they are not TOURNAMENT.`
+      );
+      return;
+    }
+    console.log(`${dateNow()} [${sessionID}] Found existing LNRURLP.`);
+  }
+  const newLNURLPs = getLNURLPsFromID(sessionID);
+  if (!newLNURLPs) {
+    console.log(`${dateNow()} [${sessionID}] LNURLP doesn't exist.`);
+    return;
+  }
+  console.log(`${dateNow()} [${sessionID}] Sending LNRURLP to client.`);
+  const gameInfo = serializeGameInfoFromID(sessionID);
+  socket.emit('resGetTournamentInfos', {
+    gameInfo: gameInfo,
+    lnurlp: newLNURLPs![0].lnurlp,
+    min: newLNURLPs![0].min,
+  });
 }
 
 async function newLNURLPTournament(sessionID: any, buyin: number) {
