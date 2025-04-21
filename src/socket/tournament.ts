@@ -26,7 +26,7 @@ export async function getTournamentMenuInfos(
   if (!LNURLW) {
     const LNURLPs = getLNURLPsFromID(sessionID);
     if (!LNURLPs) {
-      if (!data?.buyin && !data?.players) {
+      if (!data?.buyin || !data?.players) {
         console.log(
           `${dateNow()} [${sessionID}] No data provided. Cannot create LNURLP.`
         );
@@ -35,24 +35,22 @@ export async function getTournamentMenuInfos(
       console.log(
         `${dateNow()} [${sessionID}] There is no associated LNRURLP. Creating new one.`
       );
-      if (data?.buyin && data?.players) {
-        try {
-          await newLNURLPTournament(sessionID, data.buyin);
-          const gameMode = GameMode.TOURNAMENT;
-          const players: PlayerInfoFromRole = new Map();
-          const numberOfPlayers = data.players;
-          const newGameInfo: GameInfo = {
-            gamemode: gameMode,
-            players: players,
-            numberOfPlayers: numberOfPlayers,
-          };
-          setGameInfoByID(sessionID, newGameInfo);
-        } catch (error) {
-          console.error(
-            `${dateNow()} [${sessionID}] Error creating LNURLP: ${error}`
-          );
-          return error;
-        }
+      try {
+        await newLNURLPTournament(sessionID, data.buyin);
+        const gameMode = GameMode.TOURNAMENT;
+        const players: PlayerInfoFromRole = new Map();
+        const numberOfPlayers = data.players;
+        const newGameInfo: GameInfo = {
+          gamemode: gameMode,
+          players: players,
+          numberOfPlayers: numberOfPlayers,
+        };
+        setGameInfoByID(sessionID, newGameInfo);
+      } catch (error) {
+        console.error(
+          `${dateNow()} [${sessionID}] Error creating LNURLP: ${error}`
+        );
+        return error;
       }
     } else if (LNURLPs) {
       if (LNURLPs[0].mode !== GameMode.TOURNAMENT) {
@@ -95,6 +93,7 @@ export async function getTournamentMenuInfos(
       gameInfo: gameInfo,
       lnurlw: LNURLW.lnurlw,
       min: LNURLPs![0].min,
+      claimedCount: LNURLW.claimedCount,
     });
   }
 }

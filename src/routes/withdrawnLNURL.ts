@@ -4,7 +4,6 @@ import { getSocketFromID } from '../state/sessionState';
 import { dateNow } from '../utils/time';
 import { io } from '../server';
 import { handleEndOfSession } from '../state/cleanupState';
-import { gameInfos } from '../socket/game';
 import { getGameInfoFromID } from '../state/gameState';
 
 const router = Router();
@@ -33,19 +32,32 @@ router.post('/', (req: Request, res: Response) => {
   res.send({ body: 'Withdrawn' });
   const gameInfos = getGameInfoFromID(sessionID);
   const LNURLW = getLNURLWFromID(sessionID);
+  if (!gameInfos) {
+    console.error(`${dateNow()} [${sessionID}] Game info not found.`);
+    return;
+  }
+  if (!LNURLW) {
+    console.error(`${dateNow()} [${sessionID}] LNURLw not found.`);
+    return;
+  }
   if (
-    gameInfos &&
     gameInfos.gamemode === 'TOURNAMENT' &&
-    LNURLW &&
     LNURLW.claimedCount! < LNURLW.maxWithdrawals!
   ) {
     LNURLW.claimedCount = LNURLW.claimedCount! + 1;
     console.log(
       `${dateNow()} [${sessionID}] Updated claimed count to ${
         LNURLW.claimedCount
-      }.`
+      } out of ${LNURLW.maxWithdrawals}.`
     );
-  } else handleEndOfSession(sessionID);
+  }
+  if (
+    gameInfos.gamemode === 'P2P' ||
+    gameInfos.gamemode === 'PRACTICE' ||
+    (gameInfos.gamemode === 'TOURNAMENT' &&
+      LNURLW.claimedCount! == LNURLW.maxWithdrawals!)
+  )
+    handleEndOfSession(sessionID);
 });
 
 export default router;
