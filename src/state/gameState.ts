@@ -1,4 +1,5 @@
 import { PlayerInfo, PlayerRole, GameInfo, GameMode } from '../types/game';
+import { buildWinnerNamesList } from '../utils/winnerNames';
 
 const IDToGameInfo = new Map<string, GameInfo>();
 
@@ -73,6 +74,7 @@ export function serializeGameInfoFromID(sessionId: string) {
     numberOfPlayers: gameInfo.numberOfPlayers,
     players: Object.fromEntries(gameInfo.players),
     winners: gameInfo.winners,
+    champion: gameInfo.champion,
   };
 }
 
@@ -84,6 +86,7 @@ export function getSerializedIDToGameInfo() {
       numberOfPlayers?: number;
       players: Record<string, PlayerInfo>;
       winners?: PlayerRole[];
+      champion?: string;
     }
   > = {};
   for (const [sessionID, gameInfo] of IDToGameInfo.entries()) {
@@ -102,4 +105,17 @@ export function deleteGameInfoByID(sessionId: string) {
     return;
   }
   IDToGameInfo.delete(sessionId);
+}
+
+export function setChampionToGameInfo(sessionID: string) {
+  const gameInfo = IDToGameInfo.get(sessionID);
+  if (!gameInfo || !gameInfo.winners || !gameInfo.players) {
+    console.error('Could not set Champion.');
+    return;
+  }
+  const champion = buildWinnerNamesList(gameInfo.players, gameInfo.winners).at(
+    -1
+  );
+  gameInfo.champion = champion;
+  IDToGameInfo.set(sessionID, gameInfo);
 }
