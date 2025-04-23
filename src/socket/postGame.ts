@@ -1,6 +1,10 @@
 import { Socket } from 'socket.io';
 import { dateNow } from '../utils/time';
-import { getGameInfoFromID, serializeGameInfoFromID } from '../state/gameState';
+import {
+  getGameInfoFromID,
+  serializeGameInfoFromID,
+  setChampionToGameInfo,
+} from '../state/gameState';
 import {
   getLNURLWFromID,
   setIDToLNURLW,
@@ -28,6 +32,9 @@ export function postGameInfo(socket: Socket) {
   const gameInfos = getGameInfoFromID(sessionID);
   if (gameInfos && gameInfos.winners) {
     console.log(`${dateNow()} [${sessionID}] Sending P2P postGame info.`);
+    if (gameInfos.gamemode == GameMode.TOURNAMENT) {
+      setChampionToGameInfo(sessionID);
+    }
     const response: Response | undefined = serializeGameInfoFromID(sessionID);
     const LNURLW = getLNURLWFromID(sessionID);
     if (LNURLW) {

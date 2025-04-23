@@ -3,6 +3,7 @@ export interface GameInfo {
   players: PlayerInfoFromRole;
   winners?: PlayerRole[];
   numberOfPlayers?: number;
+  champion?: string;
 }
 
 export type PlayerInfoFromRole = Map<PlayerRole, PlayerInfo>;

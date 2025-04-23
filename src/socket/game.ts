@@ -3,6 +3,7 @@ import {
   appendWinnerToGameInfo,
   getGameInfoFromID,
   serializeGameInfoFromID,
+  setChampionToGameInfo,
   setValueToGameInfoFromID,
 } from '../state/gameState';
 import { dateNow } from '../utils/time';
@@ -75,10 +76,7 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
     }
   }
   appendWinnerToGameInfo(sessionID, winnerP);
-  if (
-    gameInfo.gamemode != GameMode.TOURNAMENT ||
-    gameInfo.winners?.length === gameInfo.numberOfPlayers
-  ) {
+  if (gameInfo.gamemode != GameMode.TOURNAMENT) {
     console.log(`${dateNow()} [${sessionID}] Deleting LNURLPs from Session.`);
     deleteLNURLPsFromSession(sessionID);
   }
