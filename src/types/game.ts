@@ -16,6 +16,7 @@ export interface PlayerInfo {
 
 export enum GameMode {
   P2P = 'P2P',
+  P2PNOSTR = 'P2PNostr',
   PRACTICE = 'PRACTICE',
   TOURNAMENT = 'TOURNAMENT',
 }
