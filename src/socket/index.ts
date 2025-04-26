@@ -9,6 +9,7 @@ import { getPracticeMenuInfos } from './practiceMenu';
 import { normalizeIP } from '../utils/ip';
 import { getTournamentMenuInfos } from './tournament';
 import { cancelTournament } from './cancelTournament';
+import { getNostrP2PMenuInfos } from './nostrP2PMenu';
 
 export default function registerSocketHandlers(io: Server) {
   io.use((socket: Socket, next) => {
@@ -30,17 +31,12 @@ export default function registerSocketHandlers(io: Server) {
       cancelP2P(socket);
     });
 
-    socket.on('canceltournament', async () => {
-      await cancelTournament(socket);
-    });
-
-    // TODO: Change to getGameInfos
-    socket.on('getDuelInfos', () => {
-      gameInfos(socket);
-    });
-
     socket.on('getPracticeMenuInfos', async () => {
       await getPracticeMenuInfos(socket);
+    });
+
+    socket.on('getGameMenuInfosNostr', async () => {
+      await getNostrP2PMenuInfos(socket);
     });
 
     socket.on(
@@ -49,6 +45,15 @@ export default function registerSocketHandlers(io: Server) {
         await getTournamentMenuInfos(socket, data);
       }
     );
+
+    socket.on('canceltournament', async () => {
+      await cancelTournament(socket);
+    });
+
+    // TODO: Change to getGameInfos
+    socket.on('getDuelInfos', () => {
+      gameInfos(socket);
+    });
 
     socket.on('gameFinished', async (winnerP) => {
       gameFinished(socket, winnerP);

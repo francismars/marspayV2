@@ -42,8 +42,7 @@ export async function getP2PMenuInfos(socket: Socket) {
     }
   } else if (LNURW) {
     console.log(`${dateNow()} [${sessionID}] Found associated LNURLW.`);
-    const response = { lnurlw: LNURW };
-    socket.emit('resGetGameMenuInfos', response);
+    socket.emit('resGetGameMenuInfos', { lnurlw: LNURW });
   }
 }
 
