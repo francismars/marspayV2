@@ -22,3 +22,21 @@ export function appendKind1toSessionID(sessionID: string, kind1: Kind1) {
     sessionIDtoKind1s.set(sessionID, [kind1]);
   }
 }
+
+export function deleteKind1sFromSession(sessionID: string) {
+  const kind1s = getKind1sfromSessionID(sessionID);
+  if (kind1s) {
+    for (const kind1 of kind1s) {
+      kind1IDtoSessionID.delete(kind1.id);
+    }
+  }
+  sessionIDtoKind1s.delete(sessionID);
+}
+
+export function getAllkind1IDtoSessionID() {
+  return kind1IDtoSessionID;
+}
+
+export function getAllsessionIDtoKind1s() {
+  return sessionIDtoKind1s;
+}

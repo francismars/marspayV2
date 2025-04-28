@@ -10,6 +10,7 @@ import { dateNow } from '../utils/time';
 import { GameMode, PlayerRole } from '../types/game';
 import { deleteLNURLPsFromSession } from '../state/lnurlpState';
 import { BUYINMINPRACTICE } from '../consts/values';
+import { publishEndGameKind1 } from '../calls/nostr/ndk';
 
 export function gameInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -43,7 +44,7 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
   console.log(
     `${dateNow()} [${sessionID}] Game is finished. Winner is ${winnerP}.`
   );
-  if (gameInfo.gamemode == GameMode.P2P) {
+  if (gameInfo.mode == GameMode.P2P || gameInfo.mode == GameMode.P2PNOSTR) {
     const loserP = getOpponent(winnerP);
     const winnerValue = gameInfo.players.get(winnerP)?.value;
     const loserValue = gameInfo.players.get(loserP)?.value;
@@ -59,7 +60,7 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
     }
     setValueToGameInfoFromID(sessionID, winnerP, newWinnerValue);
     setValueToGameInfoFromID(sessionID, loserP, 0);
-  } else if (gameInfo.gamemode == GameMode.PRACTICE) {
+  } else if (gameInfo.mode == GameMode.PRACTICE) {
     if (winnerP != PlayerRole.Player1) {
       const p1Value = gameInfo.players.get(PlayerRole.Player1)?.value;
       if (!p1Value) {
@@ -76,7 +77,10 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
     }
   }
   appendWinnerToGameInfo(sessionID, winnerP);
-  if (gameInfo.gamemode != GameMode.TOURNAMENT) {
+  if (gameInfo.mode == GameMode.P2PNOSTR) {
+    publishEndGameKind1(sessionID);
+  }
+  if (gameInfo.mode != GameMode.TOURNAMENT) {
     console.log(`${dateNow()} [${sessionID}] Deleting LNURLPs from Session.`);
     deleteLNURLPsFromSession(sessionID);
   }

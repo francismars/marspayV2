@@ -64,7 +64,7 @@ export async function getTournamentMenuInfos(
       const players: PlayerInfoFromRole = new Map();
       const numberOfPlayers = data.players;
       const newGameInfo: GameInfo = {
-        gamemode: gameMode,
+        mode: gameMode,
         players: players,
         numberOfPlayers: numberOfPlayers,
       };

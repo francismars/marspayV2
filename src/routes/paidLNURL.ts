@@ -24,7 +24,6 @@ import getInvoiceFromCallback from '../calls/LNAddress/getInvoiceFromCallback';
 import payInvoice from '../calls/LNBits/payInvoice';
 import { Split } from '../types/split';
 import { normalizeIP } from '../utils/ip';
-import { gameInfos } from '../socket/game';
 import { LNURLP } from '../types/lnurlp';
 
 const router = Router();
@@ -102,7 +101,7 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
     newPlayerInfo.set(playerRole, playerInfo);
     const gameMode = lnurlp.mode as GameMode;
     const gameInfo: GameInfo = {
-      gamemode: gameMode,
+      mode: gameMode,
       players: newPlayerInfo,
     };
     setGameInfoByID(sessionID, gameInfo);
