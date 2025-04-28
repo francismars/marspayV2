@@ -1,5 +1,5 @@
 export interface GameInfo {
-  gamemode: GameMode;
+  mode: GameMode;
   players: PlayerInfoFromRole;
   winners?: PlayerRole[];
   numberOfPlayers?: number;
@@ -12,11 +12,13 @@ export interface PlayerInfo {
   name: string;
   value: number;
   payments?: Payment[];
+  picture?: string;
+  id?: string;
 }
 
 export enum GameMode {
   P2P = 'P2P',
-  P2PNOSTR = 'P2PNostr',
+  P2PNOSTR = 'P2PNOSTR',
   PRACTICE = 'PRACTICE',
   TOURNAMENT = 'TOURNAMENT',
 }
@@ -42,5 +44,6 @@ export enum PlayerRole {
 
 export interface Payment {
   amount: number;
-  note: string | null;
+  note?: string | null;
+  payerPubKey?: string;
 }

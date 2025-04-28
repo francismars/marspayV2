@@ -4,6 +4,7 @@ import { deleteLNURLWFromSession, getIDFromLNURLW } from './lnurlwState';
 import { deleteSocketFromSession } from './sessionState';
 import { deleteLNURLPsFromSession, getLNURLPsFromID } from './lnurlpState';
 import { appendGameInfotoJSON } from '../utils/json';
+import { deleteKind1sFromSession } from './nostrState';
 
 export function handleEndOfSession(sessionID: string) {
   appendGameInfotoJSON(sessionID);
@@ -16,6 +17,7 @@ export function handleEndOfSession(sessionID: string) {
     deleteLNURLW(LNURLWFromID);
   }
   deleteLNURLWFromSession(sessionID);
+  deleteKind1sFromSession(sessionID);
   deleteGameInfoByID(sessionID);
   deleteSocketFromSession(sessionID);
 }

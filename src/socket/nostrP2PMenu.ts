@@ -2,7 +2,11 @@ import { Socket } from 'socket.io';
 import { dateNow } from '../utils/time';
 import { getLNURLWFromID } from '../state/lnurlwState';
 import { serializeGameInfoFromID } from '../state/gameState';
-import { createAndPublishKind1, subscribeEvent } from '../calls/nostr/ndk';
+import {
+  createAndPublishKind1,
+  setNDKInstance,
+  subscribeEvent,
+} from '../calls/nostr/ndk';
 import { nip19 } from 'nostr-tools';
 import { GameMode } from '../types/game';
 import { BUYINMIN } from '../consts/values';
@@ -12,6 +16,7 @@ import {
   getKind1sfromSessionID,
   setKind1IDtoSessionID,
 } from '../state/nostrState';
+import { Kind1 } from '../types/nostr';
 
 export async function getNostrP2PMenuInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -41,6 +46,7 @@ export async function getNostrP2PMenuInfos(socket: Socket) {
     }
     return;
   }
+  await setNDKInstance();
   const emojirandom = [...Array(4)]
     .map((_) => ALLOWEDEMOJIS[(Math.random() * ALLOWEDEMOJIS.length) | 0])
     .join('');
@@ -51,20 +57,20 @@ export async function getNostrP2PMenuInfos(socket: Socket) {
     );
     return;
   }
-  setKind1IDtoSessionID(sessionID, kind1ID);
+  setKind1IDtoSessionID(kind1ID, sessionID);
   const encodedEvent = nip19.noteEncode(kind1ID);
   console.log(
     `${dateNow()} [${sessionID}] Created Nostr Event ${encodedEvent}.`
   );
-  let eventinfo = {
+  let eventinfo: Kind1 = {
     id: kind1ID,
     note1: encodedEvent,
-    min: BUYINMIN,
     emojis: emojirandom,
+    min: BUYINMIN,
     mode: GameMode.P2PNOSTR,
   };
   appendKind1toSessionID(sessionID, eventinfo);
-  await subscribeEvent(9734, kind1ID);
+  await subscribeEvent(9735, kind1ID);
   const kind1 = getKind1sfromSessionID(sessionID);
   socket.emit('resGetGameMenuInfos', kind1);
 }

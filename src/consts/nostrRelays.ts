@@ -1,5 +1,6 @@
-export const relaysNostr = ['wss://relay.damus.io']; /*
-'wss://nostr.wine',
+export const relaysNostr = [
+  'wss://relay.damus.io',
+  'wss://nostr.wine',
   'wss://paid.nostrified.org',
   'wss://lightningrelay.com',
   'wss://relay.nostr.wf',
@@ -17,4 +18,3 @@ export const relaysNostr = ['wss://relay.damus.io']; /*
   'wss://relay.hrf.org',
   'wss://relay.nostr.net',
 ];
-*/

@@ -5,6 +5,7 @@ import { dateNow } from '../utils/time';
 import { io } from '../server';
 import { handleEndOfSession } from '../state/cleanupState';
 import { getGameInfoFromID } from '../state/gameState';
+import { GameMode } from '../types/game';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ router.post('/', (req: Request, res: Response) => {
     return;
   }
   if (
-    gameInfos.gamemode === 'TOURNAMENT' &&
+    gameInfos.mode === GameMode.TOURNAMENT &&
     LNURLW.claimedCount! < LNURLW.maxWithdrawals!
   ) {
     LNURLW.claimedCount = LNURLW.claimedCount! + 1;
@@ -52,9 +53,10 @@ router.post('/', (req: Request, res: Response) => {
     );
   }
   if (
-    gameInfos.gamemode === 'P2P' ||
-    gameInfos.gamemode === 'PRACTICE' ||
-    (gameInfos.gamemode === 'TOURNAMENT' &&
+    gameInfos.mode === GameMode.P2P ||
+    gameInfos.mode === GameMode.P2PNOSTR ||
+    gameInfos.mode === GameMode.PRACTICE ||
+    (gameInfos.mode === GameMode.TOURNAMENT &&
       LNURLW.claimedCount! == LNURLW.maxWithdrawals!)
   )
     handleEndOfSession(sessionID);

@@ -4,6 +4,10 @@ import dotenv from 'dotenv';
 import { getAllIDtoLNURLW, getAllLNURLWtoID } from '../state/lnurlwState';
 import { getAllIDtoLNURLPs, getAllLNURLPtoID } from '../state/lnurlpState';
 import { getSerializedIDToGameInfo } from '../state/gameState';
+import {
+  getAllkind1IDtoSessionID,
+  getAllsessionIDtoKind1s,
+} from '../state/nostrState';
 
 const router = Router();
 
@@ -16,6 +20,8 @@ router.get('/', function (req, res) {
     const LNURLWToID = Object.fromEntries(getAllLNURLWtoID());
     const LNURLPToID = Object.fromEntries(getAllLNURLPtoID());
     const IDToLNURLPs = Object.fromEntries(getAllIDtoLNURLPs());
+    const kind1IDtoSessionID = Object.fromEntries(getAllkind1IDtoSessionID());
+    const sessionIDtoKind1s = Object.fromEntries(getAllsessionIDtoKind1s());
     const IDtoGameInfo = getSerializedIDToGameInfo();
     res.json({
       IDtoSocket: IDtoSocket,
@@ -23,6 +29,8 @@ router.get('/', function (req, res) {
       LNURLWToID: LNURLWToID,
       LNURLPToID: LNURLPToID,
       IDToLNURLPs: IDToLNURLPs,
+      kind1IDtoSessionID: kind1IDtoSessionID,
+      sessionIDtoKind1s: sessionIDtoKind1s,
       IDtoGameInfo: IDtoGameInfo,
     });
   } else res.status(401).send('Incorrect password.');
