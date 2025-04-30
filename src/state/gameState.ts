@@ -70,7 +70,7 @@ export function serializeGameInfoFromID(sessionId: string) {
     return;
   }
   return {
-    gamemode: gameInfo.mode,
+    mode: gameInfo.mode,
     numberOfPlayers: gameInfo.numberOfPlayers,
     players: Object.fromEntries(gameInfo.players),
     winners: gameInfo.winners,

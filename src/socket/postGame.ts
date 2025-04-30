@@ -14,9 +14,10 @@ import { GameMode, PlayerInfo, PlayerRole } from '../types/game';
 import createLNURLW from '../calls/LNBits/createLNURLW';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
 import { handleEndOfSession } from '../state/cleanupState';
+import { publishEndGameKind1 } from '../calls/nostr/ndk';
 
 interface Response {
-  gamemode: GameMode;
+  mode: GameMode;
   players: {
     [k: string]: PlayerInfo;
   };
@@ -67,9 +68,14 @@ export async function createWithdrawalPostGame(socket: Socket) {
       );
       return;
     }
+    if (gameInfo.mode == GameMode.P2PNOSTR) {
+      publishEndGameKind1(sessionID);
+    }
     const winner: PlayerRole = gameInfo!.winners!.slice(-1)[0];
     const valueFrom =
-      gameInfo.mode == GameMode.P2P ? winner : PlayerRole.Player1;
+      gameInfo.mode == GameMode.P2P || gameInfo.mode == GameMode.P2PNOSTR
+        ? winner
+        : PlayerRole.Player1;
     const winnerValue = gameInfo!.players!.get(valueFrom)!.value;
     const amount =
       gameInfo.mode == GameMode.TOURNAMENT

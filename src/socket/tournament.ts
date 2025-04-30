@@ -28,7 +28,7 @@ export async function getTournamentMenuInfos(
       `${dateNow()} [${sessionID}] Found existing LNRURLW. Sending to client.`
     );
     const gameInfo = serializeGameInfoFromID(sessionID);
-    if (gameInfo?.gamemode !== GameMode.TOURNAMENT) {
+    if (gameInfo?.mode !== GameMode.TOURNAMENT) {
       console.log(
         `${dateNow()} [${sessionID}] Found existing LNRURLW but game mode is not TOURNAMENT.`
       );

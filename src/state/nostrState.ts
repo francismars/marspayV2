@@ -27,6 +27,7 @@ export function deleteKind1sFromSession(sessionID: string) {
   const kind1s = getKind1sfromSessionID(sessionID);
   if (kind1s) {
     for (const kind1 of kind1s) {
+      kind1.zapSubscription.stop();
       kind1IDtoSessionID.delete(kind1.id);
     }
   }
@@ -38,5 +39,10 @@ export function getAllkind1IDtoSessionID() {
 }
 
 export function getAllsessionIDtoKind1s() {
-  return sessionIDtoKind1s;
+  const kind1sNoSub = new Map<string, Omit<Kind1, 'zapSubscription'>[]>();
+  for (const [sessionID, kind1s] of sessionIDtoKind1s) {
+    const filteredKind1s = kind1s.map(({ zapSubscription, ...rest }) => rest);
+    kind1sNoSub.set(sessionID, filteredKind1s);
+  }
+  return kind1sNoSub;
 }
