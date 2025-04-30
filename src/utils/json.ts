@@ -10,7 +10,7 @@ export function appendGameInfotoJSON(sessionID: string) {
     console.log(`${dateNow()} [${sessionID}] No gameInfo found.`);
     return;
   }
-  if (gameInfo.gamemode === 'TOURNAMENT') {
+  if (gameInfo.mode === 'TOURNAMENT') {
     for (const [role, info] of Object.entries(gameInfo.players)) {
       gameInfo.players[role] = {
         name: info.name,

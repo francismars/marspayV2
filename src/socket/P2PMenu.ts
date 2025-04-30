@@ -7,6 +7,8 @@ import { BUYINMAX, BUYINMIN, BUYINMINWINNER } from '../consts/values';
 import { appendLNURLPToID, setLNURLPToID } from '../state/lnurlpState';
 import { GameMode } from '../types/game';
 import createLNURLP from '../calls/LNBits/createLNURLP';
+import { getKind1sfromSessionID } from '../state/nostrState';
+import { getNostrP2PMenuInfos } from './nostrP2PMenu';
 
 export async function getP2PMenuInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -19,6 +21,12 @@ export async function getP2PMenuInfos(socket: Socket) {
   );
   const LNURW = getLNURLWFromID(sessionID);
   if (!LNURW) {
+    const note1s = getKind1sfromSessionID(sessionID);
+    if (note1s) {
+      console.log(`${dateNow()} [${sessionID}] Found associated Nostr Event.`);
+      getNostrP2PMenuInfos(socket);
+      return;
+    }
     const LNURLPs = getLNURLPsFromID(sessionID);
     if (!LNURLPs) {
       console.log(
