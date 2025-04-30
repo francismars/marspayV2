@@ -3,14 +3,12 @@ import {
   appendWinnerToGameInfo,
   getGameInfoFromID,
   serializeGameInfoFromID,
-  setChampionToGameInfo,
   setValueToGameInfoFromID,
 } from '../state/gameState';
 import { dateNow } from '../utils/time';
 import { GameMode, PlayerRole } from '../types/game';
 import { deleteLNURLPsFromSession } from '../state/lnurlpState';
 import { BUYINMINPRACTICE } from '../consts/values';
-import { publishEndGameKind1 } from '../calls/nostr/ndk';
 
 export function gameInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;

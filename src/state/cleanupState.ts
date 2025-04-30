@@ -1,5 +1,5 @@
 import deleteLNURLW from '../calls/LNBits/deleteLNURLW';
-import { deleteGameInfoByID, serializeGameInfoFromID } from './gameState';
+import { deleteGameInfoByID } from './gameState';
 import { deleteLNURLWFromSession, getIDFromLNURLW } from './lnurlwState';
 import { deleteSocketFromSession } from './sessionState';
 import { deleteLNURLPsFromSession, getLNURLPsFromID } from './lnurlpState';

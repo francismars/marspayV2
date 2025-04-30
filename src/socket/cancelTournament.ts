@@ -59,7 +59,7 @@ export async function cancelTournament(socket: Socket) {
   console.log(
     `${dateNow()} [${sessionID}] Creating LNRURLw with ${amount} sats and ${depositcount} uses.`
   );
-  let lnurlw = await createLNURLW(Math.floor(amount * 0.95), depositcount);
+  const lnurlw = await createLNURLW(Math.floor(amount * 0.95), depositcount);
   if (lnurlw) {
     console.log(`${dateNow()} [${sessionID}] Created LNURLw ${lnurlw.id}.`);
     setIDToLNURLW(sessionID, {

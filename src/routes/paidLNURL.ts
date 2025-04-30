@@ -155,7 +155,7 @@ async function paySplit(lnAddress: string, satsAmount: number) {
 
   const callback = await getLNURLCallback(LNurl);
   const invoice = await getInvoiceFromCallback(callback, satsAmount);
-  const respayment = await payInvoice(invoice);
+  await payInvoice(invoice);
 }
 
 function decidePlayerRole(lnurlp: LNURLP, sessionID: string) {

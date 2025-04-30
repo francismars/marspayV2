@@ -1,4 +1,4 @@
-import { DefaultEventsMap, Server, Socket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import middleware from './middleware';
 import { dateNow } from '../utils/time';
 import { getP2PMenuInfos } from './P2PMenu';
