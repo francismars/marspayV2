@@ -33,19 +33,19 @@ export async function getNostrP2PMenuInfos(socket: Socket) {
     if (gameInfo) {
       if (!gameInfo.winners || note1s.length > gameInfo.winners.length) {
         socket.emit('resGetGameMenuInfos', note1s);
+        console.log(
+          `${dateNow()} [${sessionID}] Previous deposits found. Sending existing information.`
+        );
+        socket.emit('updatePayments', gameInfo);
         return;
-      }
-      if (note1s.length === gameInfo.winners.length) {
+      } else if (note1s.length === gameInfo.winners.length) {
         console.log(
           `${dateNow()} [${sessionID}] Double or Nothing x${
             2 ** gameInfo.winners.length
           }.`
         );
+        socket.emit('updatePayments', gameInfo);
       }
-      console.log(
-        `${dateNow()} [${sessionID}] Previous deposits found. Sending existing information.`
-      );
-      socket.emit('updatePayments', gameInfo);
     }
   }
   await setNDKInstance();

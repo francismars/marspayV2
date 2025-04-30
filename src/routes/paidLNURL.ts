@@ -105,7 +105,7 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
       players: newPlayerInfo,
     };
     setGameInfoByID(sessionID, gameInfo);
-    const socketID = getSocketFromID(sessionID);
+    const socketID = getSocketFromID(sessionID)?.socketID;
     if (!socketID) {
       console.error("Couldn't find SocketID to send notification of payment");
       return;

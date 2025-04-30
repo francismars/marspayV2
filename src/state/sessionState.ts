@@ -1,7 +1,9 @@
-const IDToSocket = new Map<string, string>();
+import { Session } from '../types/session';
 
-export function setIDToSocket(sessionId: string, socketId: string) {
-  IDToSocket.set(sessionId, socketId);
+const IDToSocket = new Map<string, Session>();
+
+export function setIDToSocket(sessionId: string, session: Session) {
+  IDToSocket.set(sessionId, session);
 }
 
 export function getSocketFromID(sessionId: string) {

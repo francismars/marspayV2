@@ -5,6 +5,7 @@ import { customAlphabet } from 'nanoid';
 import { nolookalikes } from 'nanoid-dictionary';
 import { dateNow } from '../utils/time';
 import { SESSIONIDLENGHT } from '../consts/values';
+import { Session } from '../types/session';
 
 export default function middleware(
   io: Server,
@@ -12,6 +13,10 @@ export default function middleware(
   next: (err?: ExtendedError) => void
 ) {
   const sessionID = socket.handshake.auth.sessionID;
+  const session: Session = {
+    socketID: socket.id,
+    lastSeen: Date.now(),
+  };
   if (sessionID) {
     const validID = sanitiseID(sessionID);
     if (!validID) {
@@ -26,14 +31,14 @@ export default function middleware(
         `${dateNow()} [${sessionID}] Found sessionID sent by client.`
       );
       socket.data.sessionID = sessionID;
-      setIDToSocket(sessionID, socket.id);
+      setIDToSocket(sessionID, session);
       return next();
     }
   }
   const emoji = ALLOWEDEMOJIS[Math.floor(Math.random() * ALLOWEDEMOJIS.length)];
   const newID = customAlphabet(nolookalikes, SESSIONIDLENGHT);
   socket.data.sessionID = `${emoji}:${newID()}`;
-  setIDToSocket(socket.data.sessionID, socket.id);
+  setIDToSocket(socket.data.sessionID, session);
   console.log(
     `${dateNow()} [${socket.data.sessionID}] Created new sessionID for client.`
   );

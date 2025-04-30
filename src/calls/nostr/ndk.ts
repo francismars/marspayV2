@@ -123,7 +123,7 @@ export async function createAndPublishKind1(sessionID: string) {
     id: ndkEvent.id,
     note1: encodedEvent,
     emojis: emojis,
-    min: BUYINMIN,
+    min: value,
     mode: GameMode.P2PNOSTR,
     zapSubscription: subscription,
   };
@@ -159,7 +159,7 @@ async function listenToSubscriptions(event: NDKEvent) {
     console.log('Event description not found');
     return;
   }
-  const socketID = getSocketFromID(sessionID);
+  const socketID = getSocketFromID(sessionID)?.socketID;
   if (!socketID) {
     console.error("Couldn't find SocketID to send notification of payment");
     return;

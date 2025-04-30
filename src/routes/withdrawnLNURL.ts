@@ -22,7 +22,7 @@ router.post('/', (req: Request, res: Response) => {
     res.status(404).send('Session ID not found.');
     return;
   }
-  const socketID = getSocketFromID(sessionID);
+  const socketID = getSocketFromID(sessionID)?.socketID;
   if (!socketID) {
     console.error(`${dateNow()} [${sessionID}] Socket ID not found.`);
     res.status(404).send('Socket ID not found.');
@@ -52,14 +52,12 @@ router.post('/', (req: Request, res: Response) => {
       } out of ${LNURLW.maxWithdrawals}.`
     );
   }
-  if (
-    gameInfos.mode === GameMode.P2P ||
-    gameInfos.mode === GameMode.P2PNOSTR ||
-    gameInfos.mode === GameMode.PRACTICE ||
-    (gameInfos.mode === GameMode.TOURNAMENT &&
-      LNURLW.claimedCount! == LNURLW.maxWithdrawals!)
-  )
-    handleEndOfSession(sessionID);
+  const cancelTournament =
+    gameInfos.mode === GameMode.TOURNAMENT &&
+    LNURLW.claimedCount! == LNURLW.maxWithdrawals!
+      ? true
+      : false;
+  handleEndOfSession(sessionID, cancelTournament);
 });
 
 export default router;
