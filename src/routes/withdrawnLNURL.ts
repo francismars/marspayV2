@@ -52,12 +52,12 @@ router.post('/', (req: Request, res: Response) => {
       } out of ${LNURLW.maxWithdrawals}.`
     );
   }
-  const cancelTournament =
+  const appendToJson =
     gameInfos.mode === GameMode.TOURNAMENT &&
     LNURLW.claimedCount! == LNURLW.maxWithdrawals!
-      ? true
-      : false;
-  handleEndOfSession(sessionID, cancelTournament);
+      ? false
+      : true;
+  handleEndOfSession(sessionID, appendToJson);
 });
 
 export default router;
