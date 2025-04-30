@@ -98,7 +98,7 @@ export async function getTournamentMenuInfos(
   });
 }
 
-async function newLNURLPTournament(sessionID: any, buyin: number) {
+async function newLNURLPTournament(sessionID: string, buyin: number) {
   const LNURLPDescription = 'Chain Duel Tournament';
   console.log(
     `${dateNow()} [${sessionID}] Requesting new LNURLP with description ${LNURLPDescription} with buy-in of ${buyin} sats.`

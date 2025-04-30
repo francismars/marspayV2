@@ -31,19 +31,12 @@ app.use((_req, _res, next) => {
   next(err);
 });
 
-app.use(
-  (
-    err: Error & { status?: number },
-    _req: Request,
-    res: Response,
-    _next: NextFunction
-  ) => {
-    const status = err.status || 500;
-    console.error(`[ERROR] ${status}:`, err.message);
-    res.status(status).json({
-      error: {
-        message: err.message,
-      },
-    });
-  }
-);
+app.use((err: Error & { status?: number }, _req: Request, res: Response) => {
+  const status = err.status || 500;
+  console.error(`[ERROR] ${status}:`, err.message);
+  res.status(status).json({
+    error: {
+      message: err.message,
+    },
+  });
+});

@@ -2,9 +2,10 @@ import { Socket } from 'socket.io';
 import { dateNow } from '../utils/time';
 import { getLNURLWFromID } from '../state/lnurlwState';
 import { serializeGameInfoFromID } from '../state/gameState';
-import { createAndPublishKind1, setNDKInstance } from '../calls/nostr/ndk';
 import { getKind1sfromSessionID } from '../state/nostrState';
 import { deleteLNURLPsFromSession } from '../state/lnurlpState';
+import { setNDKInstance } from '../calls/NDK/setNDKInstance';
+import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 
 export async function getNostrP2PMenuInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -49,7 +50,7 @@ export async function getNostrP2PMenuInfos(socket: Socket) {
     }
   }
   await setNDKInstance();
-  await createAndPublishKind1(sessionID);
+  await publishGameKind1(sessionID);
   const kind1 = getKind1sfromSessionID(sessionID);
   socket.emit('resGetGameMenuInfos', kind1);
 }
