@@ -6,8 +6,11 @@ import { deleteLNURLPsFromSession, getLNURLPsFromID } from './lnurlpState';
 import { appendGameInfotoJSON } from '../utils/json';
 import { deleteKind1sFromSession } from './nostrState';
 
-export function handleEndOfSession(sessionID: string) {
-  appendGameInfotoJSON(sessionID);
+export function handleEndOfSession(
+  sessionID: string,
+  appendJSON: boolean = true
+) {
+  if (appendJSON) appendGameInfotoJSON(sessionID);
   const LNURLPs = getLNURLPsFromID(sessionID);
   if (LNURLPs) {
     deleteLNURLPsFromSession(sessionID);
