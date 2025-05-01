@@ -1,3 +1,4 @@
+import { publishDeleteKind1 } from '../calls/NDK/publishDeleteKind1';
 import { Kind1 } from '../types/nostr';
 
 const kind1IDtoSessionID = new Map<string, string>();
@@ -27,6 +28,7 @@ export function deleteKind1sFromSession(sessionID: string) {
   const kind1s = getKind1sfromSessionID(sessionID);
   if (kind1s) {
     for (const kind1 of kind1s) {
+      publishDeleteKind1(kind1.id);
       kind1.zapSubscription.stop();
       kind1IDtoSessionID.delete(kind1.id);
     }
