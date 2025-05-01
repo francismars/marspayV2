@@ -14,7 +14,7 @@ import { GameMode, PlayerInfo, PlayerRole } from '../types/game';
 import createLNURLW from '../calls/LNBits/createLNURLW';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
 import { handleEndOfSession } from '../state/cleanupState';
-import { publishEndGameKind1 } from '../calls/NDK/ndk';
+import { publishEndGameKind1 } from '../calls/NDK/publishEndGameKind1';
 
 interface Response {
   mode: GameMode;

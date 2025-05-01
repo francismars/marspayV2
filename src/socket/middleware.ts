@@ -6,6 +6,7 @@ import { nolookalikes } from 'nanoid-dictionary';
 import { dateNow } from '../utils/time';
 import { SESSIONIDLENGHT } from '../consts/values';
 import { Session } from '../types/session';
+import { normalizeIP } from '../utils/ip';
 
 export default function middleware(
   io: Server,
@@ -27,9 +28,6 @@ export default function middleware(
     }
     const socketID = getSocketFromID(sessionID);
     if (socketID) {
-      console.log(
-        `${dateNow()} [${sessionID}] Found sessionID sent by client.`
-      );
       socket.data.sessionID = sessionID;
       setIDToSocket(sessionID, session);
       return next();
@@ -39,8 +37,11 @@ export default function middleware(
   const newID = customAlphabet(nolookalikes, SESSIONIDLENGHT);
   socket.data.sessionID = `${emoji}:${newID()}`;
   setIDToSocket(socket.data.sessionID, session);
+  const realIP = normalizeIP(socket.handshake.address); // TODO: change when NGINX is set up
   console.log(
-    `${dateNow()} [${socket.data.sessionID}] Created new sessionID for client.`
+    `${dateNow()} [${
+      socket.data.sessionID
+    }] Created new sessionID for ${realIP}.`
   );
   socket.emit('session', {
     sessionID: socket.data.sessionID,

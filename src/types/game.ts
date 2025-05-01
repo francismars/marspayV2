@@ -45,5 +45,4 @@ export enum PlayerRole {
 export interface Payment {
   amount: number;
   note?: string | null;
-  payerPubKey?: string;
 }

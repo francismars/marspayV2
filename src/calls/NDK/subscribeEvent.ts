@@ -116,7 +116,6 @@ async function listenToSubscriptions(event: NDKEvent) {
   }
   const payment: Payment = {
     amount: zapAmount,
-    payerPubKey: payerPubKey,
   };
   const prevValue = zapperPrevRole
     ? gameInfo!.players.get(zapperPrevRole)!.value
