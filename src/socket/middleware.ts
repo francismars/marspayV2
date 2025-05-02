@@ -14,30 +14,29 @@ export default function middleware(
   next: (err?: ExtendedError) => void
 ) {
   const sessionID = socket.handshake.auth.sessionID;
+  const validID = sanitiseID(sessionID);
+  if (!validID) {
+    console.error(
+      `${dateNow()} [${sessionID}] Invalid sessionID sent by client.`
+    );
+    return next(new Error('Invalid sessionID'));
+  }
   const session: Session = {
     socketID: socket.id,
     lastSeen: Date.now(),
   };
+  setIDToSocket(sessionID, session);
   if (sessionID) {
-    const validID = sanitiseID(sessionID);
-    if (!validID) {
-      console.error(
-        `${dateNow()} [${sessionID}] Invalid sessionID sent by client.`
-      );
-      return next(new Error('Invalid sessionID'));
-    }
     const socketID = getSocketFromID(sessionID);
     if (socketID) {
       socket.data.sessionID = sessionID;
-      setIDToSocket(sessionID, session);
       return next();
     }
   }
   const emoji = ALLOWEDEMOJIS[Math.floor(Math.random() * ALLOWEDEMOJIS.length)];
   const newID = customAlphabet(nolookalikes, SESSIONIDLENGHT);
   socket.data.sessionID = `${emoji}:${newID()}`;
-  setIDToSocket(socket.data.sessionID, session);
-  const realIP = normalizeIP(socket.handshake.address); // TODO: change when NGINX is set up
+  const realIP = socket.handshake.headers['x-real-ip']; //normalizeIP()
   console.log(
     `${dateNow()} [${
       socket.data.sessionID
