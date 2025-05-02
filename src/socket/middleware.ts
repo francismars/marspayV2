@@ -49,6 +49,10 @@ export default function middleware(
 }
 
 function sanitiseID(id: string) {
+  if (!id || id == '' || id.split(':').length !== 2) {
+    console.error(`${dateNow()} [${id}] ID not valid.`);
+    return false;
+  }
   const emoji = id.split(':')[0];
   const stringID = id.split(':')[1];
   if (!ALLOWEDEMOJIS.includes(emoji)) {
