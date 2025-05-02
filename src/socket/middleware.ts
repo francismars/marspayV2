@@ -14,22 +14,19 @@ export default function middleware(
   next: (err?: ExtendedError) => void
 ) {
   const sessionID = socket.handshake.auth.sessionID;
-  const validID = sanitiseID(sessionID);
-  if (!validID) {
-    console.error(
-      `${dateNow()} [${sessionID}] Invalid sessionID sent by client.`
-    );
-    return next(new Error('Invalid sessionID'));
-  }
   const session: Session = {
     socketID: socket.id,
     lastSeen: Date.now(),
   };
-  setIDToSocket(sessionID, session);
-  if (sessionID) {
+  const validID = sanitiseID(sessionID);
+  if (sessionID && validID) {
+    console.error(
+      `${dateNow()} [${sessionID}] Existing sessionID sent by client.`
+    );
     const socketID = getSocketFromID(sessionID);
     if (socketID) {
       socket.data.sessionID = sessionID;
+      setIDToSocket(sessionID, session);
       return next();
     }
   }
@@ -42,6 +39,7 @@ export default function middleware(
       socket.data.sessionID
     }] Created new sessionID for ${realIP}.`
   );
+  setIDToSocket(socket.data.sessionID, session);
   socket.emit('session', {
     sessionID: socket.data.sessionID,
   });
