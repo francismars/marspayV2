@@ -46,6 +46,7 @@ function ipFilter(
 ) {
   const nolmalizedIP = req.ip ? normalizeIP(req.ip) : undefined;
   const allowedServerIp = process.env.LNBITS_IP;
+  console.log(nolmalizedIP, allowedServerIp);
   if (nolmalizedIP === allowedServerIp) {
     next();
   } else {
