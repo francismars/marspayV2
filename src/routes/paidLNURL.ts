@@ -46,7 +46,6 @@ function ipFilter(
 ) {
   const nolmalizedIP = req.headers['x-real-ip'];
   const allowedServerIp = process.env.LNBITS_IP;
-  console.log(nolmalizedIP, allowedServerIp);
   if (nolmalizedIP === allowedServerIp) {
     next();
   } else {
