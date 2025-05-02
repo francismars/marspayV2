@@ -1,4 +1,4 @@
-export const BUYINMIN = 300;
+export const BUYINMIN = 1000;
 export const BUYINMINWINNER = 100;
 export const BUYINMAX = 10000000;
 export const BUYINMINPRACTICE = 150;
