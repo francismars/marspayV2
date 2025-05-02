@@ -110,8 +110,7 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
       console.error("Couldn't find SocketID to send notification of payment");
       return;
     }
-    const splitsActive = false;
-    if (splitsActive) paySplits(sessionID, amount);
+    paySplits(sessionID, amount);
     io.to(socketID!).emit('updatePayments', serializeGameInfoFromID(sessionID));
     res.status(200).send('OK');
   }
