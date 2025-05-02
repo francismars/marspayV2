@@ -54,7 +54,9 @@ router.post('/', (req: Request, res: Response) => {
   }
   const appendToJson =
     gameInfos.mode === GameMode.TOURNAMENT &&
-    LNURLW.claimedCount! == LNURLW.maxWithdrawals!
+    LNURLW.claimedCount &&
+    LNURLW.maxWithdrawals &&
+    LNURLW.claimedCount === LNURLW.maxWithdrawals
       ? false
       : true;
   handleEndOfSession(sessionID, appendToJson);
