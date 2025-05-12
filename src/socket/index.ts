@@ -17,25 +17,28 @@ export default function registerSocketHandlers(io: Server) {
 
   io.on('connection', (socket: Socket) => {
     // TODO: Change to getP2PMenuInfos
-    socket.on('getGameMenuInfos', async () => {
-      await getP2PMenuInfos(socket);
+    socket.on('getGameMenuInfos', async (hostInfo?: { LNAddress: string }) => {
+      const hostLNAddress = hostInfo && hostInfo.LNAddress ?  hostInfo.LNAddress : undefined
+      await getP2PMenuInfos(socket, hostLNAddress);
+    });
+
+    socket.on('getPracticeMenuInfos', async (hostInfo?: { LNAddress: string }) => {
+      const hostLNAddress = hostInfo && hostInfo.LNAddress ?  hostInfo.LNAddress : undefined
+      await getPracticeMenuInfos(socket, hostLNAddress);
+    });
+
+    socket.on('getGameMenuInfosNostr', async (hostInfo?: { LNAddress: string }) => {
+      const hostLNAddress = hostInfo && hostInfo.LNAddress ?  hostInfo.LNAddress : undefined
+      await getNostrP2PMenuInfos(socket, hostLNAddress);
     });
 
     socket.on('cancelp2p', () => {
       cancelP2P(socket);
     });
 
-    socket.on('getPracticeMenuInfos', async () => {
-      await getPracticeMenuInfos(socket);
-    });
-
-    socket.on('getGameMenuInfosNostr', async () => {
-      await getNostrP2PMenuInfos(socket);
-    });
-
     socket.on(
       'getTournamentInfos',
-      async (data?: { buyin: number; players: number }) => {
+      async (data?: { buyin: number; players: number; hostLNAddress?: string }) => {
         await getTournamentMenuInfos(socket, data);
       }
     );

@@ -4,4 +4,5 @@ export interface LNURLP {
   description: string;
   min: number;
   mode?: string;
+  hostLNAddress?: string
 }

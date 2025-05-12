@@ -7,4 +7,5 @@ export interface Kind1 {
   min: number;
   mode: string;
   zapSubscription: NDKSubscription;
+  hostLNAddress?: string;
 }

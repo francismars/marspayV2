@@ -10,7 +10,7 @@ import createLNURLP from '../calls/LNBits/createLNURLP';
 import { getKind1sfromSessionID } from '../state/nostrState';
 import { getNostrP2PMenuInfos } from './nostrP2PMenu';
 
-export async function getP2PMenuInfos(socket: Socket) {
+export async function getP2PMenuInfos(socket: Socket, hostLNAddress?: string ) {
   const sessionID = socket.data.sessionID;
   if (!sessionID) {
     console.error(`${dateNow()} [${sessionID}] Session ID not found.`);
@@ -32,7 +32,7 @@ export async function getP2PMenuInfos(socket: Socket) {
       console.log(
         `${dateNow()} [${sessionID}] There are no associated LNRURLPs. Creating new ones.`
       );
-      await newLNURLPsP2P(sessionID);
+    await newLNURLPsP2P(sessionID, hostLNAddress);
     } else if (LNURLPs) {
       if (LNURLPs[0].mode !== GameMode.P2P) {
         console.log(
@@ -54,7 +54,7 @@ export async function getP2PMenuInfos(socket: Socket) {
   }
 }
 
-async function newLNURLPsP2P(sessionID: string): Promise<void> {
+async function newLNURLPsP2P(sessionID: string, hostLNAddress?: string): Promise<void> {
   const playersDescriptions = ['Player 1', 'Player 2'];
   const gameInfo = getGameInfoFromID(sessionID);
   const winnerP = gameInfo?.winners?.slice(-1)[0];
@@ -77,6 +77,7 @@ async function newLNURLPsP2P(sessionID: string): Promise<void> {
     console.log(`${dateNow()} [${sessionID}] Created LNURLp ${lnurlinfo.id}.`);
     setLNURLPToID(lnurlinfo.id, sessionID);
     lnurlinfo.mode = GameMode.P2P;
+    if(hostLNAddress && hostLNAddress.split("@").length==2) lnurlinfo.hostLNAddress = hostLNAddress
     appendLNURLPToID(sessionID, lnurlinfo);
   }
 }
