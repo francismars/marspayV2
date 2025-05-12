@@ -7,7 +7,7 @@ import { deleteLNURLPsFromSession } from '../state/lnurlpState';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 
-export async function getNostrP2PMenuInfos(socket: Socket) {
+export async function getNostrP2PMenuInfos(socket: Socket, LNAddress?: string) {
   const sessionID = socket.data.sessionID;
   if (!sessionID) {
     console.error(`${dateNow()} [${sessionID}] Session ID not found.`);
@@ -50,7 +50,7 @@ export async function getNostrP2PMenuInfos(socket: Socket) {
     }
   }
   await setNDKInstance();
-  await publishGameKind1(sessionID);
+  await publishGameKind1(sessionID, LNAddress);
   const kind1 = getKind1sfromSessionID(sessionID);
   socket.emit('resGetGameMenuInfos', kind1);
 }

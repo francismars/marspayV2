@@ -110,16 +110,16 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
       console.error("Couldn't find SocketID to send notification of payment");
       return;
     }
-    paySplits(sessionID, amount);
+    paySplits(sessionID, amount, lnurlp.hostLNAddress);
     io.to(socketID!).emit('updatePayments', serializeGameInfoFromID(sessionID));
     res.status(200).send('OK');
   }
 });
 
-function paySplits(sessionID: string, amount: number) {
+function paySplits(sessionID: string, amount: number, hostLNAddress?: string) {
   const devLN = process.env.DEVELOPER_LNADDRESS;
   const designerLN = process.env.DESIGNER_LNADDRESS;
-  const hostLN = process.env.HOST_LNADDRESS;
+  const hostLN = hostLNAddress ? hostLNAddress : process.env.HOST_LNADDRESS;
   const devPercent = DEVPERCENT;
   const designerPercent = DESIGNERPERCENT;
   const hostPercent = HOSTPERCENT;
@@ -136,7 +136,7 @@ function paySplits(sessionID: string, amount: number) {
     console.log(
       `${dateNow()} [${sessionID}] Sending ${
         split.percent
-      } split of ${splitedAmount} sats to ${split.lnaddress}`
+      } split of ${splitedAmount} sats to ${split.role} at ${split.lnaddress}`
     );
     paySplit(split.lnaddress as string, splitedAmount).catch((error) => {
       console.log(
