@@ -15,7 +15,7 @@ import { GameMode } from '../../types/game';
 import { ndkInstance } from './setNDKInstance';
 import { subscribeEvent } from './subscribeEvent';
 
-export async function publishGameKind1(sessionID: string) {
+export async function publishGameKind1(sessionID: string, hostLNAddress?: string) {
   if (!ndkInstance) {
     console.log('NDK not initialized');
     return;
@@ -82,6 +82,7 @@ export async function publishGameKind1(sessionID: string) {
     min: value,
     mode: GameMode.P2PNOSTR,
     zapSubscription: subscription,
+    hostLNAddress: hostLNAddress
   };
   appendKind1toSessionID(sessionID, eventinfo);
 }

@@ -11,7 +11,7 @@ import { getGameInfoFromID, serializeGameInfoFromID } from '../state/gameState';
 import { BUYINMAX, BUYINMINPRACTICE } from '../consts/values';
 import createLNURLP from '../calls/LNBits/createLNURLP';
 
-export async function getPracticeMenuInfos(socket: Socket) {
+export async function getPracticeMenuInfos(socket: Socket, LNAddress?: string) {
   const sessionID = socket.data.sessionID;
   if (!sessionID) {
     console.error(`${dateNow()} [${sessionID}] Session ID not found.`);
@@ -27,7 +27,7 @@ export async function getPracticeMenuInfos(socket: Socket) {
       console.log(
         `${dateNow()} [${sessionID}] There is no associated LNRURLP. Creating new one.`
       );
-      await newLNURLPPRACTICE(sessionID);
+      await newLNURLPPRACTICE(sessionID, LNAddress);
     } else if (LNURLPs) {
       if (LNURLPs[0].mode !== GameMode.PRACTICE) {
         console.log(
@@ -50,7 +50,7 @@ export async function getPracticeMenuInfos(socket: Socket) {
   }
 }
 
-async function newLNURLPPRACTICE(sessionID: string): Promise<void> {
+async function newLNURLPPRACTICE(sessionID: string, hostLNAddress?: string): Promise<void> {
   const playerDescription = 'Player 1';
   const amount = BUYINMINPRACTICE;
   console.log(
@@ -66,5 +66,6 @@ async function newLNURLPPRACTICE(sessionID: string): Promise<void> {
   console.log(`${dateNow()} [${sessionID}] Created LNURLp ${lnurlinfo.id}.`);
   setLNURLPToID(lnurlinfo.id, sessionID);
   lnurlinfo.mode = GameMode.PRACTICE;
+  if(hostLNAddress && hostLNAddress.split("@").length==2) lnurlinfo.hostLNAddress = hostLNAddress
   appendLNURLPToID(sessionID, lnurlinfo);
 }

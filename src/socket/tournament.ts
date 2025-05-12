@@ -12,7 +12,7 @@ import createLNURLP from '../calls/LNBits/createLNURLP';
 
 export async function getTournamentMenuInfos(
   socket: Socket,
-  data?: { buyin: number; players: number }
+  data?: { buyin: number; players: number, hostLNAddress?: string}
 ) {
   const sessionID = socket.data.sessionID;
   if (!sessionID) {
@@ -59,7 +59,8 @@ export async function getTournamentMenuInfos(
       `${dateNow()} [${sessionID}] There is no associated LNRURLP. Creating new one.`
     );
     try {
-      await newLNURLPTournament(sessionID, data.buyin);
+      if(data.hostLNAddress) await newLNURLPTournament(sessionID, data.buyin, data.hostLNAddress);
+      else await newLNURLPTournament(sessionID, data.buyin);
       const gameMode = GameMode.TOURNAMENT;
       const players: PlayerInfoFromRole = new Map();
       const numberOfPlayers = data.players;
@@ -98,7 +99,7 @@ export async function getTournamentMenuInfos(
   });
 }
 
-async function newLNURLPTournament(sessionID: string, buyin: number) {
+async function newLNURLPTournament(sessionID: string, buyin: number, hostLNAddress?: string) {
   const LNURLPDescription = 'Chain Duel Tournament';
   console.log(
     `${dateNow()} [${sessionID}] Requesting new LNURLP with description ${LNURLPDescription} with buy-in of ${buyin} sats.`
@@ -110,6 +111,7 @@ async function newLNURLPTournament(sessionID: string, buyin: number) {
         `${dateNow()} [${sessionID}] Created LNURLP ${newLNURLP.id}.`
       );
       newLNURLP.mode = GameMode.TOURNAMENT;
+      if(hostLNAddress) newLNURLP.hostLNAddress = hostLNAddress
       appendLNURLPToID(sessionID, newLNURLP);
       setLNURLPToID(newLNURLP.id, sessionID);
     }
