@@ -7294,3 +7294,304 @@ Port 3000 is already in use
 [31m[nodemon] app crashed - waiting for file changes before starting...[39m
 [12-May-2025 18:29:04] [⛓️:tzeNwn8RxL8] Existing sessionID sent by client.
 [12-May-2025 18:29:04] [🇸🇻:XhReLn4jtyb] Created new sessionID for 82.155.190.228.
+
+> dev
+> nodemon
+
+[33m[nodemon] 3.1.9[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): src/**/*[39m
+[33m[nodemon] watching extensions: ts,js[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[12-May-2025 18:32:59] [🇸🇻:yqbYxYq9XRm] Existing sessionID sent by client.
+[12-May-2025 18:32:59] [🎸:FtPQEFFLMEU] Created new sessionID for 82.155.190.228.
+[12-May-2025 18:32:59] [🎸:FtPQEFFLMEU] Requested necessary informations for Practice Menu.
+[12-May-2025 18:32:59] [🎸:FtPQEFFLMEU] There is no associated LNRURLP. Creating new one.
+[12-May-2025 18:32:59] [🎸:FtPQEFFLMEU] Requesting new LNURLp with description Player 1 of 150 to 10000000 sats.
+[12-May-2025 18:32:59] [🎸:FtPQEFFLMEU] Created LNURLp KHUJut.
+[12-May-2025 18:32:59] [🎸:FtPQEFFLMEU] Sending LNRURLP to client.
+[12-May-2025 18:33:08] [🎸:FtPQEFFLMEU] Paid LNURLp KHUJut with 150 sats and note null.
+[12-May-2025 18:33:08] [🎸:FtPQEFFLMEU] Sending 0.0195 split of 2 sats to developer at francis@walletofsatoshi.com
+[12-May-2025 18:33:08] [🎸:FtPQEFFLMEU] Sending 0.0195 split of 2 sats to host at francis@walletofsatoshi.com
+[12-May-2025 18:33:08] [🎸:FtPQEFFLMEU] Sending 0.0095 split of 1 sats to designer at designer@btcpay989117.lndyn.com
+[12-May-2025 18:33:09] [127.0.0.1] POST /api/LNURL/paid 200
+[12-May-2025 18:33:21] [undefined] ID not valid.
+[12-May-2025 18:33:21] [👾:c8JAbqYhm6U] Created new sessionID for 82.155.190.228.
+[12-May-2025 18:33:21] [👾:c8JAbqYhm6U] Requested necessary informations for Practice Menu.
+[12-May-2025 18:33:21] [👾:c8JAbqYhm6U] There is no associated LNRURLP. Creating new one.
+[12-May-2025 18:33:21] [👾:c8JAbqYhm6U] Requesting new LNURLp with description Player 1 of 150 to 10000000 sats.
+[12-May-2025 18:33:23] [👾:c8JAbqYhm6U] Created LNURLp fAXJdS.
+[12-May-2025 18:33:23] [👾:c8JAbqYhm6U] Sending LNRURLP to client.
+[12-May-2025 18:33:25] [👾:c8JAbqYhm6U] Canceling P2P game.
+[12-May-2025 18:33:41] [👾:c8JAbqYhm6U] Existing sessionID sent by client.
+[12-May-2025 18:33:41] [☠️:p4MakWb3hFU] Created new sessionID for 82.155.190.228.
+[12-May-2025 18:33:42] [☠️:p4MakWb3hFU] Requested necessary informations for Practice Menu.
+[12-May-2025 18:33:42] [☠️:p4MakWb3hFU] There is no associated LNRURLP. Creating new one.
+[12-May-2025 18:33:42] [☠️:p4MakWb3hFU] Requesting new LNURLp with description Player 1 of 150 to 10000000 sats.
+[12-May-2025 18:33:42] [☠️:p4MakWb3hFU] Created LNURLp herHJV.
+[12-May-2025 18:33:42] [☠️:p4MakWb3hFU] Sending LNRURLP to client.
+[12-May-2025 18:33:49] [☠️:p4MakWb3hFU] Paid LNURLp herHJV with 150 sats and note null.
+[12-May-2025 18:33:49] [☠️:p4MakWb3hFU] Sending 0.0195 split of 2 sats to developer at francis@walletofsatoshi.com
+[12-May-2025 18:33:49] [☠️:p4MakWb3hFU] Sending 0.0195 split of 2 sats to host at francis@minibits.cash
+[12-May-2025 18:33:49] [☠️:p4MakWb3hFU] Sending 0.0095 split of 1 sats to designer at designer@btcpay989117.lndyn.com
+[12-May-2025 18:33:49] [127.0.0.1] POST /api/LNURL/paid 200
+[12-May-2025 18:57:07] [127.0.0.1] GET /config 404
+[12-May-2025 18:57:07] [127.0.0.1] GET /favicon.ico 404
+[12-May-2025 18:57:11] [127.0.0.1] GET /config 404
+[12-May-2025 18:57:13] [127.0.0.1] GET /config 404
+[12-May-2025 18:57:14] [127.0.0.1] GET /config 404
+[12-May-2025 18:57:15] [127.0.0.1] GET /config 404
+[12-May-2025 18:57:16] [127.0.0.1] GET /config 404
+[12-May-2025 18:57:23] [127.0.0.1] GET / 404
+[12-May-2025 18:57:28] [127.0.0.1] GET / 404
+[12-May-2025 18:57:29] [127.0.0.1] GET / 404
+[12-May-2025 18:57:47] [127.0.0.1] GET / 404
+[12-May-2025 18:57:48] [127.0.0.1] GET / 404
+[12-May-2025 18:57:49] [127.0.0.1] GET / 404
+[12-May-2025 18:57:49] [127.0.0.1] GET / 404
+[12-May-2025 18:59:53] [127.0.0.1] GET / 404
+[12-May-2025 18:59:55] [127.0.0.1] GET / 404
+[12-May-2025 18:59:57] [127.0.0.1] GET /favicon.ico 404
+[12-May-2025 19:11:56] [undefined] ID not valid.
+[12-May-2025 19:11:56] [🧡:deic7ciXD6k] Created new sessionID for 149.90.15.5.
+[12-May-2025 19:11:56] [🧡:deic7ciXD6k] Requested necessary informations for Game Menu.
+[12-May-2025 19:11:56] [🧡:deic7ciXD6k] There are no associated LNRURLPs. Creating new ones.
+[12-May-2025 19:11:56] [🧡:deic7ciXD6k] Requesting new LNURLp with description Player 1 from 3000 to 10000000 sats.
+[12-May-2025 19:11:56] [🧡:deic7ciXD6k] Created LNURLp 4cx6pC.
+[12-May-2025 19:11:56] [🧡:deic7ciXD6k] Requesting new LNURLp with description Player 2 from 3000 to 10000000 sats.
+[12-May-2025 19:11:57] [🧡:deic7ciXD6k] Created LNURLp mBXPD3.
+[12-May-2025 19:11:57] [🧡:deic7ciXD6k] Sending LNRURLPs to client.
+[12-May-2025 19:12:20] [🧡:deic7ciXD6k] Canceling P2P game.
+[12-May-2025 20:14:59] [127.0.0.1] GET /actuator/health 404
+[12-May-2025 20:26:38] [127.0.0.1] GET / 404
+[12-May-2025 21:04:16] [🤙:tVPUrhGCVGF] Existing sessionID sent by client.
+[12-May-2025 21:04:16] [🤖:TKWeDPz4tx4] Created new sessionID for 149.40.62.49.
+[12-May-2025 21:04:19] [🤖:TKWeDPz4tx4] Requested necessary informations for Tournament Menu.
+[12-May-2025 21:04:19] [🤖:TKWeDPz4tx4] There is no associated LNRURLP. Creating new one.
+[12-May-2025 21:04:19] [🤖:TKWeDPz4tx4] Requesting new LNURLP with description Chain Duel Tournament with buy-in of 10000 sats.
+[12-May-2025 21:04:37] [🤖:TKWeDPz4tx4] Created LNURLP HkuBvb.
+[12-May-2025 21:04:37] [🤖:TKWeDPz4tx4] Sending LNRURLP to client.
+[12-May-2025 21:04:59] [127.0.0.1] GET / 404
+dateNow() [🤖:TKWeDPz4tx4] Attempting to cancel tournament.
+[12-May-2025 21:05:04] [🤖:TKWeDPz4tx4] Found an ongoing tournament with 0 deposits.
+[12-May-2025 21:05:11] [127.0.0.1] GET /favicon.ico 404
+[12-May-2025 21:07:25] [🤖:TKWeDPz4tx4] Existing sessionID sent by client.
+[12-May-2025 21:07:25] [🦷:3gWYHDBjPd9] Created new sessionID for 149.40.62.49.
+[12-May-2025 21:07:26] [🦷:3gWYHDBjPd9] Requested necessary informations for Game Menu.
+[12-May-2025 21:07:26] [🦷:3gWYHDBjPd9] There are no associated LNRURLPs. Creating new ones.
+[12-May-2025 21:07:26] [🦷:3gWYHDBjPd9] Requesting new LNURLp with description Player 1 from 3000 to 10000000 sats.
+[12-May-2025 21:07:26] [🦷:3gWYHDBjPd9] Created LNURLp ARoFEv.
+[12-May-2025 21:07:26] [🦷:3gWYHDBjPd9] Requesting new LNURLp with description Player 2 from 3000 to 10000000 sats.
+[12-May-2025 21:07:26] [🦷:3gWYHDBjPd9] Created LNURLp 5HoPDA.
+[12-May-2025 21:07:26] [🦷:3gWYHDBjPd9] Sending LNRURLPs to client.
+[12-May-2025 21:07:45] [🦷:3gWYHDBjPd9] Canceling P2P game.
+[12-May-2025 21:13:56] [127.0.0.1] GET /dashboard?password=SAds2vRg_123 200
+[12-May-2025 21:13:56] [127.0.0.1] GET /favicon.ico 404
+[12-May-2025 21:22:12] [🦷:3gWYHDBjPd9] Existing sessionID sent by client.
+[12-May-2025 21:22:12] [⛓️:MWRVwEDr6HG] Created new sessionID for 149.40.62.49.
+[12-May-2025 21:22:12] [⛓️:MWRVwEDr6HG] Requested necessary informations for Practice Menu.
+[12-May-2025 21:22:12] [⛓️:MWRVwEDr6HG] There is no associated LNRURLP. Creating new one.
+[12-May-2025 21:22:12] [⛓️:MWRVwEDr6HG] Requesting new LNURLp with description Player 1 of 150 to 10000000 sats.
+[12-May-2025 21:22:12] [⛓️:MWRVwEDr6HG] Created LNURLp 92seGj.
+[12-May-2025 21:22:12] [⛓️:MWRVwEDr6HG] Sending LNRURLP to client.
+Cleaning up inactive session: 🇸🇻:XhReLn4jtyb
+gameInfo not found.
+Cleaning up inactive session: 🎸:FtPQEFFLMEU
+Cleaning up inactive session: ☠️:p4MakWb3hFU
+[12-May-2025 21:35:55] [127.0.0.1] GET / 404
+[12-May-2025 21:36:08] [127.0.0.1] GET /favicon.ico 404
+[12-May-2025 22:00:20] [127.0.0.1] GET / 404
+[12-May-2025 22:05:40] [127.0.0.1] POST /hello.world?%ADd+allow_url_include%3d1+%ADd+auto_prepend_file%3dphp://input 404
+[12-May-2025 22:05:42] [127.0.0.1] GET /vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:43] [127.0.0.1] GET /vendor/phpunit/phpunit/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:44] [127.0.0.1] GET /vendor/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:45] [127.0.0.1] GET /vendor/phpunit/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:47] [127.0.0.1] GET /vendor/phpunit/phpunit/LICENSE/eval-stdin.php 404
+[12-May-2025 22:05:48] [127.0.0.1] GET /vendor/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:50] [127.0.0.1] GET /phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:51] [127.0.0.1] GET /phpunit/phpunit/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:52] [127.0.0.1] GET /phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:54] [127.0.0.1] GET /phpunit/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:55] [127.0.0.1] GET /lib/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:56] [127.0.0.1] GET /lib/phpunit/phpunit/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:58] [127.0.0.1] GET /lib/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:05:59] [127.0.0.1] GET /lib/phpunit/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:00] [127.0.0.1] GET /lib/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:01] [127.0.0.1] GET /laravel/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:03] [127.0.0.1] GET /www/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:04] [127.0.0.1] GET /ws/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:05] [127.0.0.1] GET /yii/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:07] [127.0.0.1] GET /zend/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:08] [127.0.0.1] GET /ws/ec/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:10] [127.0.0.1] GET /V2/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:11] [127.0.0.1] GET /tests/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:12] [127.0.0.1] GET /test/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:14] [127.0.0.1] GET /testing/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:15] [127.0.0.1] GET /api/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:16] [127.0.0.1] GET /demo/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:17] [127.0.0.1] GET /cms/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:19] [127.0.0.1] GET /crm/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:20] [127.0.0.1] GET /admin/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:21] [127.0.0.1] GET /backup/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:23] [127.0.0.1] GET /blog/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:24] [127.0.0.1] GET /workspace/drupal/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:25] [127.0.0.1] GET /panel/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:26] [127.0.0.1] GET /public/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:28] [127.0.0.1] GET /apps/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:29] [127.0.0.1] GET /app/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php 404
+[12-May-2025 22:06:31] [127.0.0.1] GET /index.php?s=/index/\think\app/invokefunction&function=call_user_func_array&vars[0]=md5&vars[1][]=Hello 404
+[12-May-2025 22:06:32] [127.0.0.1] GET /public/index.php?s=/index/\think\app/invokefunction&function=call_user_func_array&vars[0]=md5&vars[1][]=Hello 404
+[12-May-2025 22:06:33] [127.0.0.1] GET /index.php?lang=../../../../../../../../usr/local/lib/php/pearcmd&+config-create+/&/<?echo(md5("hi"));?>+/tmp/index1.php 404
+[12-May-2025 22:06:34] [127.0.0.1] GET /index.php?lang=../../../../../../../../tmp/index1 404
+[12-May-2025 22:06:36] [127.0.0.1] GET /containers/json 404
+[12-May-2025 22:11:04] [undefined] ID not valid.
+[12-May-2025 22:11:04] [👻:8Na4cA9AKWa] Created new sessionID for 102.88.108.32.
+[12-May-2025 22:11:04] [👻:8Na4cA9AKWa] Requested necessary informations for Practice Menu.
+[12-May-2025 22:11:04] [👻:8Na4cA9AKWa] There is no associated LNRURLP. Creating new one.
+[12-May-2025 22:11:04] [👻:8Na4cA9AKWa] Requesting new LNURLp with description Player 1 of 150 to 10000000 sats.
+[12-May-2025 22:11:05] [👻:8Na4cA9AKWa] Created LNURLp ky5P8W.
+[12-May-2025 22:11:05] [👻:8Na4cA9AKWa] Sending LNRURLP to client.
+[12-May-2025 22:14:34] [👻:8Na4cA9AKWa] Paid LNURLp ky5P8W with 150 sats and note Sharp Guy .
+[12-May-2025 22:14:34] [👻:8Na4cA9AKWa] Sending 0.0195 split of 2 sats to developer at francis@walletofsatoshi.com
+[12-May-2025 22:14:34] [👻:8Na4cA9AKWa] Sending 0.0195 split of 2 sats to host at spcafe@blink.sv
+[12-May-2025 22:14:34] [👻:8Na4cA9AKWa] Sending 0.0095 split of 1 sats to designer at designer@btcpay989117.lndyn.com
+[12-May-2025 22:14:34] [127.0.0.1] POST /api/LNURL/paid 200
+[12-May-2025 22:15:21] [👻:8Na4cA9AKWa] Existing sessionID sent by client.
+[12-May-2025 22:15:22] [👻:8Na4cA9AKWa] Requested information for P2P game.
+[12-May-2025 22:15:22] [👻:8Na4cA9AKWa] Sending game P2P information.
+[12-May-2025 22:15:50] [👻:8Na4cA9AKWa] Game is finished. Winner is Player 2.
+[12-May-2025 22:15:50] [👻:8Na4cA9AKWa] Deleting LNURLPs from Session.
+[12-May-2025 22:16:40] [👻:8Na4cA9AKWa] Existing sessionID sent by client.
+[12-May-2025 22:16:41] [👻:8Na4cA9AKWa] Requested P2P postGame information.
+[12-May-2025 22:16:41] [👻:8Na4cA9AKWa] Sending P2P postGame info.
+[12-May-2025 22:16:47] [127.0.0.1] GET /dashboard?password=SAds2vRg_123 200
+[12-May-2025 22:16:47] [127.0.0.1] GET /favicon.ico 404
+[12-May-2025 22:16:51] [👻:8Na4cA9AKWa] Requested LNRURLw.
+[12-May-2025 22:16:51] [👻:8Na4cA9AKWa] No associated LNRURLw.
+[12-May-2025 22:16:51] [👻:8Na4cA9AKWa] Requested to create LNURLW with 0 sats. Deleting Session data.
+[12-May-2025 22:16:51] [👻:8Na4cA9AKWa] Writing game info to JSON.
+[12-May-2025 22:31:12] [👻:8Na4cA9AKWa] Existing sessionID sent by client.
+[12-May-2025 22:31:12] [🦖:Vcx6jEGPAaR] Created new sessionID for 102.88.108.32.
+[12-May-2025 22:31:13] [🦖:Vcx6jEGPAaR] Requested necessary informations for Practice Menu.
+[12-May-2025 22:31:13] [🦖:Vcx6jEGPAaR] There is no associated LNRURLP. Creating new one.
+[12-May-2025 22:31:13] [🦖:Vcx6jEGPAaR] Requesting new LNURLp with description Player 1 of 150 to 10000000 sats.
+[12-May-2025 22:31:13] [🦖:Vcx6jEGPAaR] Created LNURLp DX8WkH.
+[12-May-2025 22:31:13] [🦖:Vcx6jEGPAaR] Sending LNRURLP to client.
+[12-May-2025 22:33:50] [🦖:Vcx6jEGPAaR] Paid LNURLp DX8WkH with 150 sats and note Nostr king.
+[12-May-2025 22:33:50] [🦖:Vcx6jEGPAaR] Sending 0.0195 split of 2 sats to developer at francis@walletofsatoshi.com
+[12-May-2025 22:33:50] [🦖:Vcx6jEGPAaR] Sending 0.0195 split of 2 sats to host at spcafe@blink.sv
+[12-May-2025 22:33:50] [🦖:Vcx6jEGPAaR] Sending 0.0095 split of 1 sats to designer at designer@btcpay989117.lndyn.com
+[12-May-2025 22:33:50] [127.0.0.1] POST /api/LNURL/paid 200
+[12-May-2025 22:34:22] [🦖:Vcx6jEGPAaR] Existing sessionID sent by client.
+[12-May-2025 22:34:22] [🦖:Vcx6jEGPAaR] Requested information for P2P game.
+[12-May-2025 22:34:22] [🦖:Vcx6jEGPAaR] Sending game P2P information.
+[12-May-2025 22:34:49] [🦖:Vcx6jEGPAaR] Game is finished. Winner is Player 2.
+[12-May-2025 22:34:49] [🦖:Vcx6jEGPAaR] Deleting LNURLPs from Session.
+[12-May-2025 22:36:46] [🦖:Vcx6jEGPAaR] Existing sessionID sent by client.
+[12-May-2025 22:47:14] [127.0.0.1] GET / 404
+[12-May-2025 22:47:33] [127.0.0.1] GET /favicon.ico 404
+[12-May-2025 23:14:37] [127.0.0.1] GET /?XDEBUG_SESSION_START=phpstorm 404
+[12-May-2025 23:18:23] [127.0.0.1] GET /favicon.ico 404
+Cleaning up inactive session: ⛓️:MWRVwEDr6HG
+gameInfo not found.
+[13-May-2025 00:31:08] [127.0.0.1] GET / 404
+[13-May-2025 00:32:54] [127.0.0.1] GET / 404
+[13-May-2025 00:40:32] [127.0.0.1] GET / 404
+[13-May-2025 00:47:28] [127.0.0.1] GET /.env 404
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+Terminated
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+
+> dev
+> nodemon
+
+[33m[nodemon] 3.1.9[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): src/**/*[39m
+[33m[nodemon] watching extensions: ts,js[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+🚀 Server running at http://localhost:3000
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Terminated
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+
+> dev
+> nodemon
+
+[33m[nodemon] 3.1.9[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): src/**/*[39m
+[33m[nodemon] watching extensions: ts,js[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+🚀 Server running at http://localhost:3000
+[13-May-2025 00:52:40] [82.155.190.228 GET /dashboard?password=SAds2vRg_123 200
+[13-May-2025 00:53:58] [82.155.190.228 GET /dashboard?password=SAds2vRg_123 304
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+Terminated
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Terminated
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Terminated
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Terminated
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Terminated
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+
+> dev
+> nodemon
+
+[33m[nodemon] 3.1.9[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): src/**/*[39m
+[33m[nodemon] watching extensions: ts,js[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+🚀 Server running at http://localhost:3000
+[13-May-2025 00:54:49] [82.155.190.228] GET /dashboard?password=SAds2vRg_123 304
+[13-May-2025 00:55:05] [☠️:p4MakWb3hFU] Existing sessionID sent by client.
+[13-May-2025 00:55:05] [👻:9p6iUEcxyig] Created new sessionID for 82.155.190.228.
+[13-May-2025 00:55:05] [👻:9p6iUEcxyig] Requested necessary informations for Game Menu.
+[13-May-2025 00:55:05] [👻:9p6iUEcxyig] There are no associated LNRURLPs. Creating new ones.
+[13-May-2025 00:55:05] [👻:9p6iUEcxyig] Requesting new LNURLp with description Player 1 from 3000 to 10000000 sats.
+[13-May-2025 00:55:05] [👻:9p6iUEcxyig] Created LNURLp B5t7jE.
+[13-May-2025 00:55:05] [👻:9p6iUEcxyig] Requesting new LNURLp with description Player 2 from 3000 to 10000000 sats.
+[13-May-2025 00:55:06] [👻:9p6iUEcxyig] Created LNURLp M3Ryb8.
+[13-May-2025 00:55:06] [👻:9p6iUEcxyig] Sending LNRURLPs to client.
+[13-May-2025 00:55:11] [👻:9p6iUEcxyig] Canceling P2P game.
+[13-May-2025 00:55:14] [👻:9p6iUEcxyig] Existing sessionID sent by client.
+[13-May-2025 00:55:14] [👻:pUwfh3JzK39] Created new sessionID for 82.155.190.228.
+[13-May-2025 00:55:14] [👻:pUwfh3JzK39] Requested necessary informations for Practice Menu.
+[13-May-2025 00:55:14] [👻:pUwfh3JzK39] There is no associated LNRURLP. Creating new one.
+[13-May-2025 00:55:14] [👻:pUwfh3JzK39] Requesting new LNURLp with description Player 1 of 150 to 10000000 sats.
+[13-May-2025 00:55:15] [👻:pUwfh3JzK39] Created LNURLp kiG7aM.
+[13-May-2025 00:55:15] [👻:pUwfh3JzK39] Sending LNRURLP to client.
+[13-May-2025 00:55:25] [👻:pUwfh3JzK39] Paid LNURLp kiG7aM with 150 sats and note null.
+[13-May-2025 00:55:25] [👻:pUwfh3JzK39] Sending 0.0195 split of 2 sats to developer at francis@walletofsatoshi.com
+[13-May-2025 00:55:25] [👻:pUwfh3JzK39] Sending 0.0195 split of 2 sats to host at francis@walletofsatoshi.com
+[13-May-2025 00:55:25] [👻:pUwfh3JzK39] Sending 0.0095 split of 1 sats to designer at designer@btcpay989117.lndyn.com
+[13-May-2025 00:55:25] [170.75.162.217] POST /api/LNURL/paid 200
