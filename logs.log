@@ -7595,3 +7595,102 @@ Terminated
 [13-May-2025 00:55:25] [👻:pUwfh3JzK39] Sending 0.0195 split of 2 sats to host at francis@walletofsatoshi.com
 [13-May-2025 00:55:25] [👻:pUwfh3JzK39] Sending 0.0095 split of 1 sats to designer at designer@btcpay989117.lndyn.com
 [13-May-2025 00:55:25] [170.75.162.217] POST /api/LNURL/paid 200
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+🚀 Server running at http://localhost:3000
+Port 3000 is already in use
+Port 3000 is already in use
+Port 3000 is already in use
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[13-May-2025 01:00:11] [👻:pUwfh3JzK39] Existing sessionID sent by client.
+[13-May-2025 01:00:11] [⛓️:a6kHz9NqfFN] Created new sessionID for 82.155.190.228.
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+🚀 Server running at http://localhost:3000
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Port 3000 is already in use
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[13-May-2025 01:01:12] [⛓️:a6kHz9NqfFN] Existing sessionID sent by client.
+[13-May-2025 01:01:12] [🎸:RVqQKXaVnNK] Created new sessionID for 82.155.190.228.
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+🚀 Server running at http://localhost:3000
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Port 3000 is already in use
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+Port 3000 is already in use
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[13-May-2025 01:03:11] [🎸:RVqQKXaVnNK] Existing sessionID sent by client.
+[13-May-2025 01:03:11] [🍀:wFKk3BDALCG] Created new sessionID for 82.155.190.228.
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m
+[32m[nodemon] starting `ts-node ./src/server.ts`[39m

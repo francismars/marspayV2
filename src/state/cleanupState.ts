@@ -1,11 +1,12 @@
 import deleteLNURLW from '../calls/LNBits/deleteLNURLW';
-import { deleteGameInfoByID } from './gameState';
+import { deleteGameInfoByID, getGameInfoFromID } from './gameState';
 import { deleteLNURLWFromSession, getIDFromLNURLW } from './lnurlwState';
 import { deleteSocketFromSession, getAllIDtoSocket } from './sessionState';
 import { deleteLNURLPsFromSession, getLNURLPsFromID } from './lnurlpState';
 import { appendGameInfotoJSON } from '../utils/json';
 import { deleteKind1sFromSession } from './nostrState';
 import { CLEANUP_INTERVAL, INACTIVITY_THRESHOLD } from '../consts/values';
+import { dateNow } from '../utils/time';
 
 export function handleEndOfSession(
   sessionID: string,
@@ -32,8 +33,9 @@ function cleanupInactiveSessions(inactivityThreshold: number) {
 
   for (const [sessionID, session] of allSessions) {
     if (now - session.lastSeen > inactivityThreshold) {
-      console.log(`Cleaning up inactive session: ${sessionID}`);
-      handleEndOfSession(sessionID, false);
+      console.log(`${dateNow()} [${sessionID}] Cleaning up inactive session.`);
+      const saveState = getGameInfoFromID(sessionID)?.winners ? true : false
+      handleEndOfSession(sessionID, saveState);
     }
   }
 }
