@@ -15,7 +15,7 @@ morgan.token('custom-date', () => dateNow());
 morgan.token(
   'real-ip',
   (req: Request) =>
-    '[' + normalizeIP(req.ip || req.socket.remoteAddress || '-') + ']'
+    '[' + req.headers['x-real-ip'] + ']' || '[' + normalizeIP(req.ip || req.socket.remoteAddress || '-') + ']'
 );
 const format = ':custom-date :real-ip :method :url :status';
 app.use(morgan(format));
