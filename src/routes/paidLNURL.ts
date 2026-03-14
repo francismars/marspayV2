@@ -33,7 +33,7 @@ interface LNURLPReqBody {
   payment_hash: string;
   payment_request: string;
   amount: number;
-  comment: string | null;
+  comment: string | string[] | null;
   webhook_data: string;
   lnurlp: string;
   body: string;
@@ -70,7 +70,7 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
   }
 
   const amount = reqBody.amount / 1000;
-  const comment = reqBody.comment?.[0] ?? null;
+  const comment = normalizePaymentComment(reqBody.comment);
   console.log(
     `${dateNow()} [${sessionID}] Paid LNURLp ${reqLNURLP} with ${amount} sats and note ${comment}.`
   );
@@ -90,7 +90,7 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
     const value = playerInfos?.value ?? 0;
     const prevName = playerInfos?.name ?? null;
     const prevPayments = playerInfos?.payments ?? [];
-    const playerName = comment?.trim() ?? prevName ?? playerRole;
+    const playerName = comment ?? prevName ?? playerRole;
     const payment: Payment = { amount: amount, note: comment };
     const playerInfo: PlayerInfo = {
       name: playerName,
@@ -115,6 +115,26 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
     res.status(200).send('OK');
   }
 });
+
+function normalizePaymentComment(comment: string | string[] | null): string | null {
+  if (comment == null) return null;
+  const joined =
+    typeof comment === 'string'
+      ? comment
+      : comment.map((part) => String(part ?? '')).join('');
+  const withoutControlChars = [...joined]
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    })
+    .join('');
+  // Keep full user-provided name, while removing control chars and normalizing whitespace.
+  const normalized = withoutControlChars
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (normalized === '') return null;
+  return normalized.slice(0, 64);
+}
 
 function paySplits(sessionID: string, amount: number, hostLNAddress?: string) {
   const devLN = process.env.DEVELOPER_LNADDRESS;

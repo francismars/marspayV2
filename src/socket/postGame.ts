@@ -77,10 +77,14 @@ export async function createWithdrawalPostGame(socket: Socket) {
         ? winner
         : PlayerRole.Player1;
     const winnerValue = gameInfo!.players!.get(valueFrom)!.value;
-    const amount =
+    const grossAmount =
       gameInfo.mode == GameMode.TOURNAMENT
         ? winnerValue * gameInfo.numberOfPlayers!
         : winnerValue;
+    const amount =
+      gameInfo.mode == GameMode.TOURNAMENT
+        ? Math.floor(grossAmount * 0.95)
+        : grossAmount;
     if (amount == 0) {
       console.log(
         `${dateNow()} [${sessionID}] Requested to create LNURLW with 0 sats. Deleting Session data.`
