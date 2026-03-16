@@ -59,7 +59,7 @@ export async function publishEndGameKind1(sessionID: string) {
     const championMention = winnerID ? `nostr:${winnernprofile}` : winnerInfo.name;
     ndkEvent.content = `🏆 TOURNAMENT COMPLETE ${emojisGame}\nChampion: ${championMention}\nCongratulations ${winnerInfo.name}!\nFinal payout: ${Math.floor(
       winnerAmount * 0.95
-    )} sats.\n\nThanks to everyone who joined - follow this thread for the next tournament.`;
+    )} sats.\n\nThanks to everyone who joined.`;
   } else {
     const loser = getOpponent(winner);
     const loserID = gameInfo.players.get(loser)!.id;
