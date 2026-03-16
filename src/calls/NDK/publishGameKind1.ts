@@ -39,16 +39,25 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
         .join('');
   const value = opts.buyin ?? (lastWinnerInfo ? lastWinnerInfo.value : BUYINMIN);
   const tournamentFixedZap = mode === GameMode.TOURNAMENTNOSTR ? value : BUYINMAX;
+  const isTournamentNostrReply =
+    mode === GameMode.TOURNAMENTNOSTR &&
+    (opts.tournamentStatus === 'full' || !!winnerLength);
   const ndkEvent = new NDKEvent(ndkInstance);
   ndkEvent.kind = 1;
-  ndkEvent.tags = [
-    ['t', 'pubpay'],
-    ['zap-min', (value * 1000).toString()],
-    ['zap-max', (tournamentFixedZap * 1000).toString()],
-    ['zap-uses', mode === GameMode.TOURNAMENTNOSTR ? String(opts.numberOfPlayers ?? 4) : '2'],
-  ];
+  ndkEvent.tags = isTournamentNostrReply
+    ? []
+    : [
+        ['t', 'pubpay'],
+        ['zap-min', (value * 1000).toString()],
+        ['zap-max', (tournamentFixedZap * 1000).toString()],
+        [
+          'zap-uses',
+          mode === GameMode.TOURNAMENTNOSTR
+            ? String(opts.numberOfPlayers ?? 4)
+            : '2',
+        ],
+      ];
   if (mode === GameMode.TOURNAMENTNOSTR) {
-    ndkEvent.tags.push(['zap-uses', String(opts.numberOfPlayers ?? 4)]);
     if (opts.tournamentStatus === 'full') {
       const rootKind1Info = getKind1sfromSessionID(sessionID)?.[0];
       if (rootKind1Info) {
