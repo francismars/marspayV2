@@ -6,6 +6,7 @@ export interface Kind1 {
   emojis: string;
   min: number;
   mode: string;
-  zapSubscription: NDKSubscription;
+  zapSubscription?: NDKSubscription;
   hostLNAddress?: string;
+  numberOfPlayers?: number;
 }

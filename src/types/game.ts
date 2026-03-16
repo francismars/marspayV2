@@ -14,6 +14,10 @@ export interface PlayerInfo {
   payments?: Payment[];
   picture?: string;
   id?: string;
+  participantId?: string;
+  isAnon?: boolean;
+  nostrPubkey?: string;
+  fallbackLabel?: string;
 }
 
 export enum GameMode {
@@ -21,6 +25,7 @@ export enum GameMode {
   P2PNOSTR = 'P2PNOSTR',
   PRACTICE = 'PRACTICE',
   TOURNAMENT = 'TOURNAMENT',
+  TOURNAMENTNOSTR = 'TOURNAMENTNOSTR',
 }
 
 export enum PlayerRole {

@@ -29,7 +29,7 @@ export function deleteKind1sFromSession(sessionID: string) {
   if (kind1s) {
     for (const kind1 of kind1s) {
       publishDeleteKind1(kind1.id);
-      kind1.zapSubscription.stop();
+      kind1.zapSubscription?.stop();
       kind1IDtoSessionID.delete(kind1.id);
     }
   }
@@ -47,4 +47,16 @@ export function getAllsessionIDtoKind1s() {
     kind1sNoSub.set(sessionID, filteredKind1s);
   }
   return kind1sNoSub;
+}
+
+export function getKind1FromID(noteID: string) {
+  const sessionID = kind1IDtoSessionID.get(noteID);
+  if (!sessionID) {
+    return;
+  }
+  const kind1s = sessionIDtoKind1s.get(sessionID);
+  if (!kind1s) {
+    return;
+  }
+  return kind1s.find((kind1) => kind1.id === noteID);
 }

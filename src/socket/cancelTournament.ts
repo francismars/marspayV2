@@ -12,6 +12,8 @@ import {
   setLNURLWToID,
 } from '../state/lnurlwState';
 import { deleteSocketFromSession } from '../state/sessionState';
+import { GameMode } from '../types/game';
+import { getKind1sfromSessionID } from '../state/nostrState';
 
 export async function cancelTournament(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -49,13 +51,26 @@ export async function cancelTournament(socket: Socket) {
     return;
   }
   const LNURLPs = getLNURLPsFromID(sessionID);
-  if (!LNURLPs || LNURLPs[0].mode != 'TOURNAMENT') {
-    console.log(
-      `${dateNow()} [${sessionID}] No LNURLp found for tournament information.`
-    );
-    return;
+  let amount = 0;
+  if (tournamentInfo.mode === GameMode.TOURNAMENTNOSTR) {
+    const kind1 = getKind1sfromSessionID(sessionID)?.slice(-1)[0];
+    amount =
+      kind1?.min ??
+      Math.floor(
+        [...tournamentInfo.players.values()].reduce(
+          (sum, player) => sum + player.value,
+          0
+        ) / depositcount
+      );
+  } else {
+    if (!LNURLPs || LNURLPs[0].mode != 'TOURNAMENT') {
+      console.log(
+        `${dateNow()} [${sessionID}] No LNURLp found for tournament information.`
+      );
+      return;
+    }
+    amount = LNURLPs[0].min;
   }
-  const amount = LNURLPs[0].min;
   console.log(
     `${dateNow()} [${sessionID}] Creating LNRURLw with ${amount} sats and ${depositcount} uses.`
   );
