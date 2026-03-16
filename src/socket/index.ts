@@ -9,6 +9,7 @@ import { getPracticeMenuInfos } from './practiceMenu';
 import { getTournamentMenuInfos } from './tournament';
 import { cancelTournament } from './cancelTournament';
 import { getNostrP2PMenuInfos } from './nostrP2PMenu';
+import { getTournamentNostrInfos } from './nostrTournament';
 
 export default function registerSocketHandlers(io: Server) {
   io.use((socket: Socket, next) => {
@@ -40,6 +41,13 @@ export default function registerSocketHandlers(io: Server) {
       'getTournamentInfos',
       async (data?: { buyin: number; players: number; hostLNAddress?: string }) => {
         await getTournamentMenuInfos(socket, data);
+      }
+    );
+
+    socket.on(
+      'getTournamentInfosNostr',
+      async (data?: { buyin: number; players: number; hostLNAddress?: string }) => {
+        await getTournamentNostrInfos(socket, data);
       }
     );
 

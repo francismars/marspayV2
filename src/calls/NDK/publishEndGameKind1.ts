@@ -5,6 +5,7 @@ import { getKind1sfromSessionID } from '../../state/nostrState';
 import { dateNow } from '../../utils/time';
 import { nip19 } from 'nostr-tools';
 import { ndkInstance } from './setNDKInstance';
+import { GameMode } from '../../types/game';
 
 export async function publishEndGameKind1(sessionID: string) {
   const gameInfo = getGameInfoFromID(sessionID);
@@ -18,19 +19,34 @@ export async function publishEndGameKind1(sessionID: string) {
     return;
   }
   const winnerID = gameInfo.players.get(winner)!.id;
-  const winnernprofile = nip19.npubEncode(winnerID!);
+  const winnernprofile = winnerID ? nip19.npubEncode(winnerID) : gameInfo.players.get(winner)!.name;
   const kind1Info = getKind1sfromSessionID(sessionID)!.slice(-1)[0];
-  const loser = getOpponent(winner);
-  const loserID = gameInfo.players.get(loser)!.id;
-  const losernprofile = nip19.npubEncode(loserID!);
   const replyEventID = kind1Info.id;
   const emojisGame = kind1Info.emojis;
-  const winnerAmount = gameInfo.players.get(winner)!.value;
+  const winnerAmount =
+    gameInfo.mode === GameMode.TOURNAMENTNOSTR
+      ? [...gameInfo.players.values()].reduce((sum, player) => sum + player.value, 0)
+      : gameInfo.players.get(winner)!.value;
   const ndkEvent = new NDKEvent(ndkInstance);
   ndkEvent.kind = 1;
   ndkEvent.tags = [['e', replyEventID, '', 'root']];
-  ndkEvent.tags.push(['p', winnerID!, '', 'mention']);
-  ndkEvent.tags.push(['p', loserID!, '', 'mention']);
-  ndkEvent.content = `Chain Duel P2P Game ${emojisGame} is finished.\nnostr:${winnernprofile} wins ${winnerAmount} sats!\nBetter luck next time nostr:${losernprofile}.`;
+  if (winnerID) {
+    ndkEvent.tags.push(['p', winnerID, '', 'mention']);
+  }
+  if (gameInfo.mode === GameMode.TOURNAMENTNOSTR) {
+    ndkEvent.content = `Chain Duel Tournament ${emojisGame} is finished.\nChampion: ${winnernprofile}\nPrize pool: ${Math.floor(
+      winnerAmount * 0.95
+    )} sats.`;
+  } else {
+    const loser = getOpponent(winner);
+    const loserID = gameInfo.players.get(loser)!.id;
+    const losernprofile = loserID
+      ? nip19.npubEncode(loserID)
+      : gameInfo.players.get(loser)!.name;
+    if (loserID) {
+      ndkEvent.tags.push(['p', loserID, '', 'mention']);
+    }
+    ndkEvent.content = `Chain Duel P2P Game ${emojisGame} is finished.\nnostr:${winnernprofile} wins ${winnerAmount} sats!\nBetter luck next time nostr:${losernprofile}.`;
+  }
   await ndkEvent.publish();
 }

@@ -50,7 +50,7 @@ export async function getNostrP2PMenuInfos(socket: Socket, LNAddress?: string) {
     }
   }
   await setNDKInstance();
-  await publishGameKind1(sessionID, LNAddress);
+  await publishGameKind1(sessionID, { hostLNAddress: LNAddress });
   const kind1 = getKind1sfromSessionID(sessionID);
   socket.emit('resGetGameMenuInfos', kind1);
 }

@@ -33,7 +33,7 @@ export function postGameInfo(socket: Socket) {
   const gameInfos = getGameInfoFromID(sessionID);
   if (gameInfos && gameInfos.winners) {
     console.log(`${dateNow()} [${sessionID}] Sending P2P postGame info.`);
-    if (gameInfos.mode == GameMode.TOURNAMENT) {
+    if (gameInfos.mode == GameMode.TOURNAMENT || gameInfos.mode == GameMode.TOURNAMENTNOSTR) {
       setChampionToGameInfo(sessionID);
     }
     const response: Response | undefined = serializeGameInfoFromID(sessionID);
@@ -68,7 +68,7 @@ export async function createWithdrawalPostGame(socket: Socket) {
       );
       return;
     }
-    if (gameInfo.mode == GameMode.P2PNOSTR) {
+    if (gameInfo.mode == GameMode.P2PNOSTR || gameInfo.mode == GameMode.TOURNAMENTNOSTR) {
       publishEndGameKind1(sessionID);
     }
     const winner: PlayerRole = gameInfo!.winners!.slice(-1)[0];
@@ -80,9 +80,11 @@ export async function createWithdrawalPostGame(socket: Socket) {
     const grossAmount =
       gameInfo.mode == GameMode.TOURNAMENT
         ? winnerValue * gameInfo.numberOfPlayers!
+        : gameInfo.mode == GameMode.TOURNAMENTNOSTR
+        ? [...gameInfo.players.values()].reduce((sum, player) => sum + player.value, 0)
         : winnerValue;
     const amount =
-      gameInfo.mode == GameMode.TOURNAMENT
+      gameInfo.mode == GameMode.TOURNAMENT || gameInfo.mode == GameMode.TOURNAMENTNOSTR
         ? Math.floor(grossAmount * 0.95)
         : grossAmount;
     if (amount == 0) {

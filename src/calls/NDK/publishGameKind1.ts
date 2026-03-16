@@ -1,25 +1,30 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk';
-import { ALLOWEDEMOJIS } from '../../consts/emojis';
-import { getGameInfoFromID } from '../../state/gameState';
-import {
-  appendKind1toSessionID,
-  getKind1sfromSessionID,
-  setKind1IDtoSessionID,
-} from '../../state/nostrState';
-import { BUYINMAX, BUYINMIN } from '../../consts/values';
-import { getOpponent } from '../../socket/game';
 import { nip19 } from 'nostr-tools';
-import { dateNow } from '../../utils/time';
-import { Kind1 } from '../../types/nostr';
+import { ALLOWEDEMOJIS } from '../../consts/emojis';
+import { BUYINMAX, BUYINMIN } from '../../consts/values';
+import { getGameInfoFromID } from '../../state/gameState';
+import { appendKind1toSessionID, getKind1sfromSessionID, setKind1IDtoSessionID } from '../../state/nostrState';
+import { getOpponent } from '../../socket/game';
 import { GameMode } from '../../types/game';
+import { Kind1 } from '../../types/nostr';
+import { dateNow } from '../../utils/time';
 import { ndkInstance } from './setNDKInstance';
 import { subscribeEvent } from './subscribeEvent';
 
-export async function publishGameKind1(sessionID: string, hostLNAddress?: string) {
+interface PublishGameKind1Opts {
+  hostLNAddress?: string;
+  mode?: GameMode;
+  buyin?: number;
+  numberOfPlayers?: number;
+  tournamentStatus?: 'open' | 'full' | 'round';
+}
+
+export async function publishGameKind1(sessionID: string, opts: PublishGameKind1Opts = {}) {
   if (!ndkInstance) {
     console.log('NDK not initialized');
     return;
   }
+  const mode = opts.mode ?? GameMode.P2PNOSTR;
   const kind1Info = getKind1sfromSessionID(sessionID)?.slice(-1)[0];
   const gameInfo = getGameInfoFromID(sessionID);
   const winnerLength = gameInfo?.winners?.length;
@@ -32,16 +37,35 @@ export async function publishGameKind1(sessionID: string, hostLNAddress?: string
     : [...Array(4)]
         .map(() => ALLOWEDEMOJIS[(Math.random() * ALLOWEDEMOJIS.length) | 0])
         .join('');
-  const value = lastWinnerInfo ? lastWinnerInfo.value : BUYINMIN;
+  const value = opts.buyin ?? (lastWinnerInfo ? lastWinnerInfo.value : BUYINMIN);
   const ndkEvent = new NDKEvent(ndkInstance);
   ndkEvent.kind = 1;
   ndkEvent.tags = [
     ['t', 'pubpay'],
     ['zap-min', (value * 1000).toString()],
     ['zap-max', (BUYINMAX * 1000).toString()],
-    ['zap-uses', '2'],
+    ['zap-uses', mode === GameMode.TOURNAMENTNOSTR ? String(opts.numberOfPlayers ?? 4) : '2'],
   ];
-  if (!winnerLength) {
+  if (mode === GameMode.TOURNAMENTNOSTR) {
+    ndkEvent.tags.push(['t', 'chainduel-tournament']);
+    ndkEvent.tags.push(['t', 'chainduel-tournamentnostr']);
+    ndkEvent.tags.push(['zap-uses', String(opts.numberOfPlayers ?? 4)]);
+    if (opts.tournamentStatus === 'full') {
+      const rootKind1Info = getKind1sfromSessionID(sessionID)?.[0];
+      if (rootKind1Info) {
+        ndkEvent.tags.push(['e', rootKind1Info.id, '', 'root']);
+      }
+      ndkEvent.content = `TOURNAMENT ${emojis} is now full.\nBracket locked.\nGames are starting now.`;
+    } else if (!winnerLength) {
+      ndkEvent.content = `CHAIN DUEL TOURNAMENT NOSTR MODE.\nTOURNAMENT ID: ${emojis}.\nZap ${value} sats to join.\nFirst ${opts.numberOfPlayers ?? 4} players to pay are admitted.`;
+    } else {
+      const rootKind1Info = getKind1sfromSessionID(sessionID)?.[0];
+      if (rootKind1Info) {
+        ndkEvent.tags.push(['e', rootKind1Info.id, '', 'root']);
+      }
+      ndkEvent.content = `TOURNAMENT UPDATE ${emojis}.\nRound ${winnerLength} results recorded.\nBracket is advancing on Chain Duel backend authority.`;
+    }
+  } else if (!winnerLength) {
     ndkEvent.content = `CHAIN DUEL P2P NOSTR MODE.\nGAMEID: ${emojis}.\nZap a minimum of ${value} sats to register.`;
   } else {
     const winnerID = lastWinnerInfo!.id;
@@ -70,8 +94,11 @@ export async function publishGameKind1(sessionID: string, hostLNAddress?: string
   console.log(
     `${dateNow()} [${sessionID}] Created Nostr Event ${encodedEvent}.`
   );
-  const subscription = await subscribeEvent(9735, ndkEvent.id);
-  if (!subscription) {
+  const shouldSubscribe =
+    mode !== GameMode.TOURNAMENTNOSTR ||
+    (mode === GameMode.TOURNAMENTNOSTR && opts.tournamentStatus !== 'full' && !winnerLength);
+  const subscription = shouldSubscribe ? await subscribeEvent(9735, ndkEvent.id) : undefined;
+  if (shouldSubscribe && !subscription) {
     console.log('Subscription not created');
     return;
   }
@@ -80,9 +107,10 @@ export async function publishGameKind1(sessionID: string, hostLNAddress?: string
     note1: encodedEvent,
     emojis: emojis,
     min: value,
-    mode: GameMode.P2PNOSTR,
+    mode: mode,
     zapSubscription: subscription,
-    hostLNAddress: hostLNAddress
+    hostLNAddress: opts.hostLNAddress,
+    numberOfPlayers: opts.numberOfPlayers,
   };
   appendKind1toSessionID(sessionID, eventinfo);
 }
