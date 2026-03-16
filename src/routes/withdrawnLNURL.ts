@@ -42,7 +42,8 @@ router.post('/', (req: Request, res: Response) => {
     return;
   }
   if (
-    gameInfos.mode === GameMode.TOURNAMENT &&
+    (gameInfos.mode === GameMode.TOURNAMENT ||
+      gameInfos.mode === GameMode.TOURNAMENTNOSTR) &&
     LNURLW.claimedCount! < LNURLW.maxWithdrawals!
   ) {
     LNURLW.claimedCount = LNURLW.claimedCount! + 1;
@@ -53,7 +54,8 @@ router.post('/', (req: Request, res: Response) => {
     );
   }
   const appendToJson =
-    gameInfos.mode === GameMode.TOURNAMENT &&
+    (gameInfos.mode === GameMode.TOURNAMENT ||
+      gameInfos.mode === GameMode.TOURNAMENTNOSTR) &&
     LNURLW.claimedCount &&
     LNURLW.maxWithdrawals &&
     LNURLW.claimedCount === LNURLW.maxWithdrawals

@@ -9,6 +9,7 @@ import { dateNow } from '../utils/time';
 import { GameMode, PlayerRole } from '../types/game';
 import { deleteLNURLPsFromSession } from '../state/lnurlpState';
 import { BUYINMINPRACTICE } from '../consts/values';
+import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 
 export function gameInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -75,9 +76,16 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
     }
   }
   appendWinnerToGameInfo(sessionID, winnerP);
-  if (gameInfo.mode != GameMode.TOURNAMENT) {
+  if (gameInfo.mode != GameMode.TOURNAMENT && gameInfo.mode != GameMode.TOURNAMENTNOSTR) {
     console.log(`${dateNow()} [${sessionID}] Deleting LNURLPs from Session.`);
     deleteLNURLPsFromSession(sessionID);
+  }
+  if (gameInfo.mode == GameMode.TOURNAMENTNOSTR) {
+    void publishGameKind1(sessionID, {
+      mode: GameMode.TOURNAMENTNOSTR,
+      buyin: gameInfo.players.get(PlayerRole.Player1)?.value,
+      numberOfPlayers: gameInfo.numberOfPlayers,
+    });
   }
 }
 
