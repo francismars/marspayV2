@@ -13,7 +13,7 @@ import {
 } from '../state/lnurlwState';
 import { deleteSocketFromSession } from '../state/sessionState';
 import { GameMode } from '../types/game';
-import { getKind1sfromSessionID } from '../state/nostrState';
+import { deleteKind1sFromSession, getKind1sfromSessionID } from '../state/nostrState';
 
 export async function cancelTournament(socket: Socket) {
   const sessionID = socket.data.sessionID;
@@ -44,6 +44,9 @@ export async function cancelTournament(socket: Socket) {
   );
   response.depositcount = depositcount;
   if (depositcount == 0) {
+    if (tournamentInfo.mode === GameMode.TOURNAMENTNOSTR) {
+      deleteKind1sFromSession(sessionID);
+    }
     deleteLNURLPsFromSession(sessionID);
     deleteGameInfoByID(sessionID);
     deleteSocketFromSession(sessionID);
@@ -85,6 +88,10 @@ export async function cancelTournament(socket: Socket) {
     });
     setLNURLWToID(lnurlw.id, sessionID);
     response.lnurlw = lnurlw.lnurl;
+  }
+  if (tournamentInfo.mode === GameMode.TOURNAMENTNOSTR) {
+    // Explicit user cancel: clean up public nostr posts.
+    deleteKind1sFromSession(sessionID);
   }
   console.log(
     `${dateNow()} [${sessionID}] Sending cancel tournament information.`

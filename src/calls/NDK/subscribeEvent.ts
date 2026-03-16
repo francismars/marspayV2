@@ -205,8 +205,12 @@ function getNextAvailableRole(sessionID: string, maxPlayers: number): PlayerRole
   const gameInfo = getGameInfoFromID(sessionID);
   const assignedRoles = gameInfo ? [...gameInfo.players.keys()] : [];
   const allRoles = Object.values(PlayerRole).slice(0, maxPlayers);
-  const availableRole = allRoles.find(
+  const availableRoles = allRoles.filter(
     (role) => !assignedRoles.includes(role as PlayerRole)
   );
-  return availableRole as PlayerRole | undefined;
+  if (availableRoles.length === 0) {
+    return;
+  }
+  const randomIdx = Math.floor(Math.random() * availableRoles.length);
+  return availableRoles[randomIdx] as PlayerRole | undefined;
 }
