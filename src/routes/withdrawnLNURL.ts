@@ -52,6 +52,8 @@ router.post('/', (req: Request, res: Response) => {
         LNURLW.claimedCount
       } out of ${LNURLW.maxWithdrawals}.`
     );
+    // Keep tournament session alive until all claims are completed.
+    return;
   }
   const appendToJson =
     (gameInfos.mode === GameMode.TOURNAMENT ||
@@ -61,7 +63,7 @@ router.post('/', (req: Request, res: Response) => {
     LNURLW.claimedCount === LNURLW.maxWithdrawals
       ? false
       : true;
-  handleEndOfSession(sessionID, appendToJson);
+  handleEndOfSession(sessionID, appendToJson, false);
 });
 
 export default router;

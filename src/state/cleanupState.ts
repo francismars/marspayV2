@@ -10,7 +10,8 @@ import { dateNow } from '../utils/time';
 
 export function handleEndOfSession(
   sessionID: string,
-  appendJSON: boolean = true
+  appendJSON: boolean = true,
+  deleteKind1: boolean = false
 ) {
   if (appendJSON) appendGameInfotoJSON(sessionID);
   const LNURLPs = getLNURLPsFromID(sessionID);
@@ -22,7 +23,9 @@ export function handleEndOfSession(
     deleteLNURLW(LNURLWFromID);
   }
   deleteLNURLWFromSession(sessionID);
-  deleteKind1sFromSession(sessionID);
+  if (deleteKind1) {
+    deleteKind1sFromSession(sessionID);
+  }
   deleteGameInfoByID(sessionID);
   deleteSocketFromSession(sessionID);
 }
@@ -34,8 +37,11 @@ function cleanupInactiveSessions(inactivityThreshold: number) {
   for (const [sessionID, session] of allSessions) {
     if (now - session.lastSeen > inactivityThreshold) {
       console.log(`${dateNow()} [${sessionID}] Cleaning up inactive session.`);
-      const saveState = getGameInfoFromID(sessionID)?.winners ? true : false
-      handleEndOfSession(sessionID, saveState);
+      const gameInfo = getGameInfoFromID(sessionID);
+      const saveState = gameInfo?.winners ? true : false;
+      const hasDeposits = (gameInfo?.players?.size ?? 0) > 0;
+      // Delete stale kind1 only for unused sessions with no deposits.
+      handleEndOfSession(sessionID, saveState, !hasDeposits);
     }
   }
 }
