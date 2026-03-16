@@ -42,7 +42,7 @@ export async function publishGameKind1(sessionID: string, hostLNAddress?: string
     ['zap-uses', '2'],
   ];
   if (!winnerLength) {
-    ndkEvent.content = `CHAIN DUEL NOSTR MODE.\nGAMEID: ${emojis}.\nZap a minimum of ${value} sats to register.`;
+    ndkEvent.content = `CHAIN DUEL P2P NOSTR MODE.\nGAMEID: ${emojis}.\nZap a minimum of ${value} sats to register.`;
   } else {
     const winnerID = lastWinnerInfo!.id;
     const winnernprofile = nip19.npubEncode(winnerID!);
