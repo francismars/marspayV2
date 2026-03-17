@@ -9,6 +9,7 @@ import { GameInfo, GameMode, PlayerRole } from '../../types/game';
 import { Kind1 } from '../../types/nostr';
 import { dateNow } from '../../utils/time';
 import { ndkInstance } from './setNDKInstance';
+import { setNDKInstance } from './setNDKInstance';
 import { subscribeEvent } from './subscribeEvent';
 
 interface PublishGameKind1Opts {
@@ -22,8 +23,14 @@ interface PublishGameKind1Opts {
 
 export async function publishGameKind1(sessionID: string, opts: PublishGameKind1Opts = {}) {
   if (!ndkInstance) {
-    console.log('NDK not initialized');
-    return;
+    try {
+      await setNDKInstance();
+    } catch (error) {
+      console.log(
+        `${dateNow()} [${sessionID}] NDK not initialized: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return;
+    }
   }
   const mode = opts.mode ?? GameMode.P2PNOSTR;
   const kind1Info = getKind1sfromSessionID(sessionID)?.slice(-1)[0];

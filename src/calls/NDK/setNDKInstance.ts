@@ -10,6 +10,9 @@ export async function setNDKInstance() {
   }
   dotenv.config();
   const nostrPrivKey = process.env.NOSTR_PK;
+  if (!nostrPrivKey) {
+    throw new Error('NOSTR_PK is missing in environment');
+  }
   const pksigner = new NDKPrivateKeySigner(nostrPrivKey!);
   ndkInstance = new NDK({
     signer: pksigner,
