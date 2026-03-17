@@ -1,5 +1,6 @@
 import { Socket } from 'socket.io';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
+import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import { GameMode } from '../types/game';
 import { io } from '../server';
 import { getKind1sfromSessionID } from '../state/nostrState';
@@ -36,6 +37,15 @@ export async function createOnlineRoomHandler(
     hostSocketID: socket.id,
     buyin: payload?.buyin,
   });
+
+  try {
+    await setNDKInstance();
+  } catch (error) {
+    console.error(
+      `Failed to initialize NDK for ONLINE room ${room.roomId}:`,
+      error
+    );
+  }
 
   await publishGameKind1(sessionID, {
     mode: GameMode.ONLINE,
