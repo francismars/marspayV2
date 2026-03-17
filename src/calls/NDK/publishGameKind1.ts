@@ -17,6 +17,7 @@ interface PublishGameKind1Opts {
   buyin?: number;
   numberOfPlayers?: number;
   tournamentStatus?: 'open' | 'full' | 'round';
+  roomCode?: string;
 }
 
 export async function publishGameKind1(sessionID: string, opts: PublishGameKind1Opts = {}) {
@@ -38,7 +39,10 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
         .map(() => ALLOWEDEMOJIS[(Math.random() * ALLOWEDEMOJIS.length) | 0])
         .join('');
   const value = opts.buyin ?? (lastWinnerInfo ? lastWinnerInfo.value : BUYINMIN);
-  const tournamentFixedZap = mode === GameMode.TOURNAMENTNOSTR ? value : BUYINMAX;
+  const tournamentFixedZap =
+    mode === GameMode.TOURNAMENTNOSTR || mode === GameMode.ONLINE
+      ? value
+      : BUYINMAX;
   const isTournamentNostrReply =
     mode === GameMode.TOURNAMENTNOSTR &&
     (opts.tournamentStatus === 'full' || !!winnerLength);
@@ -100,6 +104,8 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
         : result?.loserName ?? 'Unknown loser';
       ndkEvent.content = `TOURNAMENT UPDATE ${emojis}.\nGame ${winnerLength} result: ${winnerMention} defeated ${loserMention}.\n${winnerMention} advances to the next round.\nFollow this thread for the next matchup and final champion.`;
     }
+  } else if (mode === GameMode.ONLINE) {
+    ndkEvent.content = `CHAIN DUEL ONLINE ROOM ${emojis}.\nRoom code: ${opts.roomCode ?? 'N/A'}.\nZap exactly ${value} sats and paste your room PIN in zap comment to claim a seat.\nFirst 2 valid PIN zaps get Player 1 and Player 2.`;
   } else if (!winnerLength) {
     ndkEvent.content = `CHAIN DUEL P2P NOSTR MODE.\nGAMEID: ${emojis}.\nZap a minimum of ${value} sats to register.`;
   } else {
@@ -130,6 +136,7 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
     `${dateNow()} [${sessionID}] Created Nostr Event ${encodedEvent}.`
   );
   const shouldSubscribe =
+    mode === GameMode.ONLINE ||
     mode !== GameMode.TOURNAMENTNOSTR ||
     (mode === GameMode.TOURNAMENTNOSTR && opts.tournamentStatus !== 'full' && !winnerLength);
   const subscription = shouldSubscribe ? await subscribeEvent(9735, ndkEvent.id) : undefined;

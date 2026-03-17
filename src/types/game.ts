@@ -26,6 +26,7 @@ export enum GameMode {
   PRACTICE = 'PRACTICE',
   TOURNAMENT = 'TOURNAMENT',
   TOURNAMENTNOSTR = 'TOURNAMENTNOSTR',
+  ONLINE = 'ONLINE',
 }
 
 export enum PlayerRole {
