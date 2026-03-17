@@ -18,6 +18,12 @@ import {
   PlayerRole,
 } from '../../types/game';
 import { ndkInstance } from '../../calls/NDK/setNDKInstance';
+import {
+  consumePin,
+  getRoomBySession,
+  seatPaidPlayer,
+  serializeRoom,
+} from '../../state/onlineRoomState';
 
 const processedZapEventIDs = new Set<string>();
 
@@ -110,6 +116,48 @@ async function listenToSubscriptions(event: NDKEvent) {
     userZap?.profile?.image ??
     userZap?.profile?.picture ??
     '/images/loading.gif';
+  if (gameMode === GameMode.ONLINE) {
+    const room = getRoomBySession(sessionID);
+    if (!room) {
+      return;
+    }
+    if (zapAmount < minBuyIn) {
+      io.to(socketID).emit('onlinePinInvalid', { reason: 'amount_too_low' });
+      return;
+    }
+    const pin = extractPinFromComment(finalContent);
+    if (!pin) {
+      io.to(socketID).emit('onlinePinInvalid', { reason: 'pin_missing' });
+      return;
+    }
+    const consumed = consumePin(pin, room.roomId);
+    if (!consumed.ok) {
+      io.to(socketID).emit('onlinePinInvalid', { reason: consumed.reason });
+      return;
+    }
+    const seatResult = seatPaidPlayer({
+      roomId: room.roomId,
+      sessionID: consumed.record.sessionID,
+      socketID: consumed.record.socketID,
+      amount: zapAmount,
+      name: zapperName,
+      picture: avatar,
+      pubkey: payerPubKey,
+    });
+    if (!seatResult.ok) {
+      io.to(consumed.record.socketID).emit('onlinePinInvalid', {
+        reason: seatResult.reason,
+      });
+      return;
+    }
+    io.to(room.roomId).emit('onlineSeatAssigned', {
+      roomId: room.roomId,
+      playerRole: seatResult.role,
+      sessionId: consumed.record.sessionID,
+    });
+    io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(seatResult.room));
+    return;
+  }
   console.log(
     `${dateNow()} [${sessionID}] Zap of ${zapAmount} sats sent by ${zapperName}.`
   );
@@ -199,6 +247,18 @@ async function listenToSubscriptions(event: NDKEvent) {
     io.to(socketID).emit('updatePaymentsNostrTournament', serialized);
   }
   io.to(socketID).emit('updatePayments', serialized);
+}
+
+function extractPinFromComment(content: string | undefined) {
+  if (!content) {
+    return;
+  }
+  const compact = content.trim().toUpperCase();
+  if (/^[A-Z0-9]{4,10}$/.test(compact)) {
+    return compact;
+  }
+  const matched = compact.match(/([A-Z0-9]{4,10})/);
+  return matched?.[1];
 }
 
 function getNextAvailableRole(sessionID: string, maxPlayers: number): PlayerRole | undefined {

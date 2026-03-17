@@ -10,6 +10,36 @@ import { getTournamentMenuInfos } from './tournament';
 import { cancelTournament } from './cancelTournament';
 import { getNostrP2PMenuInfos } from './nostrP2PMenu';
 import { getTournamentNostrInfos } from './nostrTournament';
+import {
+  cancelOnlineRoomHandler,
+  createOnlineRoomHandler,
+  getOnlineRoomStateHandler,
+  joinOnlineRoomByCodeHandler,
+  joinOnlineRoomHandler,
+  leaveOnlineRoomHandler,
+  listOnlineRoomsHandler,
+  roomInputHandler,
+  spectateOnlineRoomHandler,
+  startOnlineGameHandler,
+  startOnlineLoop,
+} from './onlineRoom';
+import { leaveRoom } from '../state/onlineRoomState';
+import { dateNow } from '../utils/time';
+
+function guardSocketAsync<T extends unknown[]>(
+  socket: Socket,
+  label: string,
+  fn: (...args: T) => Promise<void>
+) {
+  return (...args: T) => {
+    void fn(...args).catch((error) => {
+      console.error(
+        `${dateNow()} [${socket.data.sessionID ?? socket.id}] ${label} failed:`,
+        error
+      );
+    });
+  };
+}
 
 export default function registerSocketHandlers(io: Server) {
   io.use((socket: Socket, next) => {
@@ -18,20 +48,32 @@ export default function registerSocketHandlers(io: Server) {
 
   io.on('connection', (socket: Socket) => {
     // TODO: Change to getP2PMenuInfos
-    socket.on('getGameMenuInfos', async (hostInfo?: { LNAddress: string }) => {
-      const hostLNAddress = hostInfo && hostInfo.LNAddress ?  hostInfo.LNAddress : undefined
-      await getP2PMenuInfos(socket, hostLNAddress);
-    });
+    socket.on(
+      'getGameMenuInfos',
+      guardSocketAsync(socket, 'getGameMenuInfos', async (hostInfo?: { LNAddress: string }) => {
+        const hostLNAddress =
+          hostInfo && hostInfo.LNAddress ? hostInfo.LNAddress : undefined;
+        await getP2PMenuInfos(socket, hostLNAddress);
+      })
+    );
 
-    socket.on('getPracticeMenuInfos', async (hostInfo?: { LNAddress: string }) => {
-      const hostLNAddress = hostInfo && hostInfo.LNAddress ?  hostInfo.LNAddress : undefined
-      await getPracticeMenuInfos(socket, hostLNAddress);
-    });
+    socket.on(
+      'getPracticeMenuInfos',
+      guardSocketAsync(socket, 'getPracticeMenuInfos', async (hostInfo?: { LNAddress: string }) => {
+        const hostLNAddress =
+          hostInfo && hostInfo.LNAddress ? hostInfo.LNAddress : undefined;
+        await getPracticeMenuInfos(socket, hostLNAddress);
+      })
+    );
 
-    socket.on('getGameMenuInfosNostr', async (hostInfo?: { LNAddress: string }) => {
-      const hostLNAddress = hostInfo && hostInfo.LNAddress ?  hostInfo.LNAddress : undefined
-      await getNostrP2PMenuInfos(socket, hostLNAddress);
-    });
+    socket.on(
+      'getGameMenuInfosNostr',
+      guardSocketAsync(socket, 'getGameMenuInfosNostr', async (hostInfo?: { LNAddress: string }) => {
+        const hostLNAddress =
+          hostInfo && hostInfo.LNAddress ? hostInfo.LNAddress : undefined;
+        await getNostrP2PMenuInfos(socket, hostLNAddress);
+      })
+    );
 
     socket.on('cancelp2p', () => {
       cancelP2P(socket);
@@ -39,39 +81,107 @@ export default function registerSocketHandlers(io: Server) {
 
     socket.on(
       'getTournamentInfos',
-      async (data?: { buyin: number; players: number; hostLNAddress?: string }) => {
-        await getTournamentMenuInfos(socket, data);
-      }
+      guardSocketAsync(
+        socket,
+        'getTournamentInfos',
+        async (data?: { buyin: number; players: number; hostLNAddress?: string }) => {
+          await getTournamentMenuInfos(socket, data);
+        }
+      )
     );
 
     socket.on(
       'getTournamentInfosNostr',
-      async (data?: { buyin: number; players: number; hostLNAddress?: string }) => {
-        await getTournamentNostrInfos(socket, data);
-      }
+      guardSocketAsync(
+        socket,
+        'getTournamentInfosNostr',
+        async (data?: { buyin: number; players: number; hostLNAddress?: string }) => {
+          await getTournamentNostrInfos(socket, data);
+        }
+      )
     );
 
-    socket.on('canceltournament', async () => {
-      await cancelTournament(socket);
-    });
+    socket.on(
+      'canceltournament',
+      guardSocketAsync(socket, 'canceltournament', async () => {
+        await cancelTournament(socket);
+      })
+    );
 
     // TODO: Change to getGameInfos
     socket.on('getDuelInfos', () => {
       gameInfos(socket);
     });
 
-    socket.on('gameFinished', async (winnerP) => {
-      gameFinished(socket, winnerP);
-    });
+    socket.on(
+      'gameFinished',
+      guardSocketAsync(socket, 'gameFinished', async (winnerP) => {
+        gameFinished(socket, winnerP);
+      })
+    );
 
     socket.on('postGameInfoRequest', () => {
       postGameInfo(socket);
     });
 
-    socket.on('createWithdrawalPostGame', async () => {
-      await createWithdrawalPostGame(socket);
+    socket.on(
+      'createWithdrawalPostGame',
+      guardSocketAsync(socket, 'createWithdrawalPostGame', async () => {
+        await createWithdrawalPostGame(socket);
+      })
+    );
+
+    socket.on(
+      'createOnlineRoom',
+      guardSocketAsync(
+        socket,
+        'createOnlineRoom',
+        async (payload?: { buyin?: number; hostLNAddress?: string }) => {
+          await createOnlineRoomHandler(socket, payload);
+        }
+      )
+    );
+    socket.on('listOnlineRooms', () => {
+      listOnlineRoomsHandler(socket);
+    });
+    socket.on('joinOnlineRoom', (payload: { roomId: string }) => {
+      joinOnlineRoomHandler(socket, payload);
+    });
+    socket.on('joinOnlineRoomByCode', (payload: { roomCode: string }) => {
+      joinOnlineRoomByCodeHandler(socket, payload);
+    });
+    socket.on('spectateOnlineRoom', (payload: { roomId: string }) => {
+      spectateOnlineRoomHandler(socket, payload);
+    });
+    socket.on('leaveOnlineRoom', (payload?: { roomId?: string }) => {
+      leaveOnlineRoomHandler(socket, payload);
+    });
+    socket.on('cancelOnlineRoom', (payload: { roomId: string }) => {
+      cancelOnlineRoomHandler(socket, payload);
+    });
+    socket.on('getOnlineRoomState', (payload: { roomId: string }) => {
+      getOnlineRoomStateHandler(socket, payload);
+    });
+    socket.on(
+      'roomInput',
+      (payload: {
+        roomId: string;
+        input: { up?: boolean; down?: boolean; left?: boolean; right?: boolean };
+      }) => {
+        roomInputHandler(socket, payload);
+      }
+    );
+    socket.on('startOnlineGame', (payload: { roomId: string }) => {
+      startOnlineGameHandler(socket, payload);
     });
 
-    socket.on('disconnect', () => {});
+    socket.on('disconnect', () => {
+      const sessionID = socket.data.sessionID as string | undefined;
+      if (sessionID) {
+        leaveRoom(sessionID);
+      }
+    });
   });
+
+  startOnlineLoop();
 }
