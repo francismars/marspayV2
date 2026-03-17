@@ -24,7 +24,6 @@ import {
   startOnlineLoop,
 } from './onlineRoom';
 import { leaveRoom } from '../state/onlineRoomState';
-import { dateNow } from '../utils/time';
 
 function guardSocketAsync<T extends unknown[]>(
   socket: Socket,
