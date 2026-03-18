@@ -4,6 +4,7 @@ import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import { GameMode } from '../types/game';
 import { io } from '../server';
 import { getKind1sfromSessionID } from '../state/nostrState';
+import { dateNow } from '../utils/time';
 import {
   areSeatsFilled,
   createOnlineRoom,
@@ -24,6 +25,11 @@ import {
 
 const ONLINE_TICK_MS = 100;
 
+function logOnline(sessionID: string | undefined, message: string) {
+  const sessionTag = sessionID ?? 'unknown-session';
+  console.log(`${dateNow()} [${sessionTag}] [ONLINE] ${message}`);
+}
+
 export async function createOnlineRoomHandler(
   socket: Socket,
   payload?: { buyin?: number; hostLNAddress?: string }
@@ -32,6 +38,7 @@ export async function createOnlineRoomHandler(
   if (!sessionID) {
     return;
   }
+  logOnline(sessionID, `createOnlineRoom requested (buyin=${payload?.buyin ?? 'default'})`);
   const room = createOnlineRoom({
     hostSessionID: sessionID,
     hostSocketID: socket.id,
@@ -41,6 +48,10 @@ export async function createOnlineRoomHandler(
   socket.join(room.roomId);
   socket.data.currentOnlineRoomId = room.roomId;
   const pin = issueJoinPin(room.roomId, sessionID, socket.id);
+  logOnline(
+    sessionID,
+    `room created roomId=${room.roomId} code=${room.roomCode} buyin=${room.buyin} pinIssued=${pin?.pin ?? 'none'}`
+  );
   const roomState = serializeRoom(room);
   io.to(room.roomId).emit('onlineRoomUpdated', roomState);
   socket.emit('resCreateOnlineRoom', {
@@ -80,6 +91,12 @@ export async function createOnlineRoomHandler(
         if (live) {
           io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(live));
         }
+        logOnline(
+          sessionID,
+          `kind1 published roomId=${room.roomId} note=${kind1.note1} emojis=${kind1.emojis}`
+        );
+      } else {
+        logOnline(sessionID, `kind1 publish returned no local kind1 record roomId=${room.roomId}`);
       }
     } catch (error) {
       console.error(`Failed to publish ONLINE room kind1 ${room.roomId}:`, error);
@@ -88,6 +105,8 @@ export async function createOnlineRoomHandler(
 }
 
 export function listOnlineRoomsHandler(socket: Socket) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  logOnline(sessionID, `listOnlineRooms requested`);
   socket.emit('resListOnlineRooms', {
     rooms: listOnlineRooms(),
   });
@@ -98,14 +117,20 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
   if (!sessionID) {
     return;
   }
+  logOnline(sessionID, `joinOnlineRoom requested roomId=${payload.roomId}`);
   const room = joinRoom(payload.roomId, sessionID, socket.id);
   if (!room) {
+    logOnline(sessionID, `joinOnlineRoom failed roomId=${payload.roomId} reason=room_not_found`);
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
   socket.join(room.roomId);
   socket.data.currentOnlineRoomId = room.roomId;
   const pin = issueJoinPin(room.roomId, sessionID, socket.id);
+  logOnline(
+    sessionID,
+    `joined roomId=${room.roomId} code=${room.roomCode} pinIssued=${pin?.pin ?? 'none'}`
+  );
   const roomState = serializeRoom(room);
   io.to(room.roomId).emit('onlineRoomUpdated', roomState);
   socket.emit('resJoinOnlineRoom', {
@@ -119,8 +144,11 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
 }
 
 export function joinOnlineRoomByCodeHandler(socket: Socket, payload: { roomCode: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  logOnline(sessionID, `joinOnlineRoomByCode requested code=${payload.roomCode}`);
   const room = getRoomByCode(payload.roomCode);
   if (!room) {
+    logOnline(sessionID, `joinOnlineRoomByCode failed code=${payload.roomCode} reason=room_not_found`);
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
@@ -132,22 +160,28 @@ export function spectateOnlineRoomHandler(socket: Socket, payload: { roomId: str
   if (!sessionID) {
     return;
   }
+  logOnline(sessionID, `spectateOnlineRoom requested roomId=${payload.roomId}`);
   const room = joinRoom(payload.roomId, sessionID, socket.id);
   if (!room) {
+    logOnline(sessionID, `spectateOnlineRoom failed roomId=${payload.roomId} reason=room_not_found`);
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
+  logOnline(sessionID, `spectating roomId=${room.roomId} code=${room.roomCode}`);
   socket.join(room.roomId);
   socket.data.currentOnlineRoomId = room.roomId;
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
 }
 
 export function getOnlineRoomStateHandler(socket: Socket, payload: { roomId: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
   const room = getRoomById(payload.roomId);
   if (!room) {
+    logOnline(sessionID, `getOnlineRoomState failed roomId=${payload.roomId} reason=room_not_found`);
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
+  logOnline(sessionID, `getOnlineRoomState roomId=${room.roomId} phase=${room.phase}`);
   socket.emit('onlineRoomUpdated', serializeRoom(room));
 }
 
@@ -162,6 +196,7 @@ export function leaveOnlineRoomHandler(socket: Socket, payload?: { roomId?: stri
     socket.leave(roomId);
     socket.data.currentOnlineRoomId = undefined;
   }
+  logOnline(sessionID, `leaveOnlineRoom roomId=${roomId ?? 'unknown'}`);
   leaveRoom(sessionID);
 }
 
@@ -169,8 +204,10 @@ export function cancelOnlineRoomHandler(socket: Socket, payload: { roomId: strin
   const sessionID = socket.data.sessionID as string | undefined;
   const room = getRoomById(payload.roomId);
   if (!sessionID || !room || room.hostSessionID !== sessionID) {
+    logOnline(sessionID, `cancelOnlineRoom denied roomId=${payload.roomId}`);
     return;
   }
+  logOnline(sessionID, `cancelOnlineRoom roomId=${room.roomId}`);
   setRoomPhase(room.roomId, 'cancelled');
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
   deleteRoom(room.roomId);
@@ -195,12 +232,15 @@ export function startOnlineGameHandler(socket: Socket, payload: { roomId: string
   const sessionID = socket.data.sessionID as string | undefined;
   const room = getRoomById(payload.roomId);
   if (!sessionID || !room || room.hostSessionID !== sessionID) {
+    logOnline(sessionID, `startOnlineGame denied roomId=${payload.roomId}`);
     return;
   }
   if (!areSeatsFilled(payload.roomId)) {
+    logOnline(sessionID, `startOnlineGame blocked roomId=${payload.roomId} reason=seats_not_filled`);
     socket.emit('onlinePinInvalid', { reason: 'seats_not_filled' });
     return;
   }
+  logOnline(sessionID, `startOnlineGame roomId=${payload.roomId}`);
   setRoomPhase(payload.roomId, 'playing');
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
 }

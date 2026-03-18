@@ -1,5 +1,6 @@
 import { BUYINMIN } from '../consts/values';
 import { PlayerRole } from '../types/game';
+import { dateNow } from '../utils/time';
 import {
   JoinPinRecord,
   OnlineRoom,
@@ -24,6 +25,10 @@ const roomById = new Map<string, OnlineRoom>();
 const roomIdByCode = new Map<string, string>();
 const roomIdBySession = new Map<string, string>();
 const pinByValue = new Map<string, JoinPinRecord>();
+
+function logOnlineState(message: string) {
+  console.log(`${dateNow()} [ONLINE_STATE] ${message}`);
+}
 
 function randomToken(length: number): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -128,6 +133,9 @@ export function createOnlineRoom(params: {
   roomById.set(roomId, room);
   roomIdByCode.set(roomCode, roomId);
   roomIdBySession.set(params.hostSessionID, roomId);
+  logOnlineState(
+    `created roomId=${roomId} code=${roomCode} host=${params.hostSessionID} buyin=${buyin}`
+  );
   return room;
 }
 
@@ -164,6 +172,7 @@ export function joinRoom(roomId: string, sessionID: string, socketID: string) {
   }
   room.updatedAt = now;
   roomIdBySession.set(sessionID, roomId);
+  logOnlineState(`join roomId=${roomId} session=${sessionID} socket=${socketID}`);
   return room;
 }
 
@@ -197,7 +206,9 @@ export function leaveRoom(sessionID: string) {
     }
   }
   room.updatedAt = Date.now();
+  logOnlineState(`leave roomId=${roomId} session=${sessionID}`);
   if (sessionID === room.hostSessionID) {
+    logOnlineState(`host left roomId=${room.roomId}; deleting room`);
     deleteRoom(room.roomId);
   }
 }
@@ -217,6 +228,7 @@ export function deleteRoom(roomId: string) {
       pinByValue.delete(pin);
     }
   }
+  logOnlineState(`deleted roomId=${roomId} code=${room.roomCode}`);
 }
 
 export function deleteRoomBySession(sessionID: string) {
@@ -235,6 +247,7 @@ export function setRoomNostrMeta(roomId: string, nostrMeta: OnlineRoomNostrMeta,
   room.nostrMeta = nostrMeta;
   room.kind1EventId = kind1EventId;
   room.updatedAt = Date.now();
+  logOnlineState(`set nostr meta roomId=${roomId} note=${nostrMeta.note1} emojis=${nostrMeta.emojis}`);
 }
 
 export function issueJoinPin(roomId: string, sessionID: string, socketID: string) {
@@ -252,6 +265,9 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
     used: false,
   };
   pinByValue.set(pin, record);
+  logOnlineState(
+    `issued pin roomId=${roomId} session=${sessionID} socket=${socketID} expiresAt=${record.expiresAt}`
+  );
   return record;
 }
 
@@ -259,21 +275,26 @@ export function consumePin(pinRaw: string, roomId: string) {
   const pin = pinRaw.trim().toUpperCase();
   const record = pinByValue.get(pin);
   if (!record) {
+    logOnlineState(`consume pin failed roomId=${roomId} pin=${pin} reason=not_found`);
     return { ok: false as const, reason: 'not_found' };
   }
   if (record.roomId !== roomId) {
+    logOnlineState(`consume pin failed roomId=${roomId} pin=${pin} reason=room_mismatch`);
     return { ok: false as const, reason: 'room_mismatch' };
   }
   if (record.used) {
+    logOnlineState(`consume pin failed roomId=${roomId} pin=${pin} reason=already_used`);
     return { ok: false as const, reason: 'already_used' };
   }
   if (record.expiresAt <= Date.now()) {
     pinByValue.delete(pin);
+    logOnlineState(`consume pin failed roomId=${roomId} pin=${pin} reason=expired`);
     return { ok: false as const, reason: 'expired' };
   }
   record.used = true;
   record.usedAt = Date.now();
   pinByValue.set(pin, record);
+  logOnlineState(`consumed pin roomId=${roomId} pin=${pin} session=${record.sessionID}`);
   return { ok: true as const, record };
 }
 
@@ -292,6 +313,9 @@ export function seatPaidPlayer(params: {
   }
   for (const seat of room.seats.values()) {
     if (seat.sessionID === params.sessionID && seat.status === 'paid') {
+      logOnlineState(
+        `seat already paid roomId=${params.roomId} session=${params.sessionID} role=${seat.role}`
+      );
       return { ok: true as const, role: seat.role, room };
     }
   }
@@ -304,6 +328,7 @@ export function seatPaidPlayer(params: {
     return seat.status === 'open';
   });
   if (!openSeat) {
+    logOnlineState(`seat assignment failed roomId=${params.roomId} session=${params.sessionID} reason=seats_full`);
     return { ok: false as const, reason: 'seats_full' };
   }
   const now = Date.now();
@@ -321,6 +346,9 @@ export function seatPaidPlayer(params: {
   room.spectators.delete(params.sessionID);
   syncAuthoritativePlayers(room.roomId);
   room.updatedAt = now;
+  logOnlineState(
+    `seat assigned roomId=${params.roomId} session=${params.sessionID} role=${openSeat} amount=${params.amount}`
+  );
   return { ok: true as const, role: openSeat, room };
 }
 
@@ -329,12 +357,17 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
   if (!room) {
     return;
   }
+  if (room.phase === phase) {
+    return;
+  }
+  const prevPhase = room.phase;
   room.phase = phase;
   room.snapshot.phase = phase;
   if (phase === 'playing') {
     startOnlineCountdown(room.snapshot.state);
   }
   room.updatedAt = Date.now();
+  logOnlineState(`phase changed roomId=${roomId} ${prevPhase} -> ${phase}`);
 }
 
 export function isPaidSeatSession(roomId: string, sessionID: string) {
@@ -394,8 +427,7 @@ export function stepRoomSnapshot(roomId: string) {
   stepOnlineGame(state);
   room.snapshot.hud = getOnlineHudState(state);
   if (state.gameEnded) {
-    room.phase = 'finished';
-    room.snapshot.phase = 'finished';
+    setRoomPhase(roomId, 'finished');
   }
   room.snapshot.tick += 1;
   room.updatedAt = Date.now();
@@ -436,11 +468,13 @@ function cleanupExpiredState() {
   const now = Date.now();
   for (const [pin, record] of pinByValue.entries()) {
     if (record.expiresAt <= now || (record.used && (record.usedAt ?? 0) + PIN_TTL_MS < now)) {
+      logOnlineState(`cleanup pin roomId=${record.roomId} pin=${pin}`);
       pinByValue.delete(pin);
     }
   }
   for (const room of roomById.values()) {
     if (now - room.updatedAt > ROOM_IDLE_TTL_MS) {
+      logOnlineState(`cleanup idle room roomId=${room.roomId} inactiveMs=${now - room.updatedAt}`);
       deleteRoom(room.roomId);
     }
   }
