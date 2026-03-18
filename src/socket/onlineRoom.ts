@@ -1,14 +1,18 @@
 import { Socket } from 'socket.io';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
+import createLNURLW from '../calls/LNBits/createLNURLW';
+import { P2PMAXWITHDRAWALS } from '../consts/values';
 import { GameMode } from '../types/game';
 import { io } from '../server';
 import { getKind1sfromSessionID } from '../state/nostrState';
+import { setIDToLNURLW, setLNURLWToID } from '../state/lnurlwState';
 import { dateNow } from '../utils/time';
 import {
   areSeatsFilled,
   createOnlineRoom,
   deleteRoom,
+  getOnlinePostGame,
   getRoomByCode,
   getRoomById,
   isPaidSeatSession,
@@ -19,8 +23,10 @@ import {
   serializeRoom,
   setRoomNostrMeta,
   setRoomPhase,
+  setOnlinePostGameLnurlw,
   stepRoomSnapshot,
   updateRoomInput,
+  voteOnlineDoubleOrNothing,
 } from '../state/onlineRoomState';
 
 const ONLINE_TICK_MS = 100;
@@ -246,6 +252,81 @@ export function startOnlineGameHandler(socket: Socket, payload: { roomId: string
   logOnline(sessionID, `startOnlineGame roomId=${payload.roomId}`);
   setRoomPhase(payload.roomId, 'playing');
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
+}
+
+export function getOnlinePostGameHandler(socket: Socket, payload: { roomId: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const info = getOnlinePostGame(payload.roomId);
+  if (!info) {
+    logOnline(sessionID, `getOnlinePostGame failed roomId=${payload.roomId}`);
+    socket.emit('onlinePinInvalid', { reason: 'postgame_unavailable' });
+    return;
+  }
+  logOnline(
+    sessionID,
+    `getOnlinePostGame roomId=${payload.roomId} winner=${info.winnerName} points=${info.winnerPoints}`
+  );
+  socket.emit('resOnlinePostGameInfo', info);
+}
+
+export async function createOnlineWithdrawalHandler(socket: Socket, payload: { roomId: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const info = getOnlinePostGame(payload.roomId);
+  if (!info || !info.winnerSessionID || info.winnerSessionID !== sessionID) {
+    logOnline(sessionID, `createOnlineWithdrawal denied roomId=${payload.roomId}`);
+    socket.emit('onlinePinInvalid', { reason: 'only_winner_can_withdraw' });
+    return;
+  }
+  if (info.lnurlw) {
+    socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: info.lnurlw });
+    return;
+  }
+  const amount = Math.max(0, Math.floor(info.winnerPoints));
+  if (amount <= 0) {
+    logOnline(sessionID, `createOnlineWithdrawal skipped roomId=${payload.roomId} reason=zero_amount`);
+    socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: 'pass' });
+    return;
+  }
+  const lnurlw = await createLNURLW(amount, P2PMAXWITHDRAWALS);
+  if (!lnurlw) {
+    logOnline(sessionID, `createOnlineWithdrawal failed roomId=${payload.roomId} reason=lnbits_error`);
+    socket.emit('onlinePinInvalid', { reason: 'lnurlw_create_failed' });
+    return;
+  }
+  setIDToLNURLW(sessionID, { id: lnurlw.id, lnurlw: lnurlw.lnurl, maxWithdrawals: 1, claimedCount: 0 });
+  setLNURLWToID(lnurlw.id, sessionID);
+  setOnlinePostGameLnurlw(payload.roomId, lnurlw.lnurl);
+  logOnline(sessionID, `createOnlineWithdrawal success roomId=${payload.roomId} amount=${amount}`);
+  socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: lnurlw.lnurl });
+}
+
+export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const vote = voteOnlineDoubleOrNothing(payload.roomId, sessionID);
+  if (!vote.ok) {
+    logOnline(sessionID, `onlineDoubleOrNothing denied roomId=${payload.roomId} reason=${vote.reason}`);
+    socket.emit('onlinePinInvalid', { reason: vote.reason });
+    return;
+  }
+  io.to(payload.roomId).emit('onlineDoubleOrNothingUpdate', {
+    roomId: payload.roomId,
+    votes: vote.votes,
+    required: 2,
+    agreed: vote.agreed,
+  });
+  const room = getRoomById(payload.roomId);
+  if (room) {
+    io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
+  }
 }
 
 export function startOnlineLoop() {

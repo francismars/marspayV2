@@ -130,6 +130,12 @@ export function createOnlineRoom(params: {
         currentWidthP2: 50,
       },
     },
+    postGame: {
+      winnerName: '',
+      winnerPoints: 0,
+      totalPrize: 0,
+      doubleOrNothingVotes: new Set<string>(),
+    },
   };
   room.members.set(params.hostSessionID, {
     sessionID: params.hostSessionID,
@@ -380,6 +386,10 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
   room.snapshot.phase = phase;
   if (phase === 'playing') {
     startOnlineCountdown(room.snapshot.state);
+    room.postGame.doubleOrNothingVotes.clear();
+  }
+  if (phase === 'finished') {
+    ensurePostGameState(room);
   }
   room.updatedAt = Date.now();
   logOnlineState(`phase changed roomId=${roomId} ${prevPhase} -> ${phase}`);
@@ -430,6 +440,11 @@ export function stepRoomSnapshot(roomId: string) {
   const p1Input = room.inputBySession.get(p1.sessionID) ?? {};
   const p2Input = room.inputBySession.get(p2.sessionID) ?? {};
   const state = room.snapshot.state;
+  // Safety: if room is already in playing phase but countdown has not started,
+  // force-start countdown so clients never get stuck on "press button to start".
+  if (!state.gameStarted && !state.countdownStart) {
+    startOnlineCountdown(state);
+  }
   if (p1Input.up) setOnlineWantedDirection(state, 'P1', 'Up');
   if (p1Input.down) setOnlineWantedDirection(state, 'P1', 'Down');
   if (p1Input.left) setOnlineWantedDirection(state, 'P1', 'Left');
@@ -442,6 +457,7 @@ export function stepRoomSnapshot(roomId: string) {
   stepOnlineGame(state);
   room.snapshot.hud = getOnlineHudState(state);
   if (state.gameEnded) {
+    ensurePostGameState(room);
     setRoomPhase(roomId, 'finished');
   }
   room.snapshot.tick += 1;
@@ -460,6 +476,83 @@ export function serializeRoom(room: OnlineRoom) {
     seats: Object.fromEntries(room.seats),
     spectators: [...room.spectators],
     snapshot: room.snapshot,
+    postGame: {
+      winnerRole: room.postGame.winnerRole,
+      winnerSessionID: room.postGame.winnerSessionID,
+      winnerName: room.postGame.winnerName,
+      winnerPicture: room.postGame.winnerPicture,
+      winnerPoints: room.postGame.winnerPoints,
+      totalPrize: room.postGame.totalPrize,
+      lnurlw: room.postGame.lnurlw,
+      doubleOrNothingVotes: room.postGame.doubleOrNothingVotes.size,
+    },
+  };
+}
+
+export function getOnlinePostGame(roomId: string) {
+  const room = roomById.get(roomId);
+  if (!room || room.phase !== 'finished') {
+    return;
+  }
+  ensurePostGameState(room);
+  return {
+    roomId: room.roomId,
+    phase: room.phase,
+    p1Name: room.seats.get(PlayerRole.Player1)?.name ?? 'Player 1',
+    p2Name: room.seats.get(PlayerRole.Player2)?.name ?? 'Player 2',
+    p1Picture: room.seats.get(PlayerRole.Player1)?.picture,
+    p2Picture: room.seats.get(PlayerRole.Player2)?.picture,
+    p1Points: room.snapshot.state.score[0],
+    p2Points: room.snapshot.state.score[1],
+    winnerRole: room.postGame.winnerRole,
+    winnerSessionID: room.postGame.winnerSessionID,
+    winnerName: room.postGame.winnerName,
+    winnerPicture: room.postGame.winnerPicture,
+    winnerPoints: room.postGame.winnerPoints,
+    totalPrize: room.postGame.totalPrize,
+    lnurlw: room.postGame.lnurlw,
+    doubleOrNothingVotes: room.postGame.doubleOrNothingVotes.size,
+  };
+}
+
+export function setOnlinePostGameLnurlw(roomId: string, lnurlw: string) {
+  const room = roomById.get(roomId);
+  if (!room) {
+    return;
+  }
+  room.postGame.lnurlw = lnurlw;
+  room.updatedAt = Date.now();
+  logOnlineState(`set postgame lnurlw roomId=${roomId}`);
+}
+
+export function voteOnlineDoubleOrNothing(roomId: string, sessionID: string) {
+  const room = roomById.get(roomId);
+  if (!room || room.phase !== 'finished') {
+    return { ok: false as const, reason: 'room_not_finished' };
+  }
+  const p1 = room.seats.get(PlayerRole.Player1);
+  const p2 = room.seats.get(PlayerRole.Player2);
+  const isPlayer = p1?.sessionID === sessionID || p2?.sessionID === sessionID;
+  if (!isPlayer) {
+    return { ok: false as const, reason: 'not_player' };
+  }
+  room.postGame.doubleOrNothingVotes.add(sessionID);
+  room.updatedAt = Date.now();
+  const agreed =
+    p1?.sessionID != null &&
+    p2?.sessionID != null &&
+    room.postGame.doubleOrNothingVotes.has(p1.sessionID) &&
+    room.postGame.doubleOrNothingVotes.has(p2.sessionID);
+  logOnlineState(
+    `double-or-nothing vote roomId=${roomId} session=${sessionID} votes=${room.postGame.doubleOrNothingVotes.size} agreed=${agreed}`
+  );
+  if (agreed) {
+    resetRoomToLobby(room);
+  }
+  return {
+    ok: true as const,
+    votes: room.postGame.doubleOrNothingVotes.size,
+    agreed,
   };
 }
 
@@ -510,4 +603,60 @@ function shouldPinStayActive(record: JoinPinRecord) {
   const hasOpenSeats = [...room.seats.values()].some((seat) => seat.status === 'open');
   const userStillInRoom = room.members.has(record.sessionID);
   return hasOpenSeats && userStillInRoom;
+}
+
+function ensurePostGameState(room: OnlineRoom) {
+  const p1 = room.seats.get(PlayerRole.Player1);
+  const p2 = room.seats.get(PlayerRole.Player2);
+  const winnerRole =
+    room.snapshot.state.winnerPlayer === 'P2' ? PlayerRole.Player2 : PlayerRole.Player1;
+  const winnerSeat = winnerRole === PlayerRole.Player1 ? p1 : p2;
+  const winnerPoints = winnerRole === PlayerRole.Player1 ? room.snapshot.state.score[0] : room.snapshot.state.score[1];
+  room.postGame.winnerRole = winnerRole;
+  room.postGame.winnerSessionID = winnerSeat?.sessionID;
+  room.postGame.winnerName = winnerSeat?.name ?? room.snapshot.state.winnerName ?? 'Player 1';
+  room.postGame.winnerPicture = winnerSeat?.picture;
+  room.postGame.winnerPoints = winnerPoints;
+  room.postGame.totalPrize = room.snapshot.state.totalPoints;
+}
+
+function resetRoomToLobby(room: OnlineRoom) {
+  const p1 = room.seats.get(PlayerRole.Player1);
+  const p2 = room.seats.get(PlayerRole.Player2);
+  const p1Name = p1?.name ?? 'Player 1';
+  const p2Name = p2?.name ?? 'Player 2';
+  const p1Points = Math.max(1, Math.floor(p1?.paidAmount ?? room.buyin));
+  const p2Points = Math.max(1, Math.floor(p2?.paidAmount ?? room.buyin));
+  room.snapshot = {
+    tick: 0,
+    phase: 'lobby',
+    state: createOnlineGameState({
+      p1Name,
+      p2Name,
+      p1Points,
+      p2Points,
+    }),
+    hud: {
+      p1Points,
+      p2Points,
+      captureP1: '2%',
+      captureP2: '2%',
+      initialWidthP1: 50,
+      initialWidthP2: 50,
+      currentWidthP1: 50,
+      currentWidthP2: 50,
+    },
+  };
+  room.phase = 'lobby';
+  room.inputBySession.clear();
+  room.postGame.doubleOrNothingVotes.clear();
+  room.postGame.lnurlw = undefined;
+  room.postGame.winnerRole = undefined;
+  room.postGame.winnerSessionID = undefined;
+  room.postGame.winnerName = '';
+  room.postGame.winnerPicture = undefined;
+  room.postGame.winnerPoints = 0;
+  room.postGame.totalPrize = 0;
+  room.updatedAt = Date.now();
+  logOnlineState(`double-or-nothing agreed; reset to lobby roomId=${room.roomId}`);
 }
