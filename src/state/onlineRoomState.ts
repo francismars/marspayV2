@@ -39,6 +39,15 @@ function randomToken(length: number): string {
   return value;
 }
 
+function randomNumericPin(length: number): string {
+  const digits = '0123456789';
+  let value = '';
+  for (let i = 0; i < length; i += 1) {
+    value += digits[Math.floor(Math.random() * digits.length)];
+  }
+  return value;
+}
+
 function uniqueCode(): string {
   let code = randomToken(6);
   while (roomIdByCode.has(code)) {
@@ -254,7 +263,10 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
   if (!room) {
     return;
   }
-  const pin = randomToken(6);
+  let pin = randomNumericPin(6);
+  while (pinByValue.has(pin)) {
+    pin = randomNumericPin(6);
+  }
   const record: JoinPinRecord = {
     pin,
     roomId,
@@ -271,7 +283,7 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
 }
 
 export function consumePin(pinRaw: string, roomId: string) {
-  const pin = pinRaw.trim().toUpperCase();
+  const pin = pinRaw.trim();
   const record = pinByValue.get(pin);
   if (!record) {
     logOnlineState(`consume pin failed roomId=${roomId} pin=${pin} reason=not_found`);
@@ -285,10 +297,14 @@ export function consumePin(pinRaw: string, roomId: string) {
     logOnlineState(`consume pin failed roomId=${roomId} pin=${pin} reason=already_used`);
     return { ok: false as const, reason: 'already_used' };
   }
-  if (record.expiresAt <= Date.now()) {
+  if (record.expiresAt <= Date.now() && !shouldPinStayActive(record)) {
     pinByValue.delete(pin);
     logOnlineState(`consume pin failed roomId=${roomId} pin=${pin} reason=expired`);
     return { ok: false as const, reason: 'expired' };
+  }
+  // Keep the pin alive while user is still in room and seats are open.
+  if (shouldPinStayActive(record)) {
+    record.expiresAt = Date.now() + PIN_TTL_MS;
   }
   record.used = true;
   record.usedAt = Date.now();
@@ -466,7 +482,10 @@ function syncAuthoritativePlayers(roomId: string) {
 function cleanupExpiredState() {
   const now = Date.now();
   for (const [pin, record] of pinByValue.entries()) {
-    if (record.expiresAt <= now || (record.used && (record.usedAt ?? 0) + PIN_TTL_MS < now)) {
+    if (
+      (record.expiresAt <= now && !shouldPinStayActive(record)) ||
+      (record.used && (record.usedAt ?? 0) + PIN_TTL_MS < now)
+    ) {
       logOnlineState(`cleanup pin roomId=${record.roomId} pin=${pin}`);
       pinByValue.delete(pin);
     }
@@ -482,3 +501,13 @@ function cleanupExpiredState() {
 setInterval(() => {
   cleanupExpiredState();
 }, ROOM_CLEANUP_MS);
+
+function shouldPinStayActive(record: JoinPinRecord) {
+  const room = roomById.get(record.roomId);
+  if (!room) {
+    return false;
+  }
+  const hasOpenSeats = [...room.seats.values()].some((seat) => seat.status === 'open');
+  const userStillInRoom = room.members.has(record.sessionID);
+  return hasOpenSeats && userStillInRoom;
+}
