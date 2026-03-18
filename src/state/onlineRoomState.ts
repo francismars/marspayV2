@@ -208,8 +208,7 @@ export function leaveRoom(sessionID: string) {
   room.updatedAt = Date.now();
   logOnlineState(`leave roomId=${roomId} session=${sessionID}`);
   if (sessionID === room.hostSessionID) {
-    logOnlineState(`host left roomId=${room.roomId}; deleting room`);
-    deleteRoom(room.roomId);
+    logOnlineState(`host disconnected roomId=${room.roomId}; preserving room for reconnect`);
   }
 }
 
