@@ -8,6 +8,13 @@ import {
   OnlineRoomNostrMeta,
   OnlineSeatState,
 } from '../types/online';
+import {
+  createOnlineGameState,
+  getOnlineHudState,
+  setOnlineWantedDirection,
+  startOnlineCountdown,
+  stepOnlineGame,
+} from '../game/onlineEngine';
 
 const PIN_TTL_MS = 2 * 60 * 1000;
 const ROOM_IDLE_TTL_MS = 20 * 60 * 1000;
@@ -92,10 +99,22 @@ export function createOnlineRoom(params: {
     snapshot: {
       tick: 0,
       phase: 'lobby',
-      width: 100,
-      height: 100,
-      p1: { x: 25, y: 50 },
-      p2: { x: 75, y: 50 },
+      state: createOnlineGameState({
+        p1Name: 'Player 1',
+        p2Name: 'Player 2',
+        p1Points: buyin,
+        p2Points: buyin,
+      }),
+      hud: {
+        p1Points: buyin,
+        p2Points: buyin,
+        captureP1: '2%',
+        captureP2: '2%',
+        initialWidthP1: 50,
+        initialWidthP2: 50,
+        currentWidthP1: 50,
+        currentWidthP2: 50,
+      },
     },
   };
   room.members.set(params.hostSessionID, {
@@ -300,6 +319,7 @@ export function seatPaidPlayer(params: {
     pubkey: params.pubkey,
   });
   room.spectators.delete(params.sessionID);
+  syncAuthoritativePlayers(room.roomId);
   room.updatedAt = now;
   return { ok: true as const, role: openSeat, room };
 }
@@ -311,6 +331,9 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
   }
   room.phase = phase;
   room.snapshot.phase = phase;
+  if (phase === 'playing') {
+    startOnlineCountdown(room.snapshot.state);
+  }
   room.updatedAt = Date.now();
 }
 
@@ -356,29 +379,26 @@ export function stepRoomSnapshot(roomId: string) {
     return;
   }
 
-  const p1Input = room.inputBySession.get(p1.sessionID);
-  const p2Input = room.inputBySession.get(p2.sessionID);
-  const speed = 1.6;
+  const p1Input = room.inputBySession.get(p1.sessionID) ?? {};
+  const p2Input = room.inputBySession.get(p2.sessionID) ?? {};
+  const state = room.snapshot.state;
+  if (p1Input.up) setOnlineWantedDirection(state, 'P1', 'Up');
+  if (p1Input.down) setOnlineWantedDirection(state, 'P1', 'Down');
+  if (p1Input.left) setOnlineWantedDirection(state, 'P1', 'Left');
+  if (p1Input.right) setOnlineWantedDirection(state, 'P1', 'Right');
+  if (p2Input.up) setOnlineWantedDirection(state, 'P2', 'Up');
+  if (p2Input.down) setOnlineWantedDirection(state, 'P2', 'Down');
+  if (p2Input.left) setOnlineWantedDirection(state, 'P2', 'Left');
+  if (p2Input.right) setOnlineWantedDirection(state, 'P2', 'Right');
 
-  if (p1Input?.up) room.snapshot.p1.y -= speed;
-  if (p1Input?.down) room.snapshot.p1.y += speed;
-  if (p1Input?.left) room.snapshot.p1.x -= speed;
-  if (p1Input?.right) room.snapshot.p1.x += speed;
-  if (p2Input?.up) room.snapshot.p2.y -= speed;
-  if (p2Input?.down) room.snapshot.p2.y += speed;
-  if (p2Input?.left) room.snapshot.p2.x -= speed;
-  if (p2Input?.right) room.snapshot.p2.x += speed;
-
-  room.snapshot.p1.x = clamp(room.snapshot.p1.x, 0, room.snapshot.width);
-  room.snapshot.p1.y = clamp(room.snapshot.p1.y, 0, room.snapshot.height);
-  room.snapshot.p2.x = clamp(room.snapshot.p2.x, 0, room.snapshot.width);
-  room.snapshot.p2.y = clamp(room.snapshot.p2.y, 0, room.snapshot.height);
+  stepOnlineGame(state);
+  room.snapshot.hud = getOnlineHudState(state);
+  if (state.gameEnded) {
+    room.phase = 'finished';
+    room.snapshot.phase = 'finished';
+  }
   room.snapshot.tick += 1;
   room.updatedAt = Date.now();
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
 }
 
 export function serializeRoom(room: OnlineRoom) {
@@ -394,6 +414,22 @@ export function serializeRoom(room: OnlineRoom) {
     spectators: [...room.spectators],
     snapshot: room.snapshot,
   };
+}
+
+function syncAuthoritativePlayers(roomId: string) {
+  const room = roomById.get(roomId);
+  if (!room) return;
+  const p1 = room.seats.get(PlayerRole.Player1);
+  const p2 = room.seats.get(PlayerRole.Player2);
+  const state = room.snapshot.state;
+  state.p1Name = p1?.name ?? 'Player 1';
+  state.p2Name = p2?.name ?? 'Player 2';
+  const p1Amount = Math.floor(p1?.paidAmount ?? room.buyin);
+  const p2Amount = Math.floor(p2?.paidAmount ?? room.buyin);
+  state.initialScore = [p1Amount, p2Amount];
+  state.score = [p1Amount, p2Amount];
+  state.totalPoints = p1Amount + p2Amount;
+  room.snapshot.hud = getOnlineHudState(state);
 }
 
 function cleanupExpiredState() {

@@ -1,4 +1,5 @@
 import { PlayerRole } from './game';
+import { OnlineAuthoritativeState, OnlineHudState } from '../game/onlineEngine';
 
 export type OnlineRoomPhase = 'lobby' | 'playing' | 'finished' | 'cancelled';
 
@@ -24,10 +25,8 @@ export interface OnlineSeatState {
 export interface OnlineRoomSnapshot {
   tick: number;
   phase: OnlineRoomPhase;
-  width: number;
-  height: number;
-  p1: { x: number; y: number };
-  p2: { x: number; y: number };
+  state: OnlineAuthoritativeState;
+  hud: OnlineHudState;
 }
 
 export interface OnlineRoomMember {
