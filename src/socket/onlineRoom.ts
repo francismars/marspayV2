@@ -67,7 +67,9 @@ export async function createOnlineRoomHandler(
   // by relay availability or NDK connection delays.
   void (async () => {
     try {
+      logOnline(sessionID, `kind1 publish flow started roomId=${room.roomId}`);
       await setNDKInstance();
+      logOnline(sessionID, `ndk initialized for roomId=${room.roomId}, publishing kind1`);
       await publishGameKind1(sessionID, {
         mode: GameMode.ONLINE,
         buyin: room.buyin,
@@ -75,6 +77,7 @@ export async function createOnlineRoomHandler(
         numberOfPlayers: 2,
         roomCode: room.roomCode,
       });
+      logOnline(sessionID, `publishGameKind1 returned roomId=${room.roomId}`);
       const kind1 = getKind1sfromSessionID(sessionID)?.slice(-1)[0];
       if (kind1) {
         setRoomNostrMeta(
