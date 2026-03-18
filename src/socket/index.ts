@@ -12,12 +12,15 @@ import { getNostrP2PMenuInfos } from './nostrP2PMenu';
 import { getTournamentNostrInfos } from './nostrTournament';
 import {
   cancelOnlineRoomHandler,
+  createOnlineWithdrawalHandler,
   createOnlineRoomHandler,
   getOnlineRoomStateHandler,
+  getOnlinePostGameHandler,
   joinOnlineRoomByCodeHandler,
   joinOnlineRoomHandler,
   leaveOnlineRoomHandler,
   listOnlineRoomsHandler,
+  onlineDoubleOrNothingHandler,
   roomInputHandler,
   spectateOnlineRoomHandler,
   startOnlineGameHandler,
@@ -172,6 +175,18 @@ export default function registerSocketHandlers(io: Server) {
     );
     socket.on('startOnlineGame', (payload: { roomId: string }) => {
       startOnlineGameHandler(socket, payload);
+    });
+    socket.on('getOnlinePostGame', (payload: { roomId: string }) => {
+      getOnlinePostGameHandler(socket, payload);
+    });
+    socket.on(
+      'createOnlineWithdrawal',
+      guardSocketAsync(socket, 'createOnlineWithdrawal', async (payload: { roomId: string }) => {
+        await createOnlineWithdrawalHandler(socket, payload);
+      })
+    );
+    socket.on('onlineDoubleOrNothing', (payload: { roomId: string }) => {
+      onlineDoubleOrNothingHandler(socket, payload);
     });
 
     socket.on('disconnect', () => {
