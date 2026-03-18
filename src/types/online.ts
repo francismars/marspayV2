@@ -52,6 +52,16 @@ export interface OnlineRoom {
   seats: Map<PlayerRole.Player1 | PlayerRole.Player2, OnlineSeatState>;
   inputBySession: Map<string, { up?: boolean; down?: boolean; left?: boolean; right?: boolean }>;
   snapshot: OnlineRoomSnapshot;
+  postGame: {
+    winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
+    winnerSessionID?: string;
+    winnerName: string;
+    winnerPicture?: string;
+    winnerPoints: number;
+    totalPrize: number;
+    lnurlw?: string;
+    doubleOrNothingVotes: Set<string>;
+  };
 }
 
 export interface OnlineRoomListItem {
