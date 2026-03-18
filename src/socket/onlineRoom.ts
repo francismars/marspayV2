@@ -38,40 +38,10 @@ export async function createOnlineRoomHandler(
     buyin: payload?.buyin,
   });
 
-  try {
-    await setNDKInstance();
-  } catch (error) {
-    console.error(
-      `Failed to initialize NDK for ONLINE room ${room.roomId}:`,
-      error
-    );
-  }
-
-  await publishGameKind1(sessionID, {
-    mode: GameMode.ONLINE,
-    buyin: room.buyin,
-    hostLNAddress: payload?.hostLNAddress,
-    numberOfPlayers: 2,
-    roomCode: room.roomCode,
-  });
-  const kind1 = getKind1sfromSessionID(sessionID)?.slice(-1)[0];
-  if (kind1) {
-    setRoomNostrMeta(
-      room.roomId,
-      {
-        note1: kind1.note1,
-        emojis: kind1.emojis,
-        min: kind1.min,
-        mode: kind1.mode,
-      },
-      kind1.id
-    );
-  }
-
   socket.join(room.roomId);
   socket.data.currentOnlineRoomId = room.roomId;
   const pin = issueJoinPin(room.roomId, sessionID, socket.id);
-  const roomState = serializeRoom(getRoomById(room.roomId) ?? room);
+  const roomState = serializeRoom(room);
   io.to(room.roomId).emit('onlineRoomUpdated', roomState);
   socket.emit('resCreateOnlineRoom', {
     roomId: room.roomId,
@@ -81,6 +51,40 @@ export async function createOnlineRoomHandler(
     nostrMeta: room.nostrMeta,
     room: roomState,
   });
+
+  // Publish Kind1 asynchronously so room creation UX is never blocked
+  // by relay availability or NDK connection delays.
+  void (async () => {
+    try {
+      await setNDKInstance();
+      await publishGameKind1(sessionID, {
+        mode: GameMode.ONLINE,
+        buyin: room.buyin,
+        hostLNAddress: payload?.hostLNAddress,
+        numberOfPlayers: 2,
+        roomCode: room.roomCode,
+      });
+      const kind1 = getKind1sfromSessionID(sessionID)?.slice(-1)[0];
+      if (kind1) {
+        setRoomNostrMeta(
+          room.roomId,
+          {
+            note1: kind1.note1,
+            emojis: kind1.emojis,
+            min: kind1.min,
+            mode: kind1.mode,
+          },
+          kind1.id
+        );
+        const live = getRoomById(room.roomId);
+        if (live) {
+          io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(live));
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to publish ONLINE room kind1 ${room.roomId}:`, error);
+    }
+  })();
 }
 
 export function listOnlineRoomsHandler(socket: Socket) {
