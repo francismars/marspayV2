@@ -119,19 +119,31 @@ async function listenToSubscriptions(event: NDKEvent) {
   if (gameMode === GameMode.ONLINE) {
     const room = getRoomBySession(sessionID);
     if (!room) {
+      console.log(`${dateNow()} [${sessionID}] [ONLINE] zap ignored: no room for session`);
       return;
     }
+    console.log(
+      `${dateNow()} [${sessionID}] [ONLINE] zap received roomId=${room.roomId} amount=${zapAmount} sender=${zapperName}`
+    );
     if (zapAmount < minBuyIn) {
+      console.log(
+        `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=amount_too_low min=${minBuyIn} got=${zapAmount}`
+      );
       io.to(socketID).emit('onlinePinInvalid', { reason: 'amount_too_low' });
       return;
     }
     const pin = extractPinFromComment(finalContent);
     if (!pin) {
+      console.log(`${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=pin_missing`);
       io.to(socketID).emit('onlinePinInvalid', { reason: 'pin_missing' });
       return;
     }
+    console.log(`${dateNow()} [${sessionID}] [ONLINE] zap pin parsed roomId=${room.roomId} pin=${pin}`);
     const consumed = consumePin(pin, room.roomId);
     if (!consumed.ok) {
+      console.log(
+        `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=${consumed.reason}`
+      );
       io.to(socketID).emit('onlinePinInvalid', { reason: consumed.reason });
       return;
     }
@@ -145,11 +157,17 @@ async function listenToSubscriptions(event: NDKEvent) {
       pubkey: payerPubKey,
     });
     if (!seatResult.ok) {
+      console.log(
+        `${dateNow()} [${sessionID}] [ONLINE] seat assignment failed roomId=${room.roomId} reason=${seatResult.reason}`
+      );
       io.to(consumed.record.socketID).emit('onlinePinInvalid', {
         reason: seatResult.reason,
       });
       return;
     }
+    console.log(
+      `${dateNow()} [${sessionID}] [ONLINE] seat assigned roomId=${room.roomId} role=${seatResult.role} session=${consumed.record.sessionID}`
+    );
     io.to(room.roomId).emit('onlineSeatAssigned', {
       roomId: room.roomId,
       playerRole: seatResult.role,
