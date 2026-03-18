@@ -66,7 +66,9 @@ export function createOnlineRoom(params: {
 }): OnlineRoom {
   const roomId = uniqueRoomId();
   const roomCode = uniqueCode();
-  const buyin = Math.max(BUYINMIN, Math.floor(params.buyin ?? BUYINMIN));
+  const parsedBuyin = Math.floor(params.buyin ?? BUYINMIN);
+  const buyin =
+    Number.isFinite(parsedBuyin) && parsedBuyin > 0 ? parsedBuyin : BUYINMIN;
 
   const p1: OnlineSeatState = { role: PlayerRole.Player1, status: 'open' };
   const p2: OnlineSeatState = { role: PlayerRole.Player2, status: 'open' };
