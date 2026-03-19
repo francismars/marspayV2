@@ -295,9 +295,9 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
   if (!room) {
     return;
   }
-  let pin = randomNumericPin(6);
-  while (pinByValue.has(pin)) {
-    pin = randomNumericPin(6);
+  let pin = randomNumericPin(4);
+  while (pinByValue.has(pinRecordKey(roomId, pin))) {
+    pin = randomNumericPin(4);
   }
   const record: JoinPinRecord = {
     pin,
@@ -307,7 +307,7 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
     expiresAt: Date.now() + PIN_TTL_MS,
     used: false,
   };
-  pinByValue.set(pin, record);
+  pinByValue.set(pinRecordKey(roomId, pin), record);
   logOnlineState(
     `issued pin roomId=${roomId} session=${sessionID} socket=${socketID} expiresAt=${record.expiresAt}`
   );
@@ -316,7 +316,8 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
 
 export function consumePin(pinRaw: string, roomId: string) {
   const pin = pinRaw.trim();
-  const record = pinByValue.get(pin);
+  const key = pinRecordKey(roomId, pin);
+  const record = pinByValue.get(key);
   if (!record) {
     logOnlineState(`consume pin failed roomId=${roomId} pin=${pin} reason=not_found`);
     return { ok: false as const, reason: 'not_found' };
@@ -330,7 +331,7 @@ export function consumePin(pinRaw: string, roomId: string) {
     return { ok: false as const, reason: 'already_used' };
   }
   if (record.expiresAt <= Date.now() && !shouldPinStayActive(record)) {
-    pinByValue.delete(pin);
+    pinByValue.delete(key);
     logOnlineState(`consume pin failed roomId=${roomId} pin=${pin} reason=expired`);
     return { ok: false as const, reason: 'expired' };
   }
@@ -340,7 +341,7 @@ export function consumePin(pinRaw: string, roomId: string) {
   }
   record.used = true;
   record.usedAt = Date.now();
-  pinByValue.set(pin, record);
+  pinByValue.set(key, record);
   logOnlineState(`consumed pin roomId=${roomId} pin=${pin} session=${record.sessionID}`);
   return { ok: true as const, record };
 }
@@ -655,13 +656,13 @@ function syncAuthoritativePlayers(roomId: string) {
 
 function cleanupExpiredState() {
   const now = Date.now();
-  for (const [pin, record] of pinByValue.entries()) {
+  for (const [key, record] of pinByValue.entries()) {
     if (
       (record.expiresAt <= now && !shouldPinStayActive(record)) ||
       (record.used && (record.usedAt ?? 0) + PIN_TTL_MS < now)
     ) {
-      logOnlineState(`cleanup pin roomId=${record.roomId} pin=${pin}`);
-      pinByValue.delete(pin);
+      logOnlineState(`cleanup pin roomId=${record.roomId} pin=${record.pin}`);
+      pinByValue.delete(key);
     }
   }
   for (const room of roomById.values()) {
@@ -694,6 +695,10 @@ function shouldPinStayActive(record: JoinPinRecord) {
   const hasOpenSeats = [...room.seats.values()].some((seat) => seat.status === 'open');
   const userStillInRoom = room.members.has(record.sessionID);
   return hasOpenSeats && userStillInRoom;
+}
+
+function pinRecordKey(roomId: string, pin: string) {
+  return `${roomId}:${pin}`;
 }
 
 function shouldDeleteIdleRoom(room: OnlineRoom, now: number) {
