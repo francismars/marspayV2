@@ -21,6 +21,7 @@ import { ndkInstance } from '../../calls/NDK/setNDKInstance';
 import {
   consumePin,
   getRoomBySession,
+  listOnlineRooms,
   seatPaidPlayer,
   serializeRoom,
 } from '../../state/onlineRoomState';
@@ -174,6 +175,9 @@ async function listenToSubscriptions(event: NDKEvent) {
       sessionId: consumed.record.sessionID,
     });
     io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(seatResult.room));
+    io.emit('resListOnlineRooms', {
+      rooms: listOnlineRooms(),
+    });
     return;
   }
   console.log(

@@ -75,6 +75,7 @@ export interface OnlineRoomListItem {
   phase: OnlineRoomPhase;
   playersPaid: number;
   seatsTotal: number;
+  spectators: number;
 }
 
 export interface JoinPinRecord {
