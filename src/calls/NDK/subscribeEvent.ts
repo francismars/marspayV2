@@ -276,10 +276,10 @@ function extractPinFromComment(content: string | undefined) {
     return;
   }
   const compact = content.trim();
-  if (/^[0-9]{4,10}$/.test(compact)) {
+  if (/^[0-9]{4}$/.test(compact)) {
     return compact;
   }
-  const matched = compact.match(/([0-9]{4,10})/);
+  const matched = compact.match(/([0-9]{4})/);
   return matched?.[1];
 }
 
