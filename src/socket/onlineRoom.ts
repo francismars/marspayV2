@@ -404,6 +404,7 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
   logOnline(sessionID, `createOnlineWithdrawal success roomId=${payload.roomId} amount=${amount}`);
   const room = getRoomById(payload.roomId);
   if (room) {
+    io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
     const roomEmojis = room.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
     void publishOnlineKind1Reply({
       sessionID,
