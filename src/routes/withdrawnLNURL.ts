@@ -6,6 +6,7 @@ import { io } from '../server';
 import { handleEndOfSession } from '../state/cleanupState';
 import { getGameInfoFromID } from '../state/gameState';
 import { GameMode } from '../types/game';
+import { markOnlineRoomSettledBySession } from '../state/onlineRoomState';
 
 const router = Router();
 
@@ -30,6 +31,7 @@ router.post('/', (req: Request, res: Response) => {
   }
   console.log(`${dateNow()} [${sessionID}] Claimed LNURLw ${lnurlw}.`);
   io.to(socketID).emit('prizeWithdrawn');
+  markOnlineRoomSettledBySession(sessionID);
   res.send({ body: 'Withdrawn' });
   const gameInfos = getGameInfoFromID(sessionID);
   const LNURLW = getLNURLWFromID(sessionID);

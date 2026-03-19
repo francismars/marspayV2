@@ -7,7 +7,6 @@ import { appendGameInfotoJSON } from '../utils/json';
 import { deleteKind1sFromSession } from './nostrState';
 import { CLEANUP_INTERVAL, INACTIVITY_THRESHOLD } from '../consts/values';
 import { dateNow } from '../utils/time';
-import { deleteRoomBySession } from './onlineRoomState';
 
 export function handleEndOfSession(
   sessionID: string,
@@ -27,7 +26,6 @@ export function handleEndOfSession(
   if (deleteKind1) {
     deleteKind1sFromSession(sessionID);
   }
-  deleteRoomBySession(sessionID);
   deleteGameInfoByID(sessionID);
   deleteSocketFromSession(sessionID);
 }
