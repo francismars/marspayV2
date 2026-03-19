@@ -284,7 +284,21 @@ export function roomInputHandler(
     return;
   }
   const room = getRoomById(payload.roomId);
-  if (!room || room.phase !== 'playing' || !isPaidSeatSession(payload.roomId, sessionID)) {
+  if (!room) {
+    return;
+  }
+  if (room.phase !== 'playing') {
+    return;
+  }
+  const paidBySession = isPaidSeatSession(payload.roomId, sessionID);
+  const paidBySocket = [...room.seats.values()].some(
+    (seat) => seat.status === 'paid' && seat.socketID === socket.id
+  );
+  if (!paidBySession && !paidBySocket) {
+    logOnline(
+      sessionID,
+      `roomInput denied roomId=${payload.roomId} reason=not_paid_player socket=${socket.id}`
+    );
     return;
   }
   updateRoomInput(payload.roomId, sessionID, payload.input);
