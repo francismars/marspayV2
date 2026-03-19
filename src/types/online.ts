@@ -22,6 +22,7 @@ export interface OnlineSeatState {
   name?: string;
   picture?: string;
   pubkey?: string;
+  lnAddress?: string;
 }
 
 export interface OnlineRoomSnapshot {
@@ -62,6 +63,13 @@ export interface OnlineRoom {
     winnerPoints: number;
     totalPrize: number;
     lnurlw?: string;
+    payoutMethod?: 'withdraw_qr' | 'nostr_zap';
+    payoutTarget?: string;
+    rematchRequested?: boolean;
+    rematchRequiredAmount?: number;
+    rematchEventId?: string;
+    rematchNote1?: string;
+    rematchWaitingForSessionID?: string;
     settledAt?: number;
     doubleOrNothingVotes: Set<string>;
   };
