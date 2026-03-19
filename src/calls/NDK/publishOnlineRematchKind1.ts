@@ -37,7 +37,7 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
   const loserMention = opts.loserPubkey
     ? `nostr:${nip19.npubEncode(opts.loserPubkey)}`
     : opts.loserName ?? 'loser';
-  ndkEvent.content = `ONLINE NEXT STEP ${opts.emojis}\nDouble or Nothing accepted.\nWaiting for ${loserMention} to zap exactly ${opts.amount} sats to continue.`;
+  ndkEvent.content = `ONLINE REMATCH ${opts.emojis}\nDouble or Nothing accepted.\nWaiting for ${loserMention} to zap exactly ${opts.amount} sats to continue.`;
   await ndkEvent.publish();
   setKind1IDtoSessionID(ndkEvent.id, opts.sessionID);
   const note1 = nip19.noteEncode(ndkEvent.id);
