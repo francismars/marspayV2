@@ -348,6 +348,10 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
   if (!room) {
     return;
   }
+  if (room.phase === 'finished') {
+    logOnlineState(`pin denied roomId=${roomId} session=${sessionID} reason=room_finished`);
+    return;
+  }
   if (room.postGame.rematchRequested) {
     const isSeatedPlayer = [...room.seats.values()].some(
       (seat) => seat.status === 'paid' && seat.sessionID === sessionID
