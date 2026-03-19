@@ -55,6 +55,11 @@ export interface OnlineRoom {
   seats: Map<PlayerRole.Player1 | PlayerRole.Player2, OnlineSeatState>;
   inputBySession: Map<string, { up?: boolean; down?: boolean; left?: boolean; right?: boolean }>;
   snapshot: OnlineRoomSnapshot;
+  replay: {
+    tickMs: number;
+    frames: OnlineRoomSnapshot[];
+    recordedAt?: number;
+  };
   postGame: {
     winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
     winnerSessionID?: string;
@@ -91,6 +96,12 @@ export interface OnlineRoomListItem {
     p1Score: number;
     p2Score: number;
     netPrize: number;
+  };
+  replay?: {
+    available: boolean;
+    frameCount: number;
+    tickMs: number;
+    durationMs: number;
   };
 }
 

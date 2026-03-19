@@ -17,6 +17,7 @@ import {
   areSeatsFilled,
   createOnlineRoom,
   deleteRoom,
+  getOnlineReplay,
   getOnlinePostGame,
   getRoomByCode,
   getRoomById,
@@ -364,6 +365,11 @@ export function getOnlinePostGameHandler(socket: Socket, payload: { roomId: stri
   if (!sessionID) {
     return;
   }
+  // Refresh room membership/socket mapping on postgame entry so seat ownership
+  // stays associated through reconnects and route transitions.
+  joinRoom(payload.roomId, sessionID, socket.id);
+  socket.join(payload.roomId);
+  socket.data.currentOnlineRoomId = payload.roomId;
   const info = getOnlinePostGame(payload.roomId);
   if (!info) {
     logOnline(sessionID, `getOnlinePostGame failed roomId=${payload.roomId}`);
@@ -377,13 +383,36 @@ export function getOnlinePostGameHandler(socket: Socket, payload: { roomId: stri
   socket.emit('resOnlinePostGameInfo', info);
 }
 
+export function getOnlineReplayHandler(socket: Socket, payload: { roomId: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const replay = getOnlineReplay(payload.roomId);
+  if (!replay) {
+    logOnline(sessionID, `getOnlineReplay unavailable roomId=${payload.roomId}`);
+    socket.emit('onlinePinInvalid', { reason: 'replay_unavailable' });
+    return;
+  }
+  logOnline(
+    sessionID,
+    `getOnlineReplay roomId=${payload.roomId} frames=${replay.frames.length} tickMs=${replay.tickMs}`
+  );
+  socket.emit('resOnlineReplay', replay);
+}
+
 export async function createOnlineWithdrawalHandler(socket: Socket, payload: { roomId: string }) {
   const sessionID = socket.data.sessionID as string | undefined;
   if (!sessionID) {
     return;
   }
   const info = getOnlinePostGame(payload.roomId);
-  if (!info || !info.winnerSessionID || info.winnerSessionID !== sessionID) {
+  const room = getRoomById(payload.roomId);
+  const winnerSeat =
+    room && info?.winnerRole ? room.seats.get(info.winnerRole) : undefined;
+  const isWinnerSession = Boolean(info?.winnerSessionID && info.winnerSessionID === sessionID);
+  const isWinnerSocket = Boolean(winnerSeat?.socketID && winnerSeat.socketID === socket.id);
+  if (!info || (!isWinnerSession && !isWinnerSocket)) {
     logOnline(sessionID, `createOnlineWithdrawal denied roomId=${payload.roomId}`);
     socket.emit('onlinePinInvalid', { reason: 'only_winner_can_withdraw' });
     return;
@@ -416,15 +445,15 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
   setLNURLWToID(lnurlw.id, sessionID);
   setOnlinePostGameLnurlw(payload.roomId, lnurlw.lnurl);
   logOnline(sessionID, `createOnlineWithdrawal success roomId=${payload.roomId} amount=${amount}`);
-  const room = getRoomById(payload.roomId);
-  if (room) {
-    io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
-    const roomEmojis = room.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
+  const liveRoom = getRoomById(payload.roomId);
+  if (liveRoom) {
+    io.to(liveRoom.roomId).emit('onlineRoomUpdated', serializeRoom(liveRoom));
+    const roomEmojis = liveRoom.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
     void publishOnlineKind1Reply({
       sessionID,
-      rootEventId: room.kind1EventId,
+      rootEventId: liveRoom.kind1EventId,
       content: `ONLINE ROUND CLOSED ${roomEmojis}\nWinner selected payout.\nRound closed.`,
-      mentions: getSeatMentions(room.roomId),
+      mentions: getSeatMentions(liveRoom.roomId),
     });
   }
   socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: lnurlw.lnurl });
@@ -436,7 +465,12 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
     return;
   }
   const info = getOnlinePostGame(payload.roomId);
-  if (!info || !info.winnerSessionID || info.winnerSessionID !== sessionID) {
+  const room = getRoomById(payload.roomId);
+  const winnerSeat =
+    room && info?.winnerRole ? room.seats.get(info.winnerRole) : undefined;
+  const isWinnerSession = Boolean(info?.winnerSessionID && info.winnerSessionID === sessionID);
+  const isWinnerSocket = Boolean(winnerSeat?.socketID && winnerSeat.socketID === socket.id);
+  if (!info || (!isWinnerSession && !isWinnerSocket)) {
     logOnline(sessionID, `createOnlineNostrPayout denied roomId=${payload.roomId}`);
     socket.emit('onlinePinInvalid', { reason: 'only_winner_can_withdraw' });
     return;
@@ -477,15 +511,15 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
   }
   setOnlinePostGameNostrPayout(payload.roomId, lnAddress);
   logOnline(sessionID, `createOnlineNostrPayout success roomId=${payload.roomId} amount=${amount} ln=${lnAddress}`);
-  const room = getRoomById(payload.roomId);
-  if (room) {
-    io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
-    const roomEmojis = room.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
+  const liveRoom = getRoomById(payload.roomId);
+  if (liveRoom) {
+    io.to(liveRoom.roomId).emit('onlineRoomUpdated', serializeRoom(liveRoom));
+    const roomEmojis = liveRoom.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
     void publishOnlineKind1Reply({
       sessionID,
-      rootEventId: room.kind1EventId,
+      rootEventId: liveRoom.kind1EventId,
       content: `ONLINE ROUND CLOSED ${roomEmojis}\nWinner selected payout.\nRound closed.`,
-      mentions: getSeatMentions(room.roomId),
+      mentions: getSeatMentions(liveRoom.roomId),
     });
   }
   socket.emit('resCreateOnlineNostrPayout', {
