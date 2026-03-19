@@ -27,6 +27,9 @@ export default function middleware(
     if (socketID) {
       socket.data.sessionID = sessionID;
       setIDToSocket(sessionID, session);
+      socket.emit('session', {
+        sessionID,
+      });
       return next();
     }
   }
