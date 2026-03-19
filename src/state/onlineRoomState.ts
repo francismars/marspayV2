@@ -165,6 +165,7 @@ export function listOnlineRooms(): OnlineRoomListItem[] {
     phase: room.phase,
     playersPaid: [...room.seats.values()].filter((seat) => seat.status === 'paid').length,
     seatsTotal: 2,
+    spectators: room.spectators.size,
   }));
 }
 
