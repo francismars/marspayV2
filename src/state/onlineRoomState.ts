@@ -22,6 +22,7 @@ const ROOM_IDLE_TTL_MS = 20 * 60 * 1000;
 const ROOM_CLEANUP_MS = 15 * 1000;
 const SEAT_DISCONNECT_TTL_MS = 15 * 60 * 1000;
 const POSTGAME_SETTLED_DELETE_MS = 2 * 60 * 1000;
+const ONLINE_PAYOUT_MULTIPLIER = 0.95;
 
 const roomById = new Map<string, OnlineRoom>();
 const roomIdByCode = new Map<string, string>();
@@ -176,6 +177,24 @@ export function listOnlineRooms(): OnlineRoomListItem[] {
     playersPaid: [...room.seats.values()].filter((seat) => seat.status === 'paid').length,
     seatsTotal: 2,
     spectators: room.spectators.size,
+    result:
+      room.phase === 'finished'
+        ? {
+            winnerName:
+              room.postGame.winnerName ||
+              room.snapshot.state.winnerName ||
+              room.snapshot.state.p1Name ||
+              'Winner',
+            p1Name: room.snapshot.state.p1Name ?? 'Player 1',
+            p2Name: room.snapshot.state.p2Name ?? 'Player 2',
+            p1Score: room.snapshot.state.score?.[0] ?? 0,
+            p2Score: room.snapshot.state.score?.[1] ?? 0,
+            netPrize: Math.max(
+              0,
+              Math.floor((room.postGame.totalPrize ?? room.snapshot.state.totalPoints ?? 0) * ONLINE_PAYOUT_MULTIPLIER)
+            ),
+          }
+        : undefined,
   }));
 }
 
