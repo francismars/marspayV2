@@ -84,6 +84,14 @@ export interface OnlineRoomListItem {
   playersPaid: number;
   seatsTotal: number;
   spectators: number;
+  result?: {
+    winnerName: string;
+    p1Name: string;
+    p2Name: string;
+    p1Score: number;
+    p2Score: number;
+    netPrize: number;
+  };
 }
 
 export interface JoinPinRecord {
