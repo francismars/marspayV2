@@ -149,6 +149,8 @@ export function createOnlineRoom(params: {
       frames: [],
     },
     postGame: {
+      p1Picture: undefined,
+      p2Picture: undefined,
       winnerName: '',
       winnerPoints: 0,
       totalPrize: 0,
@@ -677,6 +679,8 @@ export function serializeRoom(room: OnlineRoom) {
       durationMs: room.replay.frames.length * room.replay.tickMs,
     },
     postGame: {
+      p1Picture: room.postGame.p1Picture,
+      p2Picture: room.postGame.p2Picture,
       winnerRole: room.postGame.winnerRole,
       winnerSessionID: room.postGame.winnerSessionID,
       winnerName: room.postGame.winnerName,
@@ -707,8 +711,8 @@ export function getOnlinePostGame(roomId: string) {
     phase: room.phase,
     p1Name: room.seats.get(PlayerRole.Player1)?.name ?? 'Player 1',
     p2Name: room.seats.get(PlayerRole.Player2)?.name ?? 'Player 2',
-    p1Picture: room.seats.get(PlayerRole.Player1)?.picture,
-    p2Picture: room.seats.get(PlayerRole.Player2)?.picture,
+    p1Picture: room.seats.get(PlayerRole.Player1)?.picture ?? room.postGame.p1Picture,
+    p2Picture: room.seats.get(PlayerRole.Player2)?.picture ?? room.postGame.p2Picture,
     p1Points: room.snapshot.state.score[0],
     p2Points: room.snapshot.state.score[1],
     winnerRole: room.postGame.winnerRole,
@@ -996,6 +1000,8 @@ function ensurePostGameState(room: OnlineRoom) {
     room.snapshot.state.winnerPlayer === 'P2' ? PlayerRole.Player2 : PlayerRole.Player1;
   const winnerSeat = winnerRole === PlayerRole.Player1 ? p1 : p2;
   const winnerPoints = winnerRole === PlayerRole.Player1 ? room.snapshot.state.score[0] : room.snapshot.state.score[1];
+  room.postGame.p1Picture = p1?.picture;
+  room.postGame.p2Picture = p2?.picture;
   room.postGame.winnerRole = winnerRole;
   room.postGame.winnerSessionID = winnerSeat?.sessionID;
   room.postGame.winnerName = winnerSeat?.name ?? room.snapshot.state.winnerName ?? 'Player 1';
@@ -1049,6 +1055,8 @@ function resetRoomToLobby(room: OnlineRoom) {
   room.postGame.settledAt = undefined;
   room.postGame.winnerRole = undefined;
   room.postGame.winnerSessionID = undefined;
+  room.postGame.p1Picture = undefined;
+  room.postGame.p2Picture = undefined;
   room.postGame.winnerName = '';
   room.postGame.winnerPicture = undefined;
   room.postGame.winnerPoints = 0;
