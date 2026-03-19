@@ -15,6 +15,10 @@ interface PublishOnlineKind1ReplyOpts {
   mentions?: OnlineReplyMention[];
 }
 
+function mentionKey(mention: OnlineReplyMention) {
+  return mention.pubkey ? `pubkey:${mention.pubkey}` : `name:${mention.name ?? ''}`;
+}
+
 function formatMention(mention: OnlineReplyMention) {
   if (mention.pubkey) {
     return `nostr:${nip19.npubEncode(mention.pubkey)}`;
@@ -42,14 +46,24 @@ export async function publishOnlineKind1Reply(opts: PublishOnlineKind1ReplyOpts)
   ndkEvent.kind = 1;
   ndkEvent.tags = [['e', opts.rootEventId, '', 'root']];
   const validMentions = (opts.mentions ?? []).filter((mention) => !!mention.pubkey || !!mention.name);
+  const dedupedMentions: OnlineReplyMention[] = [];
+  const seen = new Set<string>();
   for (const mention of validMentions) {
+    const key = mentionKey(mention);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    dedupedMentions.push(mention);
+  }
+  for (const mention of dedupedMentions) {
     if (mention.pubkey) {
       ndkEvent.tags.push(['p', mention.pubkey, '', 'mention']);
     }
   }
   const mentionLine =
-    validMentions.length > 0
-      ? `\nPlayers: ${validMentions.map((mention) => formatMention(mention)).join(' vs ')}`
+    dedupedMentions.length > 0
+      ? `\nPlayers: ${dedupedMentions.map((mention) => formatMention(mention)).join(' vs ')}`
       : '';
   ndkEvent.content = `${opts.content}${mentionLine}`;
   try {

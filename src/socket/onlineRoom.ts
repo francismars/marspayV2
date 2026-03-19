@@ -409,7 +409,7 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
     void publishOnlineKind1Reply({
       sessionID,
       rootEventId: room.kind1EventId,
-      content: `ONLINE NEXT STEP ${roomEmojis}\nWinner selected payout.\nRound closed.`,
+      content: `ONLINE ROUND CLOSED ${roomEmojis}\nWinner selected payout.\nRound closed.`,
       mentions: getSeatMentions(room.roomId),
     });
   }
@@ -470,7 +470,7 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
     void publishOnlineKind1Reply({
       sessionID,
       rootEventId: room.kind1EventId,
-      content: `ONLINE NEXT STEP ${roomEmojis}\nWinner selected payout.\nRound closed.`,
+      content: `ONLINE ROUND CLOSED ${roomEmojis}\nWinner selected payout.\nRound closed.`,
       mentions: getSeatMentions(room.roomId),
     });
   }
@@ -568,10 +568,14 @@ export function startOnlineLoop() {
             const winnerSeat = [...live.seats.values()].find(
               (seat) => seat.status === 'paid' && seat.sessionID === live.postGame.winnerSessionID
             );
+            const netPrize = Math.max(
+              0,
+              Math.floor((live.postGame.totalPrize ?? 0) * ONLINE_PAYOUT_MULTIPLIER)
+            );
             void publishOnlineKind1Reply({
               sessionID: live.hostSessionID,
               rootEventId: live.kind1EventId,
-              content: `ONLINE MATCH RESULT ${roomEmojis}\nWinner: ${winnerName}.\nFinal score: ${live.snapshot.state.p1Name} ${live.snapshot.state.score[0]} - ${live.snapshot.state.p2Name} ${live.snapshot.state.score[1]}.\nPrize pool: ${Math.floor(live.postGame.totalPrize)} sats.`,
+              content: `ONLINE MATCH RESULT ${roomEmojis}\nWinner: ${winnerName}.\nFinal score: ${live.snapshot.state.p1Name} ${live.snapshot.state.score[0]} - ${live.snapshot.state.p2Name} ${live.snapshot.state.score[1]}.\nNet prize after fee: ${netPrize} sats.`,
               mentions: [
                 { pubkey: winnerSeat?.pubkey, name: winnerName },
                 ...getSeatMentions(live.roomId),
