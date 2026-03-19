@@ -23,6 +23,7 @@ import {
   getRoomBySession,
   listOnlineRooms,
   seatPaidPlayer,
+  settleOnlineRematchPayment,
   serializeRoom,
 } from '../../state/onlineRoomState';
 
@@ -117,6 +118,7 @@ async function listenToSubscriptions(event: NDKEvent) {
     userZap?.profile?.image ??
     userZap?.profile?.picture ??
     '/images/loading.gif';
+  const lnAddress = normalizeLnAddress(userZap?.profile?.lud16);
   if (gameMode === GameMode.ONLINE) {
     const room = getRoomBySession(sessionID);
     if (!room) {
@@ -126,6 +128,29 @@ async function listenToSubscriptions(event: NDKEvent) {
     console.log(
       `${dateNow()} [${sessionID}] [ONLINE] zap received roomId=${room.roomId} amount=${zapAmount} sender=${zapperName}`
     );
+    const isRematchPaymentEvent = room.postGame.rematchEventId === eventID[1];
+    if (isRematchPaymentEvent) {
+      const rematch = settleOnlineRematchPayment({
+        roomId: room.roomId,
+        amount: zapAmount,
+        payerPubkey: payerPubKey,
+      });
+      if (!rematch.ok) {
+        console.log(
+          `${dateNow()} [${sessionID}] [ONLINE] rematch zap rejected roomId=${room.roomId} reason=${rematch.reason}`
+        );
+        io.to(socketID).emit('onlinePinInvalid', { reason: rematch.reason });
+        return;
+      }
+      console.log(
+        `${dateNow()} [${sessionID}] [ONLINE] rematch paid roomId=${room.roomId} amount=${rematch.requiredAmount}`
+      );
+      io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(rematch.room));
+      io.emit('resListOnlineRooms', {
+        rooms: listOnlineRooms(),
+      });
+      return;
+    }
     if (zapAmount < minBuyIn) {
       console.log(
         `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=amount_too_low min=${minBuyIn} got=${zapAmount}`
@@ -156,6 +181,7 @@ async function listenToSubscriptions(event: NDKEvent) {
       name: zapperName,
       picture: avatar,
       pubkey: payerPubKey,
+      lnAddress,
     });
     if (!seatResult.ok) {
       console.log(
@@ -269,6 +295,17 @@ async function listenToSubscriptions(event: NDKEvent) {
     io.to(socketID).emit('updatePaymentsNostrTournament', serialized);
   }
   io.to(socketID).emit('updatePayments', serialized);
+}
+
+function normalizeLnAddress(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return;
+  }
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return;
+  }
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmed) ? trimmed : undefined;
 }
 
 function extractPinFromComment(content: string | undefined) {

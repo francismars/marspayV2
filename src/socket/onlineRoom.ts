@@ -1,9 +1,14 @@
 import { Socket } from 'socket.io';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
+import { publishOnlineKind1Reply } from '../calls/NDK/publishOnlineKind1Reply';
+import { publishOnlineRematchKind1 } from '../calls/NDK/publishOnlineRematchKind1';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import createLNURLW from '../calls/LNBits/createLNURLW';
+import getLNURLCallback from '../calls/LNAddress/getLNURLCallback';
+import getInvoiceFromCallback from '../calls/LNAddress/getInvoiceFromCallback';
+import payInvoice from '../calls/LNBits/payInvoice';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
-import { GameMode } from '../types/game';
+import { GameMode, PlayerRole } from '../types/game';
 import { io } from '../server';
 import { getKind1sfromSessionID } from '../state/nostrState';
 import { setIDToLNURLW, setLNURLWToID } from '../state/lnurlwState';
@@ -26,12 +31,15 @@ import {
   setRoomNostrMeta,
   setRoomPhase,
   setOnlinePostGameLnurlw,
+  setOnlinePostGameNostrPayout,
+  setOnlineRematchRequested,
   stepRoomSnapshot,
   updateRoomInput,
   voteOnlineDoubleOrNothing,
 } from '../state/onlineRoomState';
 
 const ONLINE_TICK_MS = 100;
+const ONLINE_PAYOUT_MULTIPLIER = 0.95;
 
 function logOnline(sessionID: string | undefined, message: string) {
   const sessionTag = sessionID ?? 'unknown-session';
@@ -41,6 +49,33 @@ function logOnline(sessionID: string | undefined, message: string) {
 function emitOnlineRoomsList() {
   io.emit('resListOnlineRooms', {
     rooms: listOnlineRooms(),
+  });
+}
+
+function getSeatMentions(roomId: string) {
+  const room = getRoomById(roomId);
+  if (!room) {
+    return [] as Array<{ pubkey?: string; name?: string }>;
+  }
+  const p1 = room.seats.get(PlayerRole.Player1);
+  const p2 = room.seats.get(PlayerRole.Player2);
+  return [
+    { pubkey: p1?.pubkey, name: p1?.name ?? 'Player 1' },
+    { pubkey: p2?.pubkey, name: p2?.name ?? 'Player 2' },
+  ];
+}
+
+function publishOnlineMatchStarted(roomId: string, sessionID: string) {
+  const room = getRoomById(roomId);
+  if (!room) {
+    return;
+  }
+  const roomEmojis = room.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
+  void publishOnlineKind1Reply({
+    sessionID,
+    rootEventId: room.kind1EventId,
+    content: `ONLINE MATCH STARTED ${roomEmojis}\n${room.snapshot.state.p1Name} vs ${room.snapshot.state.p2Name}.\nSpectators can now watch live in room ${room.roomCode}.`,
+    mentions: getSeatMentions(room.roomId),
   });
 }
 
@@ -276,6 +311,9 @@ export function startOnlineGameHandler(socket: Socket, payload: { roomId: string
     sessionID,
     `startOnlineGame compatibility signal roomId=${payload.roomId} started=${ready.started}`
   );
+  if (ready.started) {
+    publishOnlineMatchStarted(payload.roomId, sessionID);
+  }
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
   emitOnlineRoomsList();
 }
@@ -300,6 +338,9 @@ export function onlineSetReadyHandler(
     sessionID,
     `onlineSetReady roomId=${payload.roomId} ready=${payload.ready} started=${result.started}`
   );
+  if (result.started) {
+    publishOnlineMatchStarted(payload.roomId, sessionID);
+  }
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
   emitOnlineRoomsList();
 }
@@ -333,11 +374,19 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
     socket.emit('onlinePinInvalid', { reason: 'only_winner_can_withdraw' });
     return;
   }
-  if (info.lnurlw) {
-    socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: info.lnurlw });
+  if (info.rematchRequested) {
+    socket.emit('onlinePinInvalid', { reason: 'rematch_pending' });
     return;
   }
-  const amount = Math.max(0, Math.floor(info.winnerPoints));
+  if (info.lnurlw || info.payoutMethod === 'nostr_zap') {
+    if (info.lnurlw) {
+      socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: info.lnurlw });
+      return;
+    }
+    socket.emit('onlinePinInvalid', { reason: 'withdraw_started' });
+    return;
+  }
+  const amount = Math.max(0, Math.floor(info.winnerPoints * ONLINE_PAYOUT_MULTIPLIER));
   if (amount <= 0) {
     logOnline(sessionID, `createOnlineWithdrawal skipped roomId=${payload.roomId} reason=zero_amount`);
     socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: 'pass' });
@@ -353,7 +402,83 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
   setLNURLWToID(lnurlw.id, sessionID);
   setOnlinePostGameLnurlw(payload.roomId, lnurlw.lnurl);
   logOnline(sessionID, `createOnlineWithdrawal success roomId=${payload.roomId} amount=${amount}`);
+  const room = getRoomById(payload.roomId);
+  if (room) {
+    const roomEmojis = room.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
+    void publishOnlineKind1Reply({
+      sessionID,
+      rootEventId: room.kind1EventId,
+      content: `ONLINE NEXT STEP ${roomEmojis}\nWinner selected payout.\nRound closed.`,
+      mentions: getSeatMentions(room.roomId),
+    });
+  }
   socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: lnurlw.lnurl });
+}
+
+export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { roomId: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const info = getOnlinePostGame(payload.roomId);
+  if (!info || !info.winnerSessionID || info.winnerSessionID !== sessionID) {
+    logOnline(sessionID, `createOnlineNostrPayout denied roomId=${payload.roomId}`);
+    socket.emit('onlinePinInvalid', { reason: 'only_winner_can_withdraw' });
+    return;
+  }
+  if (info.rematchRequested) {
+    logOnline(sessionID, `createOnlineNostrPayout blocked roomId=${payload.roomId} reason=rematch_pending`);
+    socket.emit('onlinePinInvalid', { reason: 'rematch_pending' });
+    return;
+  }
+  if (info.lnurlw || info.payoutMethod === 'nostr_zap') {
+    logOnline(sessionID, `createOnlineNostrPayout blocked roomId=${payload.roomId} reason=withdraw_started`);
+    socket.emit('onlinePinInvalid', { reason: 'withdraw_started' });
+    return;
+  }
+  const lnAddress = info.winnerLnAddress;
+  if (!lnAddress) {
+    logOnline(sessionID, `createOnlineNostrPayout blocked roomId=${payload.roomId} reason=winner_ln_missing`);
+    socket.emit('onlinePinInvalid', { reason: 'winner_ln_missing' });
+    return;
+  }
+  const amount = Math.max(0, Math.floor(info.winnerPoints * ONLINE_PAYOUT_MULTIPLIER));
+  if (amount <= 0) {
+    logOnline(sessionID, `createOnlineNostrPayout skipped roomId=${payload.roomId} reason=zero_amount`);
+    socket.emit('onlinePinInvalid', { reason: 'zero_amount' });
+    return;
+  }
+  try {
+    await payLnAddress(lnAddress, amount);
+  } catch (error) {
+    logOnline(
+      sessionID,
+      `createOnlineNostrPayout failed roomId=${payload.roomId} ln=${lnAddress} error=${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    socket.emit('onlinePinInvalid', { reason: 'nostr_payout_failed' });
+    return;
+  }
+  setOnlinePostGameNostrPayout(payload.roomId, lnAddress);
+  logOnline(sessionID, `createOnlineNostrPayout success roomId=${payload.roomId} amount=${amount} ln=${lnAddress}`);
+  const room = getRoomById(payload.roomId);
+  if (room) {
+    io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
+    const roomEmojis = room.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
+    void publishOnlineKind1Reply({
+      sessionID,
+      rootEventId: room.kind1EventId,
+      content: `ONLINE NEXT STEP ${roomEmojis}\nWinner selected payout.\nRound closed.`,
+      mentions: getSeatMentions(room.roomId),
+    });
+  }
+  socket.emit('resCreateOnlineNostrPayout', {
+    roomId: payload.roomId,
+    lnAddress,
+    amount,
+    ok: true,
+  });
 }
 
 export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: string }) {
@@ -375,6 +500,47 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
   });
   const room = getRoomById(payload.roomId);
   if (room) {
+    if (vote.agreed) {
+      const winnerRole = room.postGame.winnerRole;
+      const loserRole =
+        winnerRole === PlayerRole.Player1 ? PlayerRole.Player2 : PlayerRole.Player1;
+      const loserSeat = loserRole ? room.seats.get(loserRole) : undefined;
+      const requiredAmount = Math.max(1, Math.floor(room.postGame.winnerPoints * ONLINE_PAYOUT_MULTIPLIER));
+      const roomEmojis = room.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
+      void (async () => {
+        try {
+          const published = await publishOnlineRematchKind1({
+            sessionID,
+            rootEventId: room.kind1EventId,
+            emojis: roomEmojis,
+            amount: requiredAmount,
+            loserPubkey: loserSeat?.pubkey,
+            loserName: loserSeat?.name,
+          });
+          if (!published) {
+            return;
+          }
+          setOnlineRematchRequested({
+            roomId: room.roomId,
+            requiredAmount,
+            rematchEventId: published.eventId,
+            rematchNote1: published.note1,
+            waitingForSessionID: loserSeat?.sessionID,
+          });
+          const live = getRoomById(room.roomId);
+          if (live) {
+            io.to(live.roomId).emit('onlineRoomUpdated', serializeRoom(live));
+          }
+        } catch (error) {
+          logOnline(
+            sessionID,
+            `onlineDoubleOrNothing rematch publish failed roomId=${room.roomId} error=${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      })();
+    }
     io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
     emitOnlineRoomsList();
   }
@@ -395,9 +561,36 @@ export function startOnlineLoop() {
           snapshot: live.snapshot,
         });
         if (live.phase !== room.phase) {
+          const roomEmojis = live.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
+          if (room.phase === 'playing' && live.phase === 'finished') {
+            const winnerName = live.postGame.winnerName || live.snapshot.state.winnerName || 'Unknown winner';
+            const winnerSeat = [...live.seats.values()].find(
+              (seat) => seat.status === 'paid' && seat.sessionID === live.postGame.winnerSessionID
+            );
+            void publishOnlineKind1Reply({
+              sessionID: live.hostSessionID,
+              rootEventId: live.kind1EventId,
+              content: `ONLINE MATCH RESULT ${roomEmojis}\nWinner: ${winnerName}.\nFinal score: ${live.snapshot.state.p1Name} ${live.snapshot.state.score[0]} - ${live.snapshot.state.p2Name} ${live.snapshot.state.score[1]}.\nPrize pool: ${Math.floor(live.postGame.totalPrize)} sats.`,
+              mentions: [
+                { pubkey: winnerSeat?.pubkey, name: winnerName },
+                ...getSeatMentions(live.roomId),
+              ],
+            });
+          }
           emitOnlineRoomsList();
         }
       }
     }
   }, ONLINE_TICK_MS);
+}
+
+async function payLnAddress(lnAddress: string, satsAmount: number) {
+  const [userLN, domainLN] = lnAddress.split('@');
+  if (!userLN || !domainLN) {
+    throw new Error('invalid_ln_address');
+  }
+  const lnurl = `https://${domainLN}/.well-known/lnurlp/${userLN}`;
+  const callback = await getLNURLCallback(lnurl);
+  const invoice = await getInvoiceFromCallback(callback, satsAmount);
+  await payInvoice(invoice);
 }
