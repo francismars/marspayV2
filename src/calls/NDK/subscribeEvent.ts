@@ -20,6 +20,7 @@ import {
 import { ndkInstance } from '../../calls/NDK/setNDKInstance';
 import {
   consumePin,
+  getRoomByKind1EventId,
   getRoomBySession,
   listOnlineRooms,
   seatPaidPlayer,
@@ -120,9 +121,11 @@ async function listenToSubscriptions(event: NDKEvent) {
     '/images/loading.gif';
   const lnAddress = normalizeLnAddress(userZap?.profile?.lud16);
   if (gameMode === GameMode.ONLINE) {
-    const room = getRoomBySession(sessionID);
+    const room = getRoomBySession(sessionID) ?? getRoomByKind1EventId(eventID[1]);
     if (!room) {
-      console.log(`${dateNow()} [${sessionID}] [ONLINE] zap ignored: no room for session`);
+      console.log(
+        `${dateNow()} [${sessionID}] [ONLINE] zap ignored: no room (session or event mapping) event=${eventID[1]}`
+      );
       return;
     }
     console.log(
