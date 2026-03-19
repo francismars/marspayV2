@@ -137,6 +137,7 @@ export function createOnlineRoom(params: {
       winnerPoints: 0,
       totalPrize: 0,
       doubleOrNothingVotes: new Set<string>(),
+      rematchRequested: false,
     },
   };
   room.members.set(params.hostSessionID, {
@@ -376,6 +377,7 @@ export function seatPaidPlayer(params: {
   name: string;
   picture?: string;
   pubkey?: string;
+  lnAddress?: string;
 }) {
   const room = roomById.get(params.roomId);
   if (!room) {
@@ -414,6 +416,7 @@ export function seatPaidPlayer(params: {
     name: params.name,
     picture: params.picture,
     pubkey: params.pubkey,
+    lnAddress: params.lnAddress,
   });
   room.spectators.delete(params.sessionID);
   syncAuthoritativePlayers(room.roomId);
@@ -588,6 +591,13 @@ export function serializeRoom(room: OnlineRoom) {
       winnerPoints: room.postGame.winnerPoints,
       totalPrize: room.postGame.totalPrize,
       lnurlw: room.postGame.lnurlw,
+      payoutMethod: room.postGame.payoutMethod,
+      payoutTarget: room.postGame.payoutTarget,
+      rematchRequested: room.postGame.rematchRequested,
+      rematchRequiredAmount: room.postGame.rematchRequiredAmount,
+      rematchEventId: room.postGame.rematchEventId,
+      rematchNote1: room.postGame.rematchNote1,
+      rematchWaitingForSessionID: room.postGame.rematchWaitingForSessionID,
       doubleOrNothingVotes: room.postGame.doubleOrNothingVotes.size,
     },
   };
@@ -615,6 +625,17 @@ export function getOnlinePostGame(roomId: string) {
     winnerPoints: room.postGame.winnerPoints,
     totalPrize: room.postGame.totalPrize,
     lnurlw: room.postGame.lnurlw,
+    payoutMethod: room.postGame.payoutMethod,
+    payoutTarget: room.postGame.payoutTarget,
+    rematchRequested: room.postGame.rematchRequested,
+    rematchRequiredAmount: room.postGame.rematchRequiredAmount,
+    rematchEventId: room.postGame.rematchEventId,
+    rematchNote1: room.postGame.rematchNote1,
+    rematchWaitingForSessionID: room.postGame.rematchWaitingForSessionID,
+    winnerLnAddress:
+      room.postGame.winnerRole != null
+        ? room.seats.get(room.postGame.winnerRole)?.lnAddress
+        : undefined,
     doubleOrNothingVotes: room.postGame.doubleOrNothingVotes.size,
   };
 }
@@ -625,14 +646,119 @@ export function setOnlinePostGameLnurlw(roomId: string, lnurlw: string) {
     return;
   }
   room.postGame.lnurlw = lnurlw;
+  room.postGame.payoutMethod = 'withdraw_qr';
+  room.postGame.payoutTarget = undefined;
+  room.postGame.rematchRequested = false;
+  room.postGame.rematchRequiredAmount = undefined;
+  room.postGame.rematchEventId = undefined;
+  room.postGame.rematchNote1 = undefined;
+  room.postGame.rematchWaitingForSessionID = undefined;
   room.updatedAt = Date.now();
   logOnlineState(`set postgame lnurlw roomId=${roomId}`);
+}
+
+export function setOnlinePostGameNostrPayout(roomId: string, lnAddress: string) {
+  const room = roomById.get(roomId);
+  if (!room) {
+    return;
+  }
+  room.postGame.payoutMethod = 'nostr_zap';
+  room.postGame.payoutTarget = lnAddress;
+  room.postGame.rematchRequested = false;
+  room.postGame.rematchRequiredAmount = undefined;
+  room.postGame.rematchEventId = undefined;
+  room.postGame.rematchNote1 = undefined;
+  room.postGame.rematchWaitingForSessionID = undefined;
+  room.updatedAt = Date.now();
+  logOnlineState(`set postgame nostr payout roomId=${roomId} lnAddress=${lnAddress}`);
+}
+
+export function setOnlineRematchRequested(params: {
+  roomId: string;
+  requiredAmount: number;
+  rematchEventId: string;
+  rematchNote1: string;
+  waitingForSessionID?: string;
+}) {
+  const room = roomById.get(params.roomId);
+  if (!room || room.phase !== 'finished') {
+    return;
+  }
+  room.postGame.rematchRequested = true;
+  room.postGame.rematchRequiredAmount = params.requiredAmount;
+  room.postGame.rematchEventId = params.rematchEventId;
+  room.postGame.rematchNote1 = params.rematchNote1;
+  room.postGame.rematchWaitingForSessionID = params.waitingForSessionID;
+  room.postGame.payoutMethod = undefined;
+  room.postGame.payoutTarget = undefined;
+  room.postGame.lnurlw = undefined;
+  room.updatedAt = Date.now();
+  logOnlineState(
+    `rematch requested roomId=${params.roomId} amount=${params.requiredAmount} event=${params.rematchEventId}`
+  );
+}
+
+export function settleOnlineRematchPayment(params: {
+  roomId: string;
+  payerPubkey?: string;
+  amount: number;
+}) {
+  const room = roomById.get(params.roomId);
+  if (!room || room.phase !== 'finished') {
+    return { ok: false as const, reason: 'room_not_finished' };
+  }
+  if (!room.postGame.rematchRequested || !room.postGame.rematchRequiredAmount) {
+    return { ok: false as const, reason: 'rematch_not_requested' };
+  }
+  const requiredAmount = room.postGame.rematchRequiredAmount;
+  if (params.amount < requiredAmount) {
+    return { ok: false as const, reason: 'amount_too_low' };
+  }
+  const winnerRole = room.postGame.winnerRole;
+  if (!winnerRole) {
+    return { ok: false as const, reason: 'winner_unknown' };
+  }
+  const loserRole = winnerRole === PlayerRole.Player1 ? PlayerRole.Player2 : PlayerRole.Player1;
+  const winnerSeat = room.seats.get(winnerRole);
+  const loserSeat = room.seats.get(loserRole);
+  if (!winnerSeat || !loserSeat || !winnerSeat.sessionID || !loserSeat.sessionID) {
+    return { ok: false as const, reason: 'seats_not_ready' };
+  }
+  if (loserSeat.pubkey && (!params.payerPubkey || params.payerPubkey !== loserSeat.pubkey)) {
+    return { ok: false as const, reason: 'not_loser' };
+  }
+  if (winnerSeat.pubkey && params.payerPubkey && params.payerPubkey === winnerSeat.pubkey) {
+    return { ok: false as const, reason: 'winner_cannot_match' };
+  }
+  room.seats.set(winnerRole, {
+    ...winnerSeat,
+    paidAmount: requiredAmount,
+    ready: false,
+    disconnectedAt: undefined,
+  });
+  room.seats.set(loserRole, {
+    ...loserSeat,
+    paidAmount: requiredAmount,
+    ready: false,
+    disconnectedAt: undefined,
+  });
+  resetRoomToLobby(room);
+  room.updatedAt = Date.now();
+  logOnlineState(`rematch paid roomId=${params.roomId} amount=${requiredAmount}`);
+  return { ok: true as const, room, requiredAmount };
 }
 
 export function voteOnlineDoubleOrNothing(roomId: string, sessionID: string) {
   const room = roomById.get(roomId);
   if (!room || room.phase !== 'finished') {
     return { ok: false as const, reason: 'room_not_finished' };
+  }
+  // Once payout flow is started for this round, rematch is no longer allowed.
+  if (room.postGame.lnurlw || room.postGame.payoutMethod === 'nostr_zap') {
+    return { ok: false as const, reason: 'withdraw_started' };
+  }
+  if (room.postGame.rematchRequested) {
+    return { ok: false as const, reason: 'rematch_pending' };
   }
   const p1 = room.seats.get(PlayerRole.Player1);
   const p2 = room.seats.get(PlayerRole.Player2);
@@ -650,9 +776,6 @@ export function voteOnlineDoubleOrNothing(roomId: string, sessionID: string) {
   logOnlineState(
     `double-or-nothing vote roomId=${roomId} session=${sessionID} votes=${room.postGame.doubleOrNothingVotes.size} agreed=${agreed}`
   );
-  if (agreed) {
-    resetRoomToLobby(room);
-  }
   return {
     ok: true as const,
     votes: room.postGame.doubleOrNothingVotes.size,
@@ -812,6 +935,13 @@ function resetRoomToLobby(room: OnlineRoom) {
   room.inputBySession.clear();
   room.postGame.doubleOrNothingVotes.clear();
   room.postGame.lnurlw = undefined;
+  room.postGame.payoutMethod = undefined;
+  room.postGame.payoutTarget = undefined;
+  room.postGame.rematchRequested = false;
+  room.postGame.rematchRequiredAmount = undefined;
+  room.postGame.rematchEventId = undefined;
+  room.postGame.rematchNote1 = undefined;
+  room.postGame.rematchWaitingForSessionID = undefined;
   room.postGame.settledAt = undefined;
   room.postGame.winnerRole = undefined;
   room.postGame.winnerSessionID = undefined;
