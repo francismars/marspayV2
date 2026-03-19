@@ -296,6 +296,15 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
   if (!room) {
     return;
   }
+  if (room.postGame.rematchRequested) {
+    const isSeatedPlayer = [...room.seats.values()].some(
+      (seat) => seat.status === 'paid' && seat.sessionID === sessionID
+    );
+    if (!isSeatedPlayer) {
+      logOnlineState(`pin denied roomId=${roomId} session=${sessionID} reason=rematch_locked`);
+      return;
+    }
+  }
   const now = Date.now();
   for (const record of pinByValue.values()) {
     if (record.roomId !== roomId || record.sessionID !== sessionID) {
@@ -390,6 +399,12 @@ export function seatPaidPlayer(params: {
       );
       return { ok: true as const, role: seat.role, room };
     }
+  }
+  if (room.postGame.rematchRequested) {
+    logOnlineState(
+      `seat assignment blocked roomId=${params.roomId} session=${params.sessionID} reason=rematch_locked`
+    );
+    return { ok: false as const, reason: 'rematch_locked' };
   }
   const seatRoles: Array<PlayerRole.Player1 | PlayerRole.Player2> = [
     PlayerRole.Player1,
