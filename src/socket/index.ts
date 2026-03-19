@@ -17,6 +17,7 @@ import {
   createOnlineRoomHandler,
   getOnlineRoomStateHandler,
   getOnlinePostGameHandler,
+  getOnlineReplayHandler,
   joinOnlineRoomByCodeHandler,
   joinOnlineRoomHandler,
   leaveOnlineRoomHandler,
@@ -183,6 +184,9 @@ export default function registerSocketHandlers(io: Server) {
     });
     socket.on('getOnlinePostGame', (payload: { roomId: string }) => {
       getOnlinePostGameHandler(socket, payload);
+    });
+    socket.on('getOnlineReplay', (payload: { roomId: string }) => {
+      getOnlineReplayHandler(socket, payload);
     });
     socket.on(
       'createOnlineWithdrawal',
