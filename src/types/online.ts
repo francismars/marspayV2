@@ -17,6 +17,8 @@ export interface OnlineSeatState {
   status: 'open' | 'paid';
   paidAmount?: number;
   paidAt?: number;
+  ready?: boolean;
+  disconnectedAt?: number;
   name?: string;
   picture?: string;
   pubkey?: string;
@@ -60,6 +62,7 @@ export interface OnlineRoom {
     winnerPoints: number;
     totalPrize: number;
     lnurlw?: string;
+    settledAt?: number;
     doubleOrNothingVotes: Set<string>;
   };
 }

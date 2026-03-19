@@ -21,6 +21,7 @@ import {
   leaveOnlineRoomHandler,
   listOnlineRoomsHandler,
   onlineDoubleOrNothingHandler,
+  onlineSetReadyHandler,
   roomInputHandler,
   spectateOnlineRoomHandler,
   startOnlineGameHandler,
@@ -175,6 +176,9 @@ export default function registerSocketHandlers(io: Server) {
     );
     socket.on('startOnlineGame', (payload: { roomId: string }) => {
       startOnlineGameHandler(socket, payload);
+    });
+    socket.on('onlineSetReady', (payload: { roomId: string; ready: boolean }) => {
+      onlineSetReadyHandler(socket, payload);
     });
     socket.on('getOnlinePostGame', (payload: { roomId: string }) => {
       getOnlinePostGameHandler(socket, payload);

@@ -15,12 +15,14 @@ import {
   getOnlinePostGame,
   getRoomByCode,
   getRoomById,
+  hasAnyPaidSeat,
   isPaidSeatSession,
   issueJoinPin,
   joinRoom,
   leaveRoom,
   listOnlineRooms,
   serializeRoom,
+  setSeatReady,
   setRoomNostrMeta,
   setRoomPhase,
   setOnlinePostGameLnurlw,
@@ -206,14 +208,19 @@ export function leaveOnlineRoomHandler(socket: Socket, payload?: { roomId?: stri
     socket.data.currentOnlineRoomId = undefined;
   }
   logOnline(sessionID, `leaveOnlineRoom roomId=${roomId ?? 'unknown'}`);
-  leaveRoom(sessionID);
+  leaveRoom(sessionID, { releaseSeat: true });
 }
 
 export function cancelOnlineRoomHandler(socket: Socket, payload: { roomId: string }) {
   const sessionID = socket.data.sessionID as string | undefined;
   const room = getRoomById(payload.roomId);
-  if (!sessionID || !room || room.hostSessionID !== sessionID) {
+  if (!sessionID || !room || !room.members.has(sessionID)) {
     logOnline(sessionID, `cancelOnlineRoom denied roomId=${payload.roomId}`);
+    return;
+  }
+  if (hasAnyPaidSeat(payload.roomId)) {
+    logOnline(sessionID, `cancelOnlineRoom blocked roomId=${payload.roomId} reason=paid_seat_exists`);
+    socket.emit('onlinePinInvalid', { reason: 'room_has_paid_seats' });
     return;
   }
   logOnline(sessionID, `cancelOnlineRoom roomId=${room.roomId}`);
@@ -240,17 +247,47 @@ export function roomInputHandler(
 export function startOnlineGameHandler(socket: Socket, payload: { roomId: string }) {
   const sessionID = socket.data.sessionID as string | undefined;
   const room = getRoomById(payload.roomId);
-  if (!sessionID || !room || room.hostSessionID !== sessionID) {
+  if (!sessionID || !room) {
     logOnline(sessionID, `startOnlineGame denied roomId=${payload.roomId}`);
+    return;
+  }
+  const ready = setSeatReady(payload.roomId, sessionID, true);
+  if (!ready.ok) {
+    logOnline(sessionID, `startOnlineGame blocked roomId=${payload.roomId} reason=${ready.reason}`);
+    socket.emit('onlinePinInvalid', { reason: ready.reason });
     return;
   }
   if (!areSeatsFilled(payload.roomId)) {
     logOnline(sessionID, `startOnlineGame blocked roomId=${payload.roomId} reason=seats_not_filled`);
     socket.emit('onlinePinInvalid', { reason: 'seats_not_filled' });
+  }
+  logOnline(
+    sessionID,
+    `startOnlineGame compatibility signal roomId=${payload.roomId} started=${ready.started}`
+  );
+  io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
+}
+
+export function onlineSetReadyHandler(
+  socket: Socket,
+  payload: { roomId: string; ready: boolean }
+) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  const room = getRoomById(payload.roomId);
+  if (!sessionID || !room) {
+    logOnline(sessionID, `onlineSetReady denied roomId=${payload.roomId}`);
     return;
   }
-  logOnline(sessionID, `startOnlineGame roomId=${payload.roomId}`);
-  setRoomPhase(payload.roomId, 'playing');
+  const result = setSeatReady(payload.roomId, sessionID, !!payload.ready);
+  if (!result.ok) {
+    logOnline(sessionID, `onlineSetReady blocked roomId=${payload.roomId} reason=${result.reason}`);
+    socket.emit('onlinePinInvalid', { reason: result.reason });
+    return;
+  }
+  logOnline(
+    sessionID,
+    `onlineSetReady roomId=${payload.roomId} ready=${payload.ready} started=${result.started}`
+  );
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
 }
 
