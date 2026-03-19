@@ -61,6 +61,8 @@ export interface OnlineRoom {
     recordedAt?: number;
   };
   postGame: {
+    p1Picture?: string;
+    p2Picture?: string;
     winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
     winnerSessionID?: string;
     winnerName: string;
