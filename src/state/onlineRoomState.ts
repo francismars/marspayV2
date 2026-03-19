@@ -26,6 +26,7 @@ const POSTGAME_SETTLED_DELETE_MS = 2 * 60 * 1000;
 const roomById = new Map<string, OnlineRoom>();
 const roomIdByCode = new Map<string, string>();
 const roomIdBySession = new Map<string, string>();
+const roomIdByKind1EventId = new Map<string, string>();
 const pinByValue = new Map<string, JoinPinRecord>();
 
 function logOnlineState(message: string) {
@@ -76,6 +77,14 @@ export function getRoomByCode(roomCode: string) {
 
 export function getRoomBySession(sessionID: string) {
   const roomId = roomIdBySession.get(sessionID);
+  if (!roomId) {
+    return;
+  }
+  return roomById.get(roomId);
+}
+
+export function getRoomByKind1EventId(kind1EventId: string) {
+  const roomId = roomIdByKind1EventId.get(kind1EventId);
   if (!roomId) {
     return;
   }
@@ -269,6 +278,11 @@ export function deleteRoom(roomId: string) {
       pinByValue.delete(pin);
     }
   }
+  for (const [eventId, mappedRoomId] of roomIdByKind1EventId.entries()) {
+    if (mappedRoomId === roomId) {
+      roomIdByKind1EventId.delete(eventId);
+    }
+  }
   logOnlineState(`deleted roomId=${roomId} code=${room.roomCode}`);
 }
 
@@ -285,8 +299,12 @@ export function setRoomNostrMeta(roomId: string, nostrMeta: OnlineRoomNostrMeta,
   if (!room) {
     return;
   }
+  if (room.kind1EventId && room.kind1EventId !== kind1EventId) {
+    roomIdByKind1EventId.delete(room.kind1EventId);
+  }
   room.nostrMeta = nostrMeta;
   room.kind1EventId = kind1EventId;
+  roomIdByKind1EventId.set(kind1EventId, roomId);
   room.updatedAt = Date.now();
   logOnlineState(`set nostr meta roomId=${roomId} note=${nostrMeta.note1} emojis=${nostrMeta.emojis}`);
 }
@@ -660,6 +678,9 @@ export function setOnlinePostGameLnurlw(roomId: string, lnurlw: string) {
   if (!room) {
     return;
   }
+  if (room.postGame.rematchEventId) {
+    roomIdByKind1EventId.delete(room.postGame.rematchEventId);
+  }
   room.postGame.lnurlw = lnurlw;
   room.postGame.payoutMethod = 'withdraw_qr';
   room.postGame.payoutTarget = undefined;
@@ -676,6 +697,9 @@ export function setOnlinePostGameNostrPayout(roomId: string, lnAddress: string) 
   const room = roomById.get(roomId);
   if (!room) {
     return;
+  }
+  if (room.postGame.rematchEventId) {
+    roomIdByKind1EventId.delete(room.postGame.rematchEventId);
   }
   room.postGame.payoutMethod = 'nostr_zap';
   room.postGame.payoutTarget = lnAddress;
@@ -704,6 +728,7 @@ export function setOnlineRematchRequested(params: {
   room.postGame.rematchEventId = params.rematchEventId;
   room.postGame.rematchNote1 = params.rematchNote1;
   room.postGame.rematchWaitingForSessionID = params.waitingForSessionID;
+  roomIdByKind1EventId.set(params.rematchEventId, params.roomId);
   room.postGame.payoutMethod = undefined;
   room.postGame.payoutTarget = undefined;
   room.postGame.lnurlw = undefined;
@@ -948,6 +973,9 @@ function resetRoomToLobby(room: OnlineRoom) {
   };
   room.phase = 'lobby';
   room.inputBySession.clear();
+  if (room.postGame.rematchEventId) {
+    roomIdByKind1EventId.delete(room.postGame.rematchEventId);
+  }
   room.postGame.doubleOrNothingVotes.clear();
   room.postGame.lnurlw = undefined;
   room.postGame.payoutMethod = undefined;
