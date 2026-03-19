@@ -23,6 +23,8 @@ const ROOM_CLEANUP_MS = 15 * 1000;
 const SEAT_DISCONNECT_TTL_MS = 15 * 60 * 1000;
 const POSTGAME_SETTLED_DELETE_MS = 2 * 60 * 1000;
 const ONLINE_PAYOUT_MULTIPLIER = 0.95;
+const ONLINE_REPLAY_TICK_MS = 100;
+const ONLINE_REPLAY_MAX_FRAMES = 3_600;
 
 const roomById = new Map<string, OnlineRoom>();
 const roomIdByCode = new Map<string, string>();
@@ -142,6 +144,10 @@ export function createOnlineRoom(params: {
         currentWidthP2: 50,
       },
     },
+    replay: {
+      tickMs: ONLINE_REPLAY_TICK_MS,
+      frames: [],
+    },
     postGame: {
       winnerName: '',
       winnerPoints: 0,
@@ -193,6 +199,15 @@ export function listOnlineRooms(): OnlineRoomListItem[] {
               0,
               Math.floor((room.postGame.totalPrize ?? room.snapshot.state.totalPoints ?? 0) * ONLINE_PAYOUT_MULTIPLIER)
             ),
+          }
+        : undefined,
+    replay:
+      room.phase === 'finished'
+        ? {
+            available: room.replay.frames.length > 0,
+            frameCount: room.replay.frames.length,
+            tickMs: room.replay.tickMs,
+            durationMs: room.replay.frames.length * room.replay.tickMs,
           }
         : undefined,
   }));
@@ -499,9 +514,12 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
         room.seats.set(role, { ...seat, ready: false });
       }
     }
+    resetReplay(room);
+    pushReplayFrame(room);
   }
   if (phase === 'finished') {
     ensurePostGameState(room);
+    room.replay.recordedAt = Date.now();
   }
   room.updatedAt = Date.now();
   logOnlineState(`phase changed roomId=${roomId} ${prevPhase} -> ${phase}`);
@@ -620,7 +638,20 @@ export function stepRoomSnapshot(roomId: string) {
     setRoomPhase(roomId, 'finished');
   }
   room.snapshot.tick += 1;
+  pushReplayFrame(room);
   room.updatedAt = Date.now();
+}
+
+export function getOnlineReplay(roomId: string) {
+  const room = roomById.get(roomId);
+  if (!room || room.replay.frames.length === 0) {
+    return;
+  }
+  return {
+    roomId: room.roomId,
+    tickMs: room.replay.tickMs,
+    frames: room.replay.frames,
+  };
 }
 
 export function serializeRoom(room: OnlineRoom) {
@@ -635,6 +666,12 @@ export function serializeRoom(room: OnlineRoom) {
     seats: Object.fromEntries(room.seats),
     spectators: [...room.spectators],
     snapshot: room.snapshot,
+    replay: {
+      available: room.replay.frames.length > 0,
+      frameCount: room.replay.frames.length,
+      tickMs: room.replay.tickMs,
+      durationMs: room.replay.frames.length * room.replay.tickMs,
+    },
     postGame: {
       winnerRole: room.postGame.winnerRole,
       winnerSessionID: room.postGame.winnerSessionID,
@@ -990,6 +1027,7 @@ function resetRoomToLobby(room: OnlineRoom) {
       currentWidthP2: 50,
     },
   };
+  resetReplay(room);
   room.phase = 'lobby';
   room.inputBySession.clear();
   if (room.postGame.rematchEventId) {
@@ -1032,4 +1070,20 @@ function maybeStartReadyMatch(room: OnlineRoom) {
   }
   setRoomPhase(room.roomId, 'playing');
   return true;
+}
+
+function cloneSnapshot(snapshot: OnlineRoom['snapshot']): OnlineRoom['snapshot'] {
+  return JSON.parse(JSON.stringify(snapshot)) as OnlineRoom['snapshot'];
+}
+
+function resetReplay(room: OnlineRoom) {
+  room.replay.frames = [];
+  room.replay.recordedAt = undefined;
+}
+
+function pushReplayFrame(room: OnlineRoom) {
+  room.replay.frames.push(cloneSnapshot(room.snapshot));
+  if (room.replay.frames.length > ONLINE_REPLAY_MAX_FRAMES) {
+    room.replay.frames.splice(0, room.replay.frames.length - ONLINE_REPLAY_MAX_FRAMES);
+  }
 }
