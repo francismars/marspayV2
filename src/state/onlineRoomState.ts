@@ -295,6 +295,28 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
   if (!room) {
     return;
   }
+  const now = Date.now();
+  for (const record of pinByValue.values()) {
+    if (record.roomId !== roomId || record.sessionID !== sessionID) {
+      continue;
+    }
+    if (record.used) {
+      continue;
+    }
+    const stillValid = record.expiresAt > now || shouldPinStayActive(record);
+    if (!stillValid) {
+      continue;
+    }
+    record.socketID = socketID;
+    if (shouldPinStayActive(record)) {
+      record.expiresAt = now + PIN_TTL_MS;
+    }
+    pinByValue.set(pinRecordKey(roomId, record.pin), record);
+    logOnlineState(
+      `reused pin roomId=${roomId} session=${sessionID} socket=${socketID} expiresAt=${record.expiresAt}`
+    );
+    return record;
+  }
   let pin = randomNumericPin(4);
   while (pinByValue.has(pinRecordKey(roomId, pin))) {
     pin = randomNumericPin(4);
@@ -304,7 +326,7 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
     roomId,
     sessionID,
     socketID,
-    expiresAt: Date.now() + PIN_TTL_MS,
+    expiresAt: now + PIN_TTL_MS,
     used: false,
   };
   pinByValue.set(pinRecordKey(roomId, pin), record);
