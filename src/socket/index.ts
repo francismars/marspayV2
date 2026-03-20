@@ -31,6 +31,7 @@ import {
   startOnlineGameHandler,
   startOnlineLoop,
   pingLatencyHandler,
+  reportOnlineRoomPingHandler,
 } from './onlineRoom';
 import { leaveRoom } from '../state/onlineRoomState';
 
@@ -161,6 +162,12 @@ export default function registerSocketHandlers(io: Server) {
     socket.on('pingLatency', (cb: (() => void) | undefined) => {
       pingLatencyHandler(socket, cb);
     });
+    socket.on(
+      'reportOnlineRoomPing',
+      (payload: { roomId: string; latencyMs: number }) => {
+        reportOnlineRoomPingHandler(socket, payload);
+      }
+    );
     socket.on('joinOnlineRoom', (payload: { roomId: string }) => {
       joinOnlineRoomHandler(socket, payload);
     });
