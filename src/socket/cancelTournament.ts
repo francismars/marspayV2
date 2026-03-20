@@ -11,7 +11,7 @@ import {
   setIDToLNURLW,
   setLNURLWToID,
 } from '../state/lnurlwState';
-import { deleteSocketFromSession } from '../state/sessionState';
+import { setIDToSocket } from '../state/sessionState';
 import { GameMode } from '../types/game';
 import { deleteKind1sFromSession, getKind1sfromSessionID } from '../state/nostrState';
 
@@ -49,7 +49,10 @@ export async function cancelTournament(socket: Socket) {
     }
     deleteLNURLPsFromSession(sessionID);
     deleteGameInfoByID(sessionID);
-    deleteSocketFromSession(sessionID);
+    setIDToSocket(sessionID, {
+      socketID: socket.id,
+      lastSeen: Date.now(),
+    });
     socket.emit('rescanceltourn', response);
     return;
   }
