@@ -120,9 +120,16 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `createOnlineWithdrawal` | `{ roomId: string }` | Winner only; LNURLw flow |
 | `createOnlineNostrPayout` | `{ roomId: string }` | Winner only; needs `winnerLnAddress` on postgame |
 | `onlineDoubleOrNothing` | `{ roomId: string }` | Both players vote; on agreement publishes rematch Kind1 |
-| `getOnlineReplay` | `{ roomId: string }` | After finish, if replay recorded |
+| `getOnlineReplay` | `{ roomId: string }` | After finish, if replay recorded; also works for **archived** rooms (see persistence) |
+| `listOnlineArchivedRooms` | — | Returns finished matches persisted on disk (`resListOnlineArchivedRooms`) |
 
 > **No `sessionID`:** Most handlers no-op silently (no response) if `socket.data.sessionID` is missing. `createOnlineRoom` returns early without emitting if there is no session.
+
+### Finished-room persistence (replay + history)
+
+- When a **finished** room is **deleted** from memory (e.g. ~2 min after `postGame.settledAt`, or idle cleanup), the server writes **`data/online_archive/<roomId>.json`** (serialized room + full `replay.frames`) and appends a line to **`data/online_archive/index.jsonl`** for listing.
+- **`getOnlineReplay`**, **`getOnlineRoomState`**, and **`getOnlinePostGame`** fall back to this archive when the room is no longer in RAM.
+- **`listOnlineArchivedRooms`** / **`resListOnlineArchivedRooms`** expose the last **200** unique rows (deduped by `roomId`, newest `finishedAt` wins). Add retention/rotation later if disk grows.
 
 ---
 
@@ -133,6 +140,7 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `resCreateOnlineRoom` | `roomId`, `roomCode`, `joinPin`, `pinExpiresAt`, `nostrMeta?`, `room` | Host created. **`room.kind1EventId`** = Kind1 note id for zapping. **`nostrMeta`** may also appear on **`room.nostrMeta`** — check both. |
 | `resJoinOnlineRoom` | Same shape | Join by id/code |
 | `resListOnlineRooms` | `{ rooms: OnlineRoomListItem[] }` | After `listOnlineRooms`; also **broadcast** `io.emit` when room list changes |
+| `resListOnlineArchivedRooms` | `{ rooms: OnlineRoomListItem[] }` | After `listOnlineArchivedRooms`; items include `archived: true`, `finishedAt`, `result`, `replay` meta |
 | `onlineRoomUpdated` | `OnlineRoomState` | Room membership, seats, phase, postgame fields, etc. |
 | `onlineRoomSnapshot` | `{ roomId, snapshot: OnlineRoomSnapshot }` | Each **100 ms** tick while `playing`. Payload is **wrapped**: use **`data.snapshot`** (not `data` alone). **`snapshot.state`** holds authoritative sim state (snakes, coinbases, scores, etc.); **`snapshot.hud`** holds derived/display-friendly values (bars, labels). |
 | `onlineSeatAssigned` | `{ roomId, playerRole, sessionId }` | After successful zap + seat assignment |

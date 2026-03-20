@@ -22,6 +22,7 @@ import {
   joinOnlineRoomHandler,
   leaveOnlineRoomHandler,
   listOnlineRoomsHandler,
+  listOnlineArchivedRoomsHandler,
   onlineDoubleOrNothingHandler,
   onlineSetReadyHandler,
   roomInputHandler,
@@ -148,6 +149,9 @@ export default function registerSocketHandlers(io: Server) {
     );
     socket.on('listOnlineRooms', () => {
       listOnlineRoomsHandler(socket);
+    });
+    socket.on('listOnlineArchivedRooms', () => {
+      listOnlineArchivedRoomsHandler(socket);
     });
     socket.on('joinOnlineRoom', (payload: { roomId: string }) => {
       joinOnlineRoomHandler(socket, payload);
