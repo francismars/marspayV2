@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { PlayerRole } from '../types/game';
+import type { OnlineRoomListItem } from '../types/online';
 import {
   COMPACT_REPLAY_FORMAT,
   replayFrameCount,
@@ -58,6 +59,28 @@ export interface OnlineArchivedListItem {
     p1Score: number;
     p2Score: number;
     netPrize: number;
+  };
+}
+
+/** Map index row → list item (shared with merged history). */
+export function archivedRowToOnlineRoomListItem(
+  r: OnlineArchivedListItem
+): OnlineRoomListItem {
+  return {
+    roomId: r.roomId,
+    roomCode: r.roomCode,
+    buyin: r.buyin,
+    createdAt: r.createdAt,
+    finishedAt: r.finishedAt,
+    phase: r.phase ?? 'finished',
+    playersPaid: r.playersPaid,
+    seatsTotal: r.seatsTotal,
+    spectators: r.spectators,
+    archived: true,
+    matchRound: r.matchRound,
+    archiveKind: r.archiveKind ?? 'session',
+    replay: r.replay,
+    result: r.result,
   };
 }
 
