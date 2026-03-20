@@ -24,6 +24,8 @@ export interface OnlineSeatState {
   picture?: string;
   pubkey?: string;
   lnAddress?: string;
+  /** Last RTT (ms) reported by that seat's client; broadcast via `onlineRoomUpdated`. */
+  pingMs?: number;
 }
 
 export interface OnlineRoomSnapshot {
