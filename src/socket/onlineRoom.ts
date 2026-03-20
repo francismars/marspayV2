@@ -13,7 +13,11 @@ import type { OnlineRoomListItem } from '../types/online';
 import { io } from '../server';
 import { getKind1sfromSessionID } from '../state/nostrState';
 import { setIDToLNURLW, setLNURLWToID } from '../state/lnurlwState';
-import { listArchivedOnlineRoomsSync, loadSerializedRoomFromArchiveSync } from '../state/onlineRoomArchive';
+import {
+  archivedRowToOnlineRoomListItem,
+  listArchivedOnlineRoomsSync,
+  loadSerializedRoomFromArchiveSync,
+} from '../state/onlineRoomArchive';
 import { dateNow } from '../utils/time';
 import {
   areSeatsFilled,
@@ -28,6 +32,7 @@ import {
   issueJoinPin,
   joinRoom,
   leaveRoom,
+  listOnlineHistoryMerged,
   listOnlineRooms,
   serializeRoom,
   setSeatReady,
@@ -52,6 +57,14 @@ function logOnline(sessionID: string | undefined, message: string) {
 function emitOnlineRoomsList() {
   io.emit('resListOnlineRooms', {
     rooms: listOnlineRooms(),
+  });
+}
+
+/** Broadcast live list + merged history (single source of truth for History tab). */
+export function broadcastOnlineRoomLists() {
+  emitOnlineRoomsList();
+  io.emit('resOnlineHistory', {
+    rooms: listOnlineHistoryMerged(),
   });
 }
 
@@ -106,7 +119,7 @@ export async function createOnlineRoomHandler(
   );
   const roomState = serializeRoom(room);
   io.to(room.roomId).emit('onlineRoomUpdated', roomState);
-  emitOnlineRoomsList();
+  broadcastOnlineRoomLists();
   socket.emit('resCreateOnlineRoom', {
     roomId: room.roomId,
     roomCode: room.roomCode,
@@ -171,23 +184,16 @@ export function listOnlineRoomsHandler(socket: Socket) {
 export function listOnlineArchivedRoomsHandler(socket: Socket) {
   const sessionID = socket.data.sessionID as string | undefined;
   logOnline(sessionID, `listOnlineArchivedRooms requested`);
-  const rooms: OnlineRoomListItem[] = listArchivedOnlineRoomsSync().map((r) => ({
-    roomId: r.roomId,
-    roomCode: r.roomCode,
-    buyin: r.buyin,
-    createdAt: r.createdAt,
-    finishedAt: r.finishedAt,
-    phase: r.phase ?? 'finished',
-    playersPaid: r.playersPaid,
-    seatsTotal: r.seatsTotal,
-    spectators: r.spectators,
-    archived: true,
-    matchRound: r.matchRound,
-    archiveKind: r.archiveKind ?? 'session',
-    replay: r.replay,
-    result: r.result,
-  }));
+  const rooms: OnlineRoomListItem[] = listArchivedOnlineRoomsSync().map(
+    archivedRowToOnlineRoomListItem
+  );
   socket.emit('resListOnlineArchivedRooms', { rooms });
+}
+
+export function listOnlineHistoryHandler(socket: Socket) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  logOnline(sessionID, `listOnlineHistory requested`);
+  socket.emit('resOnlineHistory', { rooms: listOnlineHistoryMerged() });
 }
 
 export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string }) {
@@ -211,7 +217,7 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
   );
   const roomState = serializeRoom(room);
   io.to(room.roomId).emit('onlineRoomUpdated', roomState);
-  emitOnlineRoomsList();
+  broadcastOnlineRoomLists();
   socket.emit('resJoinOnlineRoom', {
     roomId: room.roomId,
     roomCode: room.roomCode,
@@ -250,7 +256,7 @@ export function spectateOnlineRoomHandler(socket: Socket, payload: { roomId: str
   socket.join(room.roomId);
   socket.data.currentOnlineRoomId = room.roomId;
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
-  emitOnlineRoomsList();
+  broadcastOnlineRoomLists();
 }
 
 export function getOnlineRoomStateHandler(socket: Socket, payload: { roomId: string }) {
@@ -284,7 +290,7 @@ export function leaveOnlineRoomHandler(socket: Socket, payload?: { roomId?: stri
   }
   logOnline(sessionID, `leaveOnlineRoom roomId=${roomId ?? 'unknown'}`);
   leaveRoom(sessionID, { releaseSeat: true });
-  emitOnlineRoomsList();
+  broadcastOnlineRoomLists();
 }
 
 export function cancelOnlineRoomHandler(socket: Socket, payload: { roomId: string }) {
@@ -303,7 +309,7 @@ export function cancelOnlineRoomHandler(socket: Socket, payload: { roomId: strin
   setRoomPhase(room.roomId, 'cancelled');
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
   deleteRoom(room.roomId);
-  emitOnlineRoomsList();
+  broadcastOnlineRoomLists();
 }
 
 export function roomInputHandler(
@@ -360,7 +366,7 @@ export function startOnlineGameHandler(socket: Socket, payload: { roomId: string
     publishOnlineMatchStarted(payload.roomId, sessionID);
   }
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
-  emitOnlineRoomsList();
+  broadcastOnlineRoomLists();
 }
 
 export function onlineSetReadyHandler(
@@ -387,7 +393,7 @@ export function onlineSetReadyHandler(
     publishOnlineMatchStarted(payload.roomId, sessionID);
   }
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
-  emitOnlineRoomsList();
+  broadcastOnlineRoomLists();
 }
 
 export function getOnlinePostGameHandler(socket: Socket, payload: { roomId: string }) {
@@ -489,6 +495,7 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
       mentions: getSeatMentions(liveRoom.roomId),
     });
   }
+  broadcastOnlineRoomLists();
   socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: lnurlw.lnurl });
 }
 
@@ -555,6 +562,8 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
       mentions: getSeatMentions(liveRoom.roomId),
     });
   }
+  deleteRoom(payload.roomId);
+  broadcastOnlineRoomLists();
   socket.emit('resCreateOnlineNostrPayout', {
     roomId: payload.roomId,
     lnAddress,
@@ -624,7 +633,7 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
       })();
     }
     io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
-    emitOnlineRoomsList();
+    broadcastOnlineRoomLists();
   }
 }
 
@@ -663,7 +672,7 @@ export function startOnlineLoop() {
               ],
             });
           }
-          emitOnlineRoomsList();
+          broadcastOnlineRoomLists();
         }
       }
     }

@@ -19,7 +19,9 @@ import {
 import {
   appendOnlineMatchArchive,
   appendOnlineRoomArchive,
+  archivedRowToOnlineRoomListItem,
   getOnlinePostGameFromArchive,
+  listArchivedOnlineRoomsSync,
   loadCompactReplayFromArchiveSync,
 } from './onlineRoomArchive';
 import { packReplayForArchive, type OnlineReplayWirePayload } from './onlineReplayCompact';
@@ -28,7 +30,8 @@ const PIN_TTL_MS = 2 * 60 * 1000;
 const ROOM_IDLE_TTL_MS = 20 * 60 * 1000;
 const ROOM_CLEANUP_MS = 15 * 1000;
 const SEAT_DISCONNECT_TTL_MS = 15 * 60 * 1000;
-const POSTGAME_SETTLED_DELETE_MS = 2 * 60 * 1000;
+/** Fallback delete if immediate removal after payout failed (should be rare). */
+const SETTLED_ROOM_DELETE_FALLBACK_MS = 30 * 1000;
 const ONLINE_PAYOUT_MULTIPLIER = 0.95;
 const ONLINE_REPLAY_TICK_MS = 100;
 const ONLINE_REPLAY_MAX_FRAMES = 3_600;
@@ -199,6 +202,27 @@ function roomToFinishedResult(room: OnlineRoom): NonNullable<OnlineRoomListItem[
       Math.floor((room.postGame.totalPrize ?? room.snapshot.state.totalPoints ?? 0) * ONLINE_PAYOUT_MULTIPLIER)
     ),
   };
+}
+
+/**
+ * Single source of truth for History: archived index rows + finished rooms still in RAM
+ * (archived wins when both exist for the same `roomId`).
+ */
+export function listOnlineHistoryMerged(): OnlineRoomListItem[] {
+  const archived = listArchivedOnlineRoomsSync().map(archivedRowToOnlineRoomListItem);
+  const liveFinished = listOnlineRooms().filter((r) => r.phase === 'finished');
+  const byId = new Map<string, OnlineRoomListItem>();
+  for (const a of archived) {
+    byId.set(a.roomId, { ...a, archived: true });
+  }
+  for (const f of liveFinished) {
+    if (!byId.has(f.roomId)) {
+      byId.set(f.roomId, { ...f, archived: false });
+    }
+  }
+  return [...byId.values()].sort(
+    (a, b) => (b.finishedAt ?? b.createdAt) - (a.finishedAt ?? a.createdAt)
+  );
 }
 
 export function listOnlineRooms(): OnlineRoomListItem[] {
@@ -638,6 +662,8 @@ export function markOnlineRoomSettledBySession(sessionID: string) {
   room.postGame.settledAt = Date.now();
   room.updatedAt = Date.now();
   logOnlineState(`postgame settled roomId=${room.roomId} by session=${sessionID}`);
+  const roomId = room.roomId;
+  deleteRoom(roomId);
 }
 
 export function updateRoomInput(
@@ -983,9 +1009,9 @@ function cleanupExpiredState() {
   for (const room of roomById.values()) {
     releaseExpiredPaidSeats(room, now);
 
-    if (room.postGame.settledAt && now - room.postGame.settledAt > POSTGAME_SETTLED_DELETE_MS) {
+    if (room.postGame.settledAt && now - room.postGame.settledAt > SETTLED_ROOM_DELETE_FALLBACK_MS) {
       logOnlineState(
-        `cleanup settled room roomId=${room.roomId} settledMs=${now - room.postGame.settledAt}`
+        `cleanup settled room fallback roomId=${room.roomId} settledMs=${now - room.postGame.settledAt}`
       );
       deleteRoom(room.roomId);
       continue;
