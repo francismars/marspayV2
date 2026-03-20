@@ -22,6 +22,7 @@ import {
   getOnlinePostGameFromArchive,
   loadReplayFromArchiveSync,
 } from './onlineRoomArchive';
+import { packReplayForArchive } from './onlineReplayCompact';
 
 const PIN_TTL_MS = 2 * 60 * 1000;
 const ROOM_IDLE_TTL_MS = 20 * 60 * 1000;
@@ -322,10 +323,7 @@ export function deleteRoom(roomId: string) {
       archiveId: `${room.roomId}-session`,
       finishedAt: room.postGame.settledAt ?? Date.now(),
       serializedRoom: serializeRoom(room) as Record<string, unknown>,
-      replay: {
-        tickMs: room.replay.tickMs,
-        frames: room.replay.frames,
-      },
+      replay: packReplayForArchive(room.replay.frames, room.replay.tickMs),
     });
   }
   for (const sessionID of room.members.keys()) {
@@ -570,10 +568,7 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
       archiveId: `${room.roomId}-r${room.matchRound}`,
       finishedAt: Date.now(),
       serializedRoom: serializeRoom(room) as Record<string, unknown>,
-      replay: {
-        tickMs: room.replay.tickMs,
-        frames: [...room.replay.frames],
-      },
+      replay: packReplayForArchive([...room.replay.frames], room.replay.tickMs),
     });
   }
   room.updatedAt = Date.now();

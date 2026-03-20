@@ -323,7 +323,8 @@ function capturePercentByLength(length: number): number {
   return 2;
 }
 
-function getCaptureLabel(length: number): string {
+/** Used when rebuilding snapshots from compact replays (body segment count). */
+export function getCaptureLabel(length: number): string {
   return `${capturePercentByLength(length)}%`;
 }
 
