@@ -16,7 +16,12 @@ import {
   startOnlineCountdown,
   stepOnlineGame,
 } from '../game/onlineEngine';
-import { appendOnlineRoomArchive, getOnlinePostGameFromArchive, loadReplayFromArchiveSync } from './onlineRoomArchive';
+import {
+  appendOnlineMatchArchive,
+  appendOnlineRoomArchive,
+  getOnlinePostGameFromArchive,
+  loadReplayFromArchiveSync,
+} from './onlineRoomArchive';
 
 const PIN_TTL_MS = 2 * 60 * 1000;
 const ROOM_IDLE_TTL_MS = 20 * 60 * 1000;
@@ -117,6 +122,7 @@ export function createOnlineRoom(params: {
     createdAt: now,
     updatedAt: now,
     buyin,
+    matchRound: 0,
     phase: 'lobby',
     members: new Map<string, OnlineRoomMember>(),
     spectators: new Set<string>(),
@@ -208,9 +214,12 @@ export function listOnlineRooms(): OnlineRoomListItem[] {
     playersPaid: [...room.seats.values()].filter((seat) => seat.status === 'paid').length,
     seatsTotal: 2,
     spectators: room.spectators.size,
-    result: room.phase === 'finished' ? roomToFinishedResult(room) : undefined,
+    result:
+      room.phase === 'postgame' || room.phase === 'finished'
+        ? roomToFinishedResult(room)
+        : undefined,
     replay:
-      room.phase === 'finished'
+      room.phase === 'postgame' || room.phase === 'finished'
         ? {
             available: room.replay.frames.length > 0,
             frameCount: room.replay.frames.length,
@@ -308,7 +317,9 @@ export function deleteRoom(roomId: string) {
   if (room.phase === 'finished') {
     void appendOnlineRoomArchive({
       version: 1,
+      kind: 'session',
       roomId: room.roomId,
+      archiveId: `${room.roomId}-session`,
       finishedAt: room.postGame.settledAt ?? Date.now(),
       serializedRoom: serializeRoom(room) as Record<string, unknown>,
       replay: {
@@ -370,6 +381,10 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
   }
   if (room.phase === 'finished') {
     logOnlineState(`pin denied roomId=${roomId} session=${sessionID} reason=room_finished`);
+    return;
+  }
+  if (room.phase === 'postgame' && !room.postGame.rematchRequested) {
+    logOnlineState(`pin denied roomId=${roomId} session=${sessionID} reason=round_postgame`);
     return;
   }
   if (room.postGame.rematchRequested) {
@@ -529,6 +544,9 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
   const prevPhase = room.phase;
   room.phase = phase;
   room.snapshot.phase = phase;
+  if (phase === 'playing' && prevPhase === 'lobby') {
+    room.matchRound += 1;
+  }
   if (phase === 'playing') {
     startOnlineCountdown(room.snapshot.state);
     room.postGame.doubleOrNothingVotes.clear();
@@ -541,9 +559,22 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
     resetReplay(room);
     pushReplayFrame(room);
   }
-  if (phase === 'finished') {
+  if (phase === 'postgame') {
     ensurePostGameState(room);
     room.replay.recordedAt = Date.now();
+    void appendOnlineMatchArchive({
+      version: 1,
+      kind: 'match',
+      roomId: room.roomId,
+      matchRound: room.matchRound,
+      archiveId: `${room.roomId}-r${room.matchRound}`,
+      finishedAt: Date.now(),
+      serializedRoom: serializeRoom(room) as Record<string, unknown>,
+      replay: {
+        tickMs: room.replay.tickMs,
+        frames: [...room.replay.frames],
+      },
+    });
   }
   room.updatedAt = Date.now();
   logOnlineState(`phase changed roomId=${roomId} ${prevPhase} -> ${phase}`);
@@ -658,24 +689,26 @@ export function stepRoomSnapshot(roomId: string) {
   stepOnlineGame(state);
   room.snapshot.hud = getOnlineHudState(state);
   if (state.gameEnded) {
-    ensurePostGameState(room);
-    setRoomPhase(roomId, 'finished');
+    setRoomPhase(roomId, 'postgame');
   }
   room.snapshot.tick += 1;
   pushReplayFrame(room);
   room.updatedAt = Date.now();
 }
 
-export function getOnlineReplay(roomId: string) {
+export function getOnlineReplay(roomId: string, matchRound?: number) {
   const room = roomById.get(roomId);
   if (room && room.replay.frames.length > 0) {
-    return {
-      roomId: room.roomId,
-      tickMs: room.replay.tickMs,
-      frames: room.replay.frames,
-    };
+    if (matchRound == null || matchRound === room.matchRound) {
+      return {
+        roomId: room.roomId,
+        tickMs: room.replay.tickMs,
+        frames: room.replay.frames,
+        matchRound: room.matchRound,
+      };
+    }
   }
-  return loadReplayFromArchiveSync(roomId);
+  return loadReplayFromArchiveSync(roomId, matchRound);
 }
 
 export function serializeRoom(room: OnlineRoom) {
@@ -684,6 +717,7 @@ export function serializeRoom(room: OnlineRoom) {
     roomCode: room.roomCode,
     hostSessionID: room.hostSessionID,
     buyin: room.buyin,
+    matchRound: room.matchRound,
     createdAt: room.createdAt,
     finishedAt:
       room.phase === 'finished'
@@ -695,7 +729,10 @@ export function serializeRoom(room: OnlineRoom) {
     seats: Object.fromEntries(room.seats),
     spectators: [...room.spectators],
     snapshot: room.snapshot,
-    result: room.phase === 'finished' ? roomToFinishedResult(room) : undefined,
+    result:
+      room.phase === 'postgame' || room.phase === 'finished'
+        ? roomToFinishedResult(room)
+        : undefined,
     replay: {
       available: room.replay.frames.length > 0,
       frameCount: room.replay.frames.length,
@@ -726,7 +763,7 @@ export function serializeRoom(room: OnlineRoom) {
 
 export function getOnlinePostGame(roomId: string) {
   const room = roomById.get(roomId);
-  if (room && room.phase === 'finished') {
+  if (room && (room.phase === 'postgame' || room.phase === 'finished')) {
     ensurePostGameState(room);
     return {
       roomId: room.roomId,
@@ -779,6 +816,9 @@ export function setOnlinePostGameLnurlw(roomId: string, lnurlw: string) {
   room.postGame.rematchWaitingForSessionID = undefined;
   room.updatedAt = Date.now();
   logOnlineState(`set postgame lnurlw roomId=${roomId}`);
+  if (room.phase === 'postgame') {
+    setRoomPhase(roomId, 'finished');
+  }
 }
 
 export function setOnlinePostGameNostrPayout(roomId: string, lnAddress: string) {
@@ -798,6 +838,9 @@ export function setOnlinePostGameNostrPayout(roomId: string, lnAddress: string) 
   room.postGame.rematchWaitingForSessionID = undefined;
   room.updatedAt = Date.now();
   logOnlineState(`set postgame nostr payout roomId=${roomId} lnAddress=${lnAddress}`);
+  if (room.phase === 'postgame') {
+    setRoomPhase(roomId, 'finished');
+  }
 }
 
 export function setOnlineRematchRequested(params: {
@@ -808,7 +851,7 @@ export function setOnlineRematchRequested(params: {
   waitingForSessionID?: string;
 }) {
   const room = roomById.get(params.roomId);
-  if (!room || room.phase !== 'finished') {
+  if (!room || room.phase !== 'postgame') {
     return;
   }
   room.postGame.rematchRequested = true;
@@ -832,7 +875,7 @@ export function settleOnlineRematchPayment(params: {
   amount: number;
 }) {
   const room = roomById.get(params.roomId);
-  if (!room || room.phase !== 'finished') {
+  if (!room || room.phase !== 'postgame') {
     return { ok: false as const, reason: 'room_not_finished' };
   }
   if (!room.postGame.rematchRequested || !room.postGame.rematchRequiredAmount) {
@@ -878,8 +921,8 @@ export function settleOnlineRematchPayment(params: {
 
 export function voteOnlineDoubleOrNothing(roomId: string, sessionID: string) {
   const room = roomById.get(roomId);
-  if (!room || room.phase !== 'finished') {
-    return { ok: false as const, reason: 'room_not_finished' };
+  if (!room || room.phase !== 'postgame') {
+    return { ok: false as const, reason: 'room_not_postgame' };
   }
   // Once payout flow is started for this round, rematch is no longer allowed.
   if (room.postGame.lnurlw || room.postGame.payoutMethod === 'nostr_zap') {

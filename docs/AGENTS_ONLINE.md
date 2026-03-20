@@ -120,16 +120,28 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `createOnlineWithdrawal` | `{ roomId: string }` | Winner only; LNURLw flow |
 | `createOnlineNostrPayout` | `{ roomId: string }` | Winner only; needs `winnerLnAddress` on postgame |
 | `onlineDoubleOrNothing` | `{ roomId: string }` | Both players vote; on agreement publishes rematch Kind1 |
-| `getOnlineReplay` | `{ roomId: string }` | After finish, if replay recorded; also works for **archived** rooms (see persistence) |
-| `listOnlineArchivedRooms` | — | Returns finished matches persisted on disk (`resListOnlineArchivedRooms`) |
+| `getOnlineReplay` | `{ roomId: string; matchRound?: number }` | Live buffer for current round, or disk **`roomId-rN`** / session file; omit **`matchRound`** to use latest session replay when archived |
+| `listOnlineArchivedRooms` | — | Returns persisted rows (`resListOnlineArchivedRooms`), including **per-match** and **session** entries |
 
 > **No `sessionID`:** Most handlers no-op silently (no response) if `socket.data.sessionID` is missing. `createOnlineRoom` returns early without emitting if there is no session.
 
-### Finished-room persistence (replay + history)
+### Room phases (ONLINE)
 
-- When a **finished** room is **deleted** from memory (e.g. ~2 min after `postGame.settledAt`, or idle cleanup), the server writes **`data/online_archive/<roomId>.json`** (serialized room + full `replay.frames`) and appends a line to **`data/online_archive/index.jsonl`** for listing.
-- **`getOnlineReplay`**, **`getOnlineRoomState`**, and **`getOnlinePostGame`** fall back to this archive when the room is no longer in RAM.
-- **`listOnlineArchivedRooms`** / **`resListOnlineArchivedRooms`** expose the last **200** unique rows (deduped by `roomId`, newest `finishedAt` wins). Add retention/rotation later if disk grows.
+| Phase | Meaning |
+|-------|--------|
+| `lobby` | Waiting for ready / rematch paid |
+| `playing` | Sim running |
+| `postgame` | **Match sim ended** — payout, Double or Nothing, rematch Kind1, etc. |
+| `finished` | **Winner closed the round** (LNURLw created or Nostr payout chosen). Session can be deleted after `settledAt` + TTL. |
+
+**`matchRound`** increments on each **lobby → playing** (match 1, 2, … for DoN rematches).
+
+### Persistence (replay + history)
+
+- **Per match:** when the sim ends (`playing` → **`postgame`**), the server writes **`data/online_archive/<roomId>-r<matchRound>.json`** (serialized room + full replay for that round) and appends an index line (`archiveKind: 'match'`, `phase: 'postgame'`).
+- **Session (after payout):** when a **`finished`** room is **deleted** from memory (~2 min after `postGame.settledAt`, etc.), **`data/online_archive/<roomId>-session.json`** is written (`archiveKind: 'session'`, `phase: 'finished'`). Legacy **`roomId.json`** from older builds is still read for fallback.
+- **`getOnlineReplay`**, **`getOnlineRoomState`**, **`getOnlinePostGame`** fall back to disk when the room is not in RAM (optional **`matchRound`** for a specific stored match).
+- **`listOnlineArchivedRooms`** merges index lines (deduped by **`archiveId`**, capped ~**400** rows). Add retention/rotation later if disk grows.
 
 ---
 
