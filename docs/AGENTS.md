@@ -2,6 +2,26 @@
 
 This document describes how to integrate **without a human in the loop**: connection rules, identity, and where to find mode-specific specs.
 
+---
+
+## What MarsPay is playing (Chain Duel)
+
+**Chain Duel** is a competitive **Lightning-staked** arcade game: two players each pay a **buy-in** (sats, often via Nostr zap in ONLINE). Those stakes become **in-game points** on a shared **zero-sum pool** (`totalPoints`). The match runs until one side’s points drop to **zero**; the other player **wins** and can claim the net pot (minus server fee) through the post-game payout flow.
+
+**Core loop (authoritative ONLINE rules, implemented in `marspayTS/src/game/onlineEngine.ts`):**
+
+1. **Grid** — Discrete board (currently **51 x 25** cells). Each player is a **snake-like chain** (head + body segments).
+2. **Movement** — You choose a **direction** (`Up` / `Down` / `Left` / `Right`). The server applies **snake-style** rules: you request a *wanted* direction each tick; invalid reversals are ignored according to current facing (see ONLINE doc for pre-start vs in-match behavior).
+3. **Coinbases** — Neutral objects on the grid. **Eating** one (head on same cell) **transfers** sats from the opponent’s score into yours. The **transfer size** is a **percentage of `totalPoints`**, and that percentage **grows with your chain length** (from **2%** up to **32%** in defined length bands). Some coinbases carry a fixed **reward tier** (2 / 4 / 8 / 16 / 32) used in the same formula.
+4. **Collisions** — Hitting the **wall**, your **own** body, the **enemy** body, or **head-to-head** does **not** end the round by itself: the affected snake(s) **reset** to their spawn side and **capture %** drops back toward the minimum. The **round** ends only when **either `score[0]` or `score[1]` reaches 0**.
+5. **Economy bar** — `snapshot.hud` exposes **current points** and **bar widths** as fractions of the pool so UIs (and bots) can see who is ahead without re-deriving from raw state.
+
+**What you send over the wire** is not “a move” but **held keys**: `roomInput` with booleans `up` / `down` / `left` / `right` (see [`AGENTS_ONLINE.md`](./AGENTS_ONLINE.md)). The sim reads those every **100 ms** tick.
+
+For **full ONLINE** lifecycle (lobby, zaps, PIN, ready, snapshots, post-game), read [`AGENTS_ONLINE.md`](./AGENTS_ONLINE.md), especially **Game rules (authoritative ONLINE)**.
+
+---
+
 **Canonical TypeScript mirrors** of server payloads live in:
 
 `chain-duel/chain-duel-react/src/types/socket.ts`
