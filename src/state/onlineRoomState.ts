@@ -80,6 +80,15 @@ export function getRoomById(roomId: string) {
   return roomById.get(roomId);
 }
 
+/** Iterate live rooms in `playing` phase (for mempool block rewards, etc.). */
+export function forEachPlayingOnlineRoom(fn: (room: OnlineRoom) => void): void {
+  for (const room of roomById.values()) {
+    if (room.phase === 'playing') {
+      fn(room);
+    }
+  }
+}
+
 export function getRoomByCode(roomCode: string) {
   const roomId = roomIdByCode.get(roomCode.toUpperCase());
   if (!roomId) {
@@ -347,7 +356,7 @@ export function deleteRoom(roomId: string) {
       archiveId: `${room.roomId}-session`,
       finishedAt: room.postGame.settledAt ?? Date.now(),
       serializedRoom: serializeRoom(room) as Record<string, unknown>,
-      replay: packReplayForArchive(room.replay.frames, room.replay.tickMs),
+      replay: packReplayForArchive(room.replay.frames, room.replay.tickMs, room.replay.blockEvents),
     });
   }
   for (const sessionID of room.members.keys()) {
@@ -592,7 +601,7 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
       archiveId: `${room.roomId}-r${room.matchRound}`,
       finishedAt: Date.now(),
       serializedRoom: serializeRoom(room) as Record<string, unknown>,
-      replay: packReplayForArchive([...room.replay.frames], room.replay.tickMs),
+      replay: packReplayForArchive([...room.replay.frames], room.replay.tickMs, room.replay.blockEvents),
     });
   }
   room.updatedAt = Date.now();
@@ -747,7 +756,7 @@ export function getOnlineReplay(
   const room = roomById.get(roomId);
   if (room && room.replay.frames.length > 0) {
     if (matchRound == null || matchRound === room.matchRound) {
-      const packed = packReplayForArchive(room.replay.frames, room.replay.tickMs);
+      const packed = packReplayForArchive(room.replay.frames, room.replay.tickMs, room.replay.blockEvents);
       return {
         roomId: room.roomId,
         matchRound: room.matchRound,
@@ -1205,6 +1214,7 @@ function cloneSnapshot(snapshot: OnlineRoom['snapshot']): OnlineRoom['snapshot']
 function resetReplay(room: OnlineRoom) {
   room.replay.frames = [];
   room.replay.recordedAt = undefined;
+  room.replay.blockEvents = undefined;
 }
 
 function pushReplayFrame(room: OnlineRoom) {

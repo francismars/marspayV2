@@ -10,6 +10,7 @@ import { getTournamentMenuInfos } from './tournament';
 import { cancelTournament } from './cancelTournament';
 import { getNostrP2PMenuInfos } from './nostrP2PMenu';
 import { getTournamentNostrInfos } from './nostrTournament';
+import { startMempoolBlockWatcher } from '../state/mempoolBlockWatcher';
 import {
   cancelOnlineRoomHandler,
   createOnlineNostrPayoutHandler,
@@ -231,5 +232,6 @@ export default function registerSocketHandlers(io: Server) {
     });
   });
 
+  startMempoolBlockWatcher(io);
   startOnlineLoop();
 }

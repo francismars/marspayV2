@@ -243,6 +243,22 @@ function isValidCompactReplay(replay: unknown): replay is PackedReplay {
   if (typeof r.gzipBase64 !== 'string' || typeof r.frameCount !== 'number') {
     return false;
   }
+  if (r.blockEvents !== undefined) {
+    if (!Array.isArray(r.blockEvents)) {
+      return false;
+    }
+    for (const ev of r.blockEvents) {
+      if (
+        !ev ||
+        typeof ev !== 'object' ||
+        typeof (ev as { frameIndex?: unknown }).frameIndex !== 'number' ||
+        typeof (ev as { blockHeight?: unknown }).blockHeight !== 'number' ||
+        typeof (ev as { medianFeeSatPerVb?: unknown }).medianFeeSatPerVb !== 'number'
+      ) {
+        return false;
+      }
+    }
+  }
   return true;
 }
 
@@ -292,6 +308,7 @@ function loadCompactWireFromArchiveRecord(
     gzipBase64: r.gzipBase64,
     frameCount: r.frameCount,
     matchRound: m.matchRound,
+    ...(Array.isArray(r.blockEvents) && r.blockEvents.length > 0 ? { blockEvents: r.blockEvents } : {}),
   };
 }
 
