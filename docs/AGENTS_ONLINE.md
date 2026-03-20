@@ -6,6 +6,62 @@ Types: `chain-duel/chain-duel-react/src/types/socket.ts` (`OnlineRoomState`, `On
 
 ---
 
+## Game rules (authoritative ONLINE)
+
+This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients and bots should **treat `onlineRoomSnapshot` as truth**, not re-simulate unless fuzz-testing.
+
+### Stakes and win condition
+
+- Each seat’s paid amount (and buy-in defaults) set **`initialScore` / `score`** and **`totalPoints`** = sum of both players’ starting points. **Scores always stay between 0 and `totalPoints`**; taking from one side adds to the other (zero-sum pool).
+- **Match ends** when **`score[0] <= 0` or `score[1] <= 0`** after a tick (`gameEnded` becomes true; winner is the player still above zero). There is no time limit in engine code beyond room-level cleanup elsewhere.
+
+### Map and entities
+
+- **Grid:** `state.cols` x `state.rows` (implementation constants: **51** columns, **25** rows). Origin and bounds checks use integer cell indices; going out of bounds **resets** that snake (see below).
+- **Snakes:** `state.p1` / `state.p2` each have `head`, `body` (chain behind the head), `dir` (current), `dirWanted` (requested).
+- **Coinbases:** `state.coinbases[]` each have `pos: [x, y]` and optional `reward` (2, 4, 8, 16, or 32). Eating removes that coinbase and may spawn another at a random empty cell.
+
+### Movement and input (`roomInput`)
+
+- During **`playing`**, each tick the server reads **boolean held directions** per paid player from `inputBySession` and maps them with `setOnlineWantedDirection` (only one direction “wins” per tick depending on which keys are true).
+- **After the match has started (`gameStarted`):** turns are constrained so you **cannot flip into illegal reversals** relative to current `dir` (classic snake-style: from `Up`/`Down` you may only switch to `Left`/`Right`, etc.). **P1** and **P2** have slightly different allowed transitions when `dir` is empty at the very start of motion.
+- **Before `gameStarted` (pre-countdown / lineup):** only **P1 → Right** and **P2 → Left** are accepted as `dirWanted` so both face inward.
+- Then a **countdown** runs (`countdownStart`, `countdownTicks`); when it completes, **`gameStarted`** becomes true and snakes begin stepping every tick.
+
+### Eating a coinbase (scoring)
+
+- When a **head** occupies the same cell as a coinbase, that player **gains** points and the opponent **loses** the same amount.
+- Transfer amount = `floor(totalPoints * percent / 100)` with a **minimum of 1** sat (as implemented).
+- **Percent** for a normal coinbase comes from **your snake length** (head + body segments), using bands:
+
+| Chain length (segments) | Capture % of `totalPoints` |
+|-------------------------|----------------------------|
+| 1                       | 2%                         |
+| 2–3                     | 4%                         |
+| 4–6                     | 8%                         |
+| 7–10                    | 16%                        |
+| 11+                     | 32%                        |
+
+- If the coinbase has **`reward`** (2 / 4 / 8 / 16 / 32), that value is used as the **percent** in the same formula instead of the length-based table.
+- The eater’s **body grows** by one segment. **`currentCaptureP1` / `currentCaptureP2`** strings in `snapshot.state` (and HUD capture labels) reflect the **current** capture percent for that snake.
+
+### Collisions (death / reset, not match end)
+
+- **Head vs head** on the same cell: **both** snakes reset to default spawn poses and default wanted direction (P1 right, P2 left); capture labels reset to **2%**.
+- **Head out of bounds** or **head vs any body segment** (self or enemy): that snake **resets** the same way.
+- After reset, play continues until someone’s **score hits 0**.
+
+### HUD and reading a snapshot
+
+- **`snapshot.hud`:** `p1Points` / `p2Points` mirror `state.score`. **Widths** (`initialWidthP*`, `currentWidthP*`) are the share of the bar (0–100) each side holds of the pool — useful for agents that don’t want to parse the full grid.
+- **`snapshot.state`:** Full authoritative picture: snake geometry, coinbases, `gameStarted`, `gameEnded`, `winnerPlayer` (`'P1' | 'P2'`), `winnerName`, `score`, `totalPoints`, `pointChanges` (floating combat text metadata), etc.
+
+### Tick rate
+
+- Simulation advances on the server **every 100 ms** while the room phase is `playing`; each step emits **`onlineRoomSnapshot`**.
+
+---
+
 ## Constants (implementation)
 
 | Constant | Value | Location |
@@ -149,6 +205,8 @@ For several zap failures, `subscribeEvent.ts` emits `onlinePinInvalid` to `getSo
 ---
 
 ## Input and simulation
+
+See **[Game rules (authoritative ONLINE)](#game-rules-authoritative-online)** for what those inputs *do* (snake movement, collisions, scoring).
 
 - **Authoritative** state is server-side (`OnlineAuthoritativeState` in `onlineEngine.ts`).
 - Clients should **render from `onlineRoomSnapshot`**, not predict long-term.
