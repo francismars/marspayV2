@@ -224,6 +224,55 @@ function checkCollisions(state: OnlineAuthoritativeState): void {
     resetSnake(state, 'P1');
     resetSnake(state, 'P2');
   }
+  /**
+   * Head-on pass-through: adjacent heads swap cells in one tick. Body checks alone would
+   * reset one snake first and respawn them, so the other head→body hit never runs — only one dies.
+   * Mirror legacy `chain-duel-react` engine: treat facing adjacent heads (after the move) as mutual death.
+   */
+  if (
+    state.p1.head[0] === state.p2.head[0] + 1 &&
+    state.p2.head[1] === state.p1.head[1] &&
+    state.p1.dir === 'Right' &&
+    state.p2.dir === 'Left' &&
+    state.p1.dirWanted === 'Right' &&
+    state.p2.dirWanted === 'Left'
+  ) {
+    resetSnake(state, 'P1');
+    resetSnake(state, 'P2');
+  }
+  if (
+    state.p1.head[0] === state.p2.head[0] - 1 &&
+    state.p2.head[1] === state.p1.head[1] &&
+    state.p1.dir === 'Left' &&
+    state.p2.dir === 'Right' &&
+    state.p1.dirWanted === 'Left' &&
+    state.p2.dirWanted === 'Right'
+  ) {
+    resetSnake(state, 'P1');
+    resetSnake(state, 'P2');
+  }
+  if (
+    state.p1.head[0] === state.p2.head[0] &&
+    state.p1.head[1] === state.p2.head[1] - 1 &&
+    state.p1.dir === 'Up' &&
+    state.p2.dir === 'Down' &&
+    state.p1.dirWanted === 'Up' &&
+    state.p2.dirWanted === 'Down'
+  ) {
+    resetSnake(state, 'P1');
+    resetSnake(state, 'P2');
+  }
+  if (
+    state.p1.head[0] === state.p2.head[0] &&
+    state.p1.head[1] === state.p2.head[1] + 1 &&
+    state.p1.dir === 'Down' &&
+    state.p2.dir === 'Up' &&
+    state.p1.dirWanted === 'Down' &&
+    state.p2.dirWanted === 'Up'
+  ) {
+    resetSnake(state, 'P1');
+    resetSnake(state, 'P2');
+  }
   if (outOfBounds(state, state.p1.head)) resetSnake(state, 'P1');
   if (outOfBounds(state, state.p2.head)) resetSnake(state, 'P2');
 

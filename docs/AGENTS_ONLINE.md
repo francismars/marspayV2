@@ -123,6 +123,8 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `getOnlineReplay` | `{ roomId: string; matchRound?: number }` | **`resOnlineReplay`** returns **compact-v2** (`gzipBase64` + `frameCount` + `tickMs`); client gunzips + decodes to full frames. Live room or disk **`roomId-rN`** / session; omit **`matchRound`** for latest session replay when archived |
 | `listOnlineArchivedRooms` | — | Raw archive index rows only (`resListOnlineArchivedRooms`) |
 | `listOnlineHistory` | — | **Preferred:** merged history (`resOnlineHistory`) — archive index **plus** `finished` rooms still in RAM; same merge rules as UI |
+| `pingLatency` | ack callback `() => void` | Immediate ack for RTT; client measures `Date.now()` delta. |
+| `reportOnlineRoomPing` | `{ roomId: string; latencyMs: number }` | **Paid seat only** (matches `sessionID`). Writes **`seat.pingMs`** and emits **`onlineRoomUpdated`** so all clients can show **both** players’ ping. |
 
 > **No `sessionID`:** Most handlers no-op silently (no response) if `socket.data.sessionID` is missing. `createOnlineRoom` returns early without emitting if there is no session.
 

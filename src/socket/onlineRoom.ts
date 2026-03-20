@@ -320,6 +320,38 @@ export function pingLatencyHandler(_socket: Socket, cb?: () => void) {
   }
 }
 
+/**
+ * Seated players report measured RTT; server stores per-seat `pingMs` and broadcasts `onlineRoomUpdated`
+ * so everyone can show both players' latency.
+ */
+export function reportOnlineRoomPingHandler(
+  socket: Socket,
+  payload: { roomId?: string; latencyMs?: unknown }
+) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID || typeof payload?.roomId !== 'string') {
+    return;
+  }
+  const room = getRoomById(payload.roomId);
+  if (!room) {
+    return;
+  }
+  const raw = payload.latencyMs;
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+    return;
+  }
+  const latencyMs = Math.max(0, Math.min(10000, Math.round(raw)));
+  const seat = [...room.seats.values()].find(
+    (s) => s.sessionID === sessionID && s.status === 'paid'
+  );
+  if (!seat) {
+    return;
+  }
+  seat.pingMs = latencyMs;
+  room.updatedAt = Date.now();
+  io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
+}
+
 export function roomInputHandler(
   socket: Socket,
   payload: { roomId: string; input: { up?: boolean; down?: boolean; left?: boolean; right?: boolean } }
