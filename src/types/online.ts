@@ -35,6 +35,14 @@ export interface OnlineRoomSnapshot {
   hud: OnlineHudState;
 }
 
+/** Stored in compact replay; drives block SFX/flash during replay playback. */
+export interface OnlineReplayBlockEvent {
+  /** Replay frame index when that step’s snapshot first includes the mempool-spawned coinbase. */
+  frameIndex: number;
+  blockHeight: number;
+  medianFeeSatPerVb: number;
+}
+
 export interface OnlineRoomMember {
   sessionID: string;
   socketID: string;
@@ -64,6 +72,7 @@ export interface OnlineRoom {
     tickMs: number;
     frames: OnlineRoomSnapshot[];
     recordedAt?: number;
+    blockEvents?: OnlineReplayBlockEvent[];
   };
   postGame: {
     p1Picture?: string;

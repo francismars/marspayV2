@@ -359,6 +359,40 @@ function createNewCoinbase(state: OnlineAuthoritativeState): void {
   }
 }
 
+/**
+ * Extra coinbase when a new Bitcoin block is found (server polls mempool.space).
+ * Fee tiers match legacy P2P `createNewCoinbase(state, feeValue)` in chain-duel-react.
+ * Use `medianFeeSatPerVb < 0` for a plain apple (no multiplier) when fee is missing.
+ */
+export function spawnBlockRewardCoinbase(
+  state: OnlineAuthoritativeState,
+  medianFeeSatPerVb: number
+): boolean {
+  if (!state.gameStarted || state.gameEnded) {
+    return false;
+  }
+  let reward: Coinbase['reward'] | undefined;
+  if (Number.isFinite(medianFeeSatPerVb) && medianFeeSatPerVb >= 0) {
+    if (medianFeeSatPerVb < 15) reward = 2;
+    else if (medianFeeSatPerVb < 45) reward = 4;
+    else if (medianFeeSatPerVb < 135) reward = 8;
+    else if (medianFeeSatPerVb < 405) reward = 16;
+    else reward = 32;
+  }
+  let accepted = false;
+  let attempts = 0;
+  while (!accepted && attempts < 1000) {
+    const x = Math.floor(Math.random() * state.cols);
+    const y = Math.floor(Math.random() * state.rows);
+    if (!hasCollisionAt(state, [x, y])) {
+      state.coinbases.push(reward != null ? { pos: [x, y], reward } : { pos: [x, y] });
+      accepted = true;
+    }
+    attempts += 1;
+  }
+  return accepted;
+}
+
 function getLength(state: OnlineAuthoritativeState, player: PlayerId): number {
   return player === 'P1' ? state.p1.body.length : state.p2.body.length;
 }

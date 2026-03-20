@@ -3,7 +3,7 @@
  * Wire + disk use the same `PackedReplay` shape; clients gunzip + decode via `onlineReplayCodec`.
  */
 import { gzipSync } from 'zlib';
-import type { OnlineRoomSnapshot } from '../types/online';
+import type { OnlineReplayBlockEvent, OnlineRoomSnapshot } from '../types/online';
 import {
   COMPACT_REPLAY_FORMAT,
   encodeFramesToInnerJson,
@@ -16,7 +16,10 @@ export type PackedReplay = {
   tickMs: number;
   gzipBase64: string;
   frameCount: number;
+  blockEvents?: OnlineReplayBlockEvent[];
 };
+
+export type { OnlineReplayBlockEvent };
 
 /** Payload sent over Socket.IO and stored under `replay` in archive files. */
 export type OnlineReplayWirePayload = PackedReplay & {
@@ -27,7 +30,8 @@ export type OnlineReplayWirePayload = PackedReplay & {
 /** Persist: compact + gzip. Empty frames → zero-length payload. */
 export function packReplayForArchive(
   frames: OnlineRoomSnapshot[],
-  tickMs: number
+  tickMs: number,
+  blockEvents?: OnlineReplayBlockEvent[]
 ): PackedReplay {
   if (frames.length === 0) {
     return { format: COMPACT_REPLAY_FORMAT, tickMs, gzipBase64: '', frameCount: 0 };
@@ -40,6 +44,7 @@ export function packReplayForArchive(
     tickMs,
     gzipBase64: gz.toString('base64'),
     frameCount: frames.length,
+    ...(blockEvents && blockEvents.length > 0 ? { blockEvents } : {}),
   };
 }
 
