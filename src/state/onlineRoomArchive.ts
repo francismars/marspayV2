@@ -6,10 +6,10 @@ import path from 'path';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { PlayerRole } from '../types/game';
-import type { OnlineRoomSnapshot } from '../types/online';
 import {
-  expandReplayPayload,
+  COMPACT_REPLAY_FORMAT,
   replayFrameCount,
+  type OnlineReplayWirePayload,
   type PackedReplay,
 } from './onlineReplayCompact';
 
@@ -27,10 +27,8 @@ export interface OnlineRoomArchiveFile {
   archiveId: string;
   finishedAt: number;
   serializedRoom: Record<string, unknown>;
-  /** Legacy full JSON frames, or compact-v2 gzip blob (see `onlineReplayCompact.ts`). */
-  replay:
-    | { tickMs: number; frames: OnlineRoomSnapshot[] }
-    | PackedReplay;
+  /** compact-v2 gzip blob (see `onlineReplayCompact.ts`). */
+  replay: PackedReplay;
 }
 
 export interface OnlineArchivedListItem {
@@ -208,6 +206,23 @@ export async function appendOnlineRoomArchive(payload: {
   }
 }
 
+function isValidCompactReplay(replay: unknown): replay is PackedReplay {
+  if (!replay || typeof replay !== 'object') {
+    return false;
+  }
+  const r = replay as Record<string, unknown>;
+  if (r.format !== COMPACT_REPLAY_FORMAT) {
+    return false;
+  }
+  if (typeof r.tickMs !== 'number') {
+    return false;
+  }
+  if (typeof r.gzipBase64 !== 'string' || typeof r.frameCount !== 'number') {
+    return false;
+  }
+  return true;
+}
+
 function readArchiveJsonFile(filePath: string): OnlineRoomArchiveFile | null {
   if (!fs.existsSync(filePath)) {
     return null;
@@ -215,7 +230,7 @@ function readArchiveJsonFile(filePath: string): OnlineRoomArchiveFile | null {
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(raw) as OnlineRoomArchiveFile;
-    if (parsed.version !== 1 || !parsed.replay || expandReplayPayload(parsed.replay) == null) {
+    if (parsed.version !== 1 || !parsed.replay || !isValidCompactReplay(parsed.replay)) {
       return null;
     }
     return parsed;
@@ -240,41 +255,40 @@ function readArchiveFileAny(filePath: string): OnlineRoomArchiveFile | null {
   }
 }
 
-function loadReplayFromArchiveRecord(
+function loadCompactWireFromArchiveRecord(
   m: OnlineRoomArchiveFile | null
-): { roomId: string; tickMs: number; frames: OnlineRoomSnapshot[]; matchRound?: number } | undefined {
-  if (!m?.replay) {
+): OnlineReplayWirePayload | undefined {
+  if (!m?.replay || !isValidCompactReplay(m.replay)) {
     return undefined;
   }
-  const expanded = expandReplayPayload(m.replay);
-  if (!expanded?.frames.length) {
-    return undefined;
-  }
+  const r = m.replay;
   return {
     roomId: m.roomId,
-    tickMs: expanded.tickMs,
-    frames: expanded.frames,
+    tickMs: r.tickMs,
+    format: r.format,
+    gzipBase64: r.gzipBase64,
+    frameCount: r.frameCount,
     matchRound: m.matchRound,
   };
 }
 
-/** Load replay: live memory preferred; else `roomId-rN` match file; else session/legacy. */
-export function loadReplayFromArchiveSync(
+/** Compact replay blob from disk (same shape as `getOnlineReplay` when room is archived). */
+export function loadCompactReplayFromArchiveSync(
   roomId: string,
   matchRound?: number
-): { roomId: string; tickMs: number; frames: OnlineRoomSnapshot[]; matchRound?: number } | undefined {
+): OnlineReplayWirePayload | undefined {
   if (matchRound != null) {
-    return loadReplayFromArchiveRecord(
+    return loadCompactWireFromArchiveRecord(
       readArchiveJsonFile(path.join(archiveDir(), matchFileName(roomId, matchRound)))
     );
   }
-  const fromSession = loadReplayFromArchiveRecord(
+  const fromSession = loadCompactWireFromArchiveRecord(
     readArchiveJsonFile(path.join(archiveDir(), sessionFileName(roomId)))
   );
   if (fromSession) {
     return fromSession;
   }
-  return loadReplayFromArchiveRecord(
+  return loadCompactWireFromArchiveRecord(
     readArchiveJsonFile(path.join(archiveDir(), legacyRoomFileName(roomId)))
   );
 }

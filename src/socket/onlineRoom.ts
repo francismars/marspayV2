@@ -422,14 +422,14 @@ export function getOnlineReplayHandler(socket: Socket, payload: { roomId: string
     return;
   }
   const replay = getOnlineReplay(payload.roomId, payload.matchRound);
-  if (!replay) {
+  if (!replay || replay.frameCount === 0) {
     logOnline(sessionID, `getOnlineReplay unavailable roomId=${payload.roomId}`);
     socket.emit('onlinePinInvalid', { reason: 'replay_unavailable' });
     return;
   }
   logOnline(
     sessionID,
-    `getOnlineReplay roomId=${payload.roomId} frames=${replay.frames.length} tickMs=${replay.tickMs}`
+    `getOnlineReplay roomId=${payload.roomId} frameCount=${replay.frameCount} tickMs=${replay.tickMs}`
   );
   socket.emit('resOnlineReplay', replay);
 }
