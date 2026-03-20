@@ -2,6 +2,14 @@ import { Session } from '../types/session';
 
 const IDToSocket = new Map<string, Session>();
 
+/** Prefix avoids collisions with ONLINE `roomId` UUIDs and other room names. */
+const SESSION_SOCKET_ROOM_PREFIX = 'marspay:session:';
+
+/** Socket.IO room used for per-session fan-out (LNURL payment, Nostr zap UI, withdraw). */
+export function sessionSocketRoomName(sessionId: string): string {
+  return `${SESSION_SOCKET_ROOM_PREFIX}${sessionId}`;
+}
+
 export function setIDToSocket(sessionId: string, session: Session) {
   IDToSocket.set(sessionId, session);
 }

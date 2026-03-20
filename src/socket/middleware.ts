@@ -1,5 +1,9 @@
 import { ExtendedError, Server, Socket } from 'socket.io';
-import { getSocketFromID, setIDToSocket } from '../state/sessionState';
+import {
+  getSocketFromID,
+  sessionSocketRoomName,
+  setIDToSocket,
+} from '../state/sessionState';
 import { ALLOWEDEMOJIS } from '../consts/emojis';
 import { customAlphabet } from 'nanoid';
 import { nolookalikes } from 'nanoid-dictionary';
@@ -8,7 +12,7 @@ import { SESSIONIDLENGHT } from '../consts/values';
 import { Session } from '../types/session';
 import { normalizeIP } from '../utils/ip';
 
-export default function middleware(
+export default async function middleware(
   io: Server,
   socket: Socket,
   next: (err?: ExtendedError) => void
@@ -33,6 +37,7 @@ export default function middleware(
     );
     socket.data.sessionID = sessionID;
     setIDToSocket(sessionID, session);
+    await socket.join(sessionSocketRoomName(sessionID));
     socket.emit('session', {
       sessionID,
     });
@@ -48,6 +53,7 @@ export default function middleware(
     }] Created new sessionID for ${realIP}.`
   );
   setIDToSocket(socket.data.sessionID, session);
+  await socket.join(sessionSocketRoomName(socket.data.sessionID));
   socket.emit('session', {
     sessionID: socket.data.sessionID,
   });

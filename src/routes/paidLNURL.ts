@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { dateNow } from '../utils/time';
-import { getSocketFromID } from '../state/sessionState';
+import { sessionSocketRoomName } from '../state/sessionState';
 import { getIDFromLNURLP, getLNURLPsFromID } from '../state/lnurlpState';
 import {
   serializeGameInfoFromID,
@@ -111,12 +111,14 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
     setGameInfoByID(sessionID, gameInfo);
     // Splits must run even when no socket is connected (UI missed update otherwise).
     paySplits(sessionID, amount, lnurlp.hostLNAddress);
-    const socketID = getSocketFromID(sessionID)?.socketID;
-    if (socketID) {
-      io.to(socketID).emit('updatePayments', serializeGameInfoFromID(sessionID));
-    } else {
-      console.error(
-        `${dateNow()} [${sessionID}] Couldn't find SocketID to send notification of payment`
+    // Fan-out by session room (middleware joins each socket to marspay:session:<id>).
+    // Relying only on IDToSocket + socket.id missed cases where the map was empty/stale.
+    const sessionRoom = sessionSocketRoomName(sessionID);
+    io.to(sessionRoom).emit('updatePayments', serializeGameInfoFromID(sessionID));
+    const roomSize = io.sockets.adapter.rooms.get(sessionRoom)?.size ?? 0;
+    if (roomSize === 0) {
+      console.warn(
+        `${dateNow()} [${sessionID}] updatePayments emitted to session room but no socket joined (client offline); UI will catch up on reconnect / getPracticeMenuInfos`
       );
     }
     res.status(200).send('OK');
