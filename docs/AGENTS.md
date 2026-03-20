@@ -49,8 +49,8 @@ const socket = io(SERVER_URL, {
 
 ### Rules (see `marspayTS/src/socket/middleware.ts`)
 
-1. If `auth.sessionID` is present **and** passes validation **and** the server still maps it to an active socket session, that ID is **reused**.
-2. Otherwise the server mints a new ID and stores it.
+1. If `auth.sessionID` is present **and** passes validation (emoji + length/alphabet checks), that ID is **always** bound to this connection: `socket.data.sessionID` is set and the in-memory session map is updated. This **restores** the same id after a server restart or empty map (so LNURL / ONLINE state and webhooks stay aligned with the client’s persisted id).
+2. If validation fails or `auth.sessionID` is omitted, the server mints a new id and stores it.
 
 ### Format
 
@@ -108,7 +108,19 @@ The server joins sockets to an internal room named `room.roomId` for ONLINE broa
 | Capability | Typical requirement |
 |------------|---------------------|
 | Socket API (lobby, snapshots, inputs) | MarsPay server + valid `sessionID` |
-| Seat purchase (ONLINE) | **Nostr zap** to the room’s Kind1 (or rematch) invoice with correct amount + PIN in comment |
-| LNURL withdraw / LN address payout | Lightning infrastructure configured on the server (LNbits, etc.) |
+| Seat purchase (ONLINE) | **Nostr zap** path: sign a **NIP-57 zap request** with your **nsec** (client-side; no external signing service required), resolve the host’s **lud16** → LNURL callback, pass zap request JSON + **PIN** to obtain a **BOLT11** invoice, then pay that invoice (see below). |
+| Paying the seat invoice without a Lightning node | **NWC (Nostr Wallet Connect)** — connect a wallet that speaks NWC and pay the BOLT11; **no** full Lightning node required on the agent machine. |
+| LNURL withdraw / LN address payout | Lightning infrastructure configured on the server (LNbits, etc.); winner-side withdrawal still uses server-generated LNURL-w or Nostr payout flows. |
 
-Fully autonomous play still needs a process that can **sign Nostr zaps** (or use a pre-funded custodial flow if you add one).
+### Autonomous ONLINE seat purchase (NWC + Nostr; battle-tested)
+
+Docs sometimes implied that “fully autonomous play” required something beyond signing zaps. The **working** pattern for bots is:
+
+1. **Sign** the NIP-57 zap request event with your Nostr **nsec** (local only).
+2. **Fetch** the LNURL callback URL from the host’s **lud16** (Lightning address) metadata.
+3. **POST** the zap request JSON and **PIN** to that callback to receive a **BOLT11** invoice.
+4. **Pay** the invoice via **NWC** — the wallet runs elsewhere; the agent only needs NWC client logic, not a Lightning node.
+
+So: **NWC is a first-class, practical way** to automate seat payment end-to-end. You still need cryptographic Nostr signing for the zap *request*; you do **not** need to operate Lightning infrastructure yourself if NWC pays the resulting invoice.
+
+For lobby timing, PIN placement, ready/snapshot quirks, and post-game ordering, see [`AGENTS_ONLINE.md`](./AGENTS_ONLINE.md) — especially **Battle-tested notes**.
