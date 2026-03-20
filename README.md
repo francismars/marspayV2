@@ -1,15 +1,17 @@
 # MarsPay V2
 
-Backend service for **Chain Duel** and similar **1v1 Lightning games**. It connects players over **Socket.IO**, routes **LNbits** LNURL pay and withdraw flows, listens for **Nostr** zaps (via NDK), and keeps game and session state on the server so matches stay fair and payouts line up with what was paid in.
+**Reusable Lightning backend** for **1v1 games** (and similar match formats). Plug in **your own frontend** — web, mobile, or bot — as long as it speaks the **Socket.IO** contract. The server handles **LNbits** LNURL pay and withdraw, **Nostr** zaps and Kind1 flows (via NDK), and **session + game state** so stakes, admissions, and payouts stay consistent.
+
+**Chain Duel** is the reference game that ships alongside this repo; the same stack is meant to support **other projects** that need paid lobbies, duels, tournaments, or ONLINE-style matches without rebuilding Lightning plumbing.
 
 ## What this project does
 
 - **Matchmaking and sessions** — Each client gets a stable `sessionID` (see [docs/AGENTS.md](docs/AGENTS.md)) so reconnects and seat claims can be tied to the same player.
 - **Lightning money flow** — LNURLp (deposits / buy-ins) and LNURLw (winner withdrawals) through LNbits, plus webhooks when payments settle.
 - **Nostr** — Kind1 game notes, zap receipts for admissions and ONLINE seat purchase (PIN-in-comment flow), and related replies depending on mode.
-- **Authoritative ONLINE play** — For ONLINE rooms, the **game simulation runs on the server** (tick-based snake / chain duel logic in `src/game/onlineEngine.ts`); clients send inputs and render snapshots.
+- **Authoritative ONLINE play** — For ONLINE rooms, the **game simulation runs on the server** (see `src/game/onlineEngine.ts` — today a tick-based arena game; you can treat this as the **pattern** for other authoritative modes). Clients send inputs and render snapshots.
 
-Frontends (e.g. Chain Duel React) talk to this server over WebSocket events; type shapes are documented in-repo for bots and integrations.
+**Integrating your own client:** Implement the events and payloads described in [docs/AGENTS.md](docs/AGENTS.md) and [docs/AGENTS_ONLINE.md](docs/AGENTS_ONLINE.md). A TypeScript mirror of socket types exists in the Chain Duel React app for reference (`chain-duel/chain-duel-react/src/types/socket.ts` when that repo is checked out next to this one).
 
 ## Features (high level)
 
@@ -69,7 +71,7 @@ ADMIN_PASSWORD=
 
 - **Autonomous clients / bots:** [docs/AGENTS.md](docs/AGENTS.md) (sessions, reconnect)
 - **ONLINE mode (zap, PIN, snapshots, payouts):** [docs/AGENTS_ONLINE.md](docs/AGENTS_ONLINE.md)
-- **Game rules (Chain Duel ONLINE sim):** same ONLINE doc, section on authoritative rules
+- **Built-in ONLINE game rules (reference implementation):** [docs/AGENTS_ONLINE.md](docs/AGENTS_ONLINE.md) — authoritative rules section
 
 ## Scripts
 
