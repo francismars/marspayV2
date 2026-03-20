@@ -120,7 +120,7 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `createOnlineWithdrawal` | `{ roomId: string }` | Winner only; LNURLw flow |
 | `createOnlineNostrPayout` | `{ roomId: string }` | Winner only; needs `winnerLnAddress` on postgame |
 | `onlineDoubleOrNothing` | `{ roomId: string }` | Both players vote; on agreement publishes rematch Kind1 |
-| `getOnlineReplay` | `{ roomId: string; matchRound?: number }` | Live buffer for current round, or disk **`roomId-rN`** / session file; omit **`matchRound`** to use latest session replay when archived |
+| `getOnlineReplay` | `{ roomId: string; matchRound?: number }` | **`resOnlineReplay`** returns **compact-v2** (`gzipBase64` + `frameCount` + `tickMs`); client gunzips + decodes to full frames. Live room or disk **`roomId-rN`** / session; omit **`matchRound`** for latest session replay when archived |
 | `listOnlineArchivedRooms` | — | Returns persisted rows (`resListOnlineArchivedRooms`), including **per-match** and **session** entries |
 
 > **No `sessionID`:** Most handlers no-op silently (no response) if `socket.data.sessionID` is missing. `createOnlineRoom` returns early without emitting if there is no session.
@@ -139,7 +139,7 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 ### Persistence (replay + history)
 
 - **Per match:** when the sim ends (`playing` → **`postgame`**), the server writes **`data/online_archive/<roomId>-r<matchRound>.json`** (serialized room + replay for that round) and appends an index line (`archiveKind: 'match'`, `phase: 'postgame'`).
-- **Replay on disk (`compact-v2`):** new archives store **`replay: { format: 'compact-v2', tickMs, gzipBase64, frameCount }`** — gzip’d JSON with a one-time header (grid, names, meta, initial scores) plus thin per-frame rows (snakes as head + flat body coords, direction indices, flags, scores, etc.). **Legacy** archives with **`replay.frames: OnlineRoomSnapshot[]`** are still read. **`getOnlineReplay`** always returns **expanded** full snapshots (same shape as live play).
+- **Replay (`compact-v2`):** archives and **`resOnlineReplay`** use **`{ format: 'compact-v2', tickMs, gzipBase64, frameCount }`** (gzip’d JSON: one-time header + thin per-frame rows). The **browser** gunzips and decodes via **`onlineReplayCodec.ts`** (shared with marspayTS). No legacy full-frame JSON.
 - **Session (after payout):** when a **`finished`** room is **deleted** from memory (~2 min after `postGame.settledAt`, etc.), **`data/online_archive/<roomId>-session.json`** is written (`archiveKind: 'session'`, `phase: 'finished'`). Legacy **`roomId.json`** from older builds is still read for fallback.
 - **`getOnlineReplay`**, **`getOnlineRoomState`**, **`getOnlinePostGame`** fall back to disk when the room is not in RAM (optional **`matchRound`** for a specific stored match).
 - **`listOnlineArchivedRooms`** merges index lines (deduped by **`archiveId`**, capped ~**400** rows). Add retention/rotation later if disk grows.

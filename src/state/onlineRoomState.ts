@@ -20,9 +20,9 @@ import {
   appendOnlineMatchArchive,
   appendOnlineRoomArchive,
   getOnlinePostGameFromArchive,
-  loadReplayFromArchiveSync,
+  loadCompactReplayFromArchiveSync,
 } from './onlineRoomArchive';
-import { packReplayForArchive } from './onlineReplayCompact';
+import { packReplayForArchive, type OnlineReplayWirePayload } from './onlineReplayCompact';
 
 const PIN_TTL_MS = 2 * 60 * 1000;
 const ROOM_IDLE_TTL_MS = 20 * 60 * 1000;
@@ -691,19 +691,23 @@ export function stepRoomSnapshot(roomId: string) {
   room.updatedAt = Date.now();
 }
 
-export function getOnlineReplay(roomId: string, matchRound?: number) {
+/** Compact wire payload; client gunzips + decodes to full frames. */
+export function getOnlineReplay(
+  roomId: string,
+  matchRound?: number
+): OnlineReplayWirePayload | undefined {
   const room = roomById.get(roomId);
   if (room && room.replay.frames.length > 0) {
     if (matchRound == null || matchRound === room.matchRound) {
+      const packed = packReplayForArchive(room.replay.frames, room.replay.tickMs);
       return {
         roomId: room.roomId,
-        tickMs: room.replay.tickMs,
-        frames: room.replay.frames,
         matchRound: room.matchRound,
+        ...packed,
       };
     }
   }
-  return loadReplayFromArchiveSync(roomId, matchRound);
+  return loadCompactReplayFromArchiveSync(roomId, matchRound);
 }
 
 export function serializeRoom(room: OnlineRoom) {
