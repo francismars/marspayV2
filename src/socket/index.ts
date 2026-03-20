@@ -30,6 +30,7 @@ import {
   spectateOnlineRoomHandler,
   startOnlineGameHandler,
   startOnlineLoop,
+  pingLatencyHandler,
 } from './onlineRoom';
 import { leaveRoom } from '../state/onlineRoomState';
 
@@ -156,6 +157,9 @@ export default function registerSocketHandlers(io: Server) {
     });
     socket.on('listOnlineHistory', () => {
       listOnlineHistoryHandler(socket);
+    });
+    socket.on('pingLatency', (cb: (() => void) | undefined) => {
+      pingLatencyHandler(socket, cb);
     });
     socket.on('joinOnlineRoom', (payload: { roomId: string }) => {
       joinOnlineRoomHandler(socket, payload);
