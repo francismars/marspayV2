@@ -2,3 +2,4 @@ node_modules
 dist
 .env
 public/games.json
+data/online_archive/

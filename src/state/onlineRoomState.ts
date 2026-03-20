@@ -16,6 +16,7 @@ import {
   startOnlineCountdown,
   stepOnlineGame,
 } from '../game/onlineEngine';
+import { appendOnlineRoomArchive, getOnlinePostGameFromArchive, loadReplayFromArchiveSync } from './onlineRoomArchive';
 
 const PIN_TTL_MS = 2 * 60 * 1000;
 const ROOM_IDLE_TTL_MS = 20 * 60 * 1000;
@@ -175,34 +176,39 @@ export function createOnlineRoom(params: {
   return room;
 }
 
+function roomToFinishedResult(room: OnlineRoom): NonNullable<OnlineRoomListItem['result']> {
+  return {
+    winnerName:
+      room.postGame.winnerName ||
+      room.snapshot.state.winnerName ||
+      room.snapshot.state.p1Name ||
+      'Winner',
+    p1Name: room.snapshot.state.p1Name ?? 'Player 1',
+    p2Name: room.snapshot.state.p2Name ?? 'Player 2',
+    p1Score: room.snapshot.state.score?.[0] ?? 0,
+    p2Score: room.snapshot.state.score?.[1] ?? 0,
+    netPrize: Math.max(
+      0,
+      Math.floor((room.postGame.totalPrize ?? room.snapshot.state.totalPoints ?? 0) * ONLINE_PAYOUT_MULTIPLIER)
+    ),
+  };
+}
+
 export function listOnlineRooms(): OnlineRoomListItem[] {
   return [...roomById.values()].map((room) => ({
     roomId: room.roomId,
     roomCode: room.roomCode,
     buyin: room.buyin,
     createdAt: room.createdAt,
+    finishedAt:
+      room.phase === 'finished'
+        ? room.postGame.settledAt ?? room.updatedAt
+        : undefined,
     phase: room.phase,
     playersPaid: [...room.seats.values()].filter((seat) => seat.status === 'paid').length,
     seatsTotal: 2,
     spectators: room.spectators.size,
-    result:
-      room.phase === 'finished'
-        ? {
-            winnerName:
-              room.postGame.winnerName ||
-              room.snapshot.state.winnerName ||
-              room.snapshot.state.p1Name ||
-              'Winner',
-            p1Name: room.snapshot.state.p1Name ?? 'Player 1',
-            p2Name: room.snapshot.state.p2Name ?? 'Player 2',
-            p1Score: room.snapshot.state.score?.[0] ?? 0,
-            p2Score: room.snapshot.state.score?.[1] ?? 0,
-            netPrize: Math.max(
-              0,
-              Math.floor((room.postGame.totalPrize ?? room.snapshot.state.totalPoints ?? 0) * ONLINE_PAYOUT_MULTIPLIER)
-            ),
-          }
-        : undefined,
+    result: room.phase === 'finished' ? roomToFinishedResult(room) : undefined,
     replay:
       room.phase === 'finished'
         ? {
@@ -298,6 +304,18 @@ export function deleteRoom(roomId: string) {
   const room = roomById.get(roomId);
   if (!room) {
     return;
+  }
+  if (room.phase === 'finished') {
+    void appendOnlineRoomArchive({
+      version: 1,
+      roomId: room.roomId,
+      finishedAt: room.postGame.settledAt ?? Date.now(),
+      serializedRoom: serializeRoom(room) as Record<string, unknown>,
+      replay: {
+        tickMs: room.replay.tickMs,
+        frames: room.replay.frames,
+      },
+    });
   }
   for (const sessionID of room.members.keys()) {
     roomIdBySession.delete(sessionID);
@@ -650,14 +668,14 @@ export function stepRoomSnapshot(roomId: string) {
 
 export function getOnlineReplay(roomId: string) {
   const room = roomById.get(roomId);
-  if (!room || room.replay.frames.length === 0) {
-    return;
+  if (room && room.replay.frames.length > 0) {
+    return {
+      roomId: room.roomId,
+      tickMs: room.replay.tickMs,
+      frames: room.replay.frames,
+    };
   }
-  return {
-    roomId: room.roomId,
-    tickMs: room.replay.tickMs,
-    frames: room.replay.frames,
-  };
+  return loadReplayFromArchiveSync(roomId);
 }
 
 export function serializeRoom(room: OnlineRoom) {
@@ -666,12 +684,18 @@ export function serializeRoom(room: OnlineRoom) {
     roomCode: room.roomCode,
     hostSessionID: room.hostSessionID,
     buyin: room.buyin,
+    createdAt: room.createdAt,
+    finishedAt:
+      room.phase === 'finished'
+        ? room.postGame.settledAt ?? room.updatedAt
+        : undefined,
     phase: room.phase,
     kind1EventId: room.kind1EventId,
     nostrMeta: room.nostrMeta,
     seats: Object.fromEntries(room.seats),
     spectators: [...room.spectators],
     snapshot: room.snapshot,
+    result: room.phase === 'finished' ? roomToFinishedResult(room) : undefined,
     replay: {
       available: room.replay.frames.length > 0,
       frameCount: room.replay.frames.length,
@@ -702,39 +726,39 @@ export function serializeRoom(room: OnlineRoom) {
 
 export function getOnlinePostGame(roomId: string) {
   const room = roomById.get(roomId);
-  if (!room || room.phase !== 'finished') {
-    return;
+  if (room && room.phase === 'finished') {
+    ensurePostGameState(room);
+    return {
+      roomId: room.roomId,
+      phase: room.phase,
+      p1Name: room.seats.get(PlayerRole.Player1)?.name ?? 'Player 1',
+      p2Name: room.seats.get(PlayerRole.Player2)?.name ?? 'Player 2',
+      p1Picture: room.seats.get(PlayerRole.Player1)?.picture ?? room.postGame.p1Picture,
+      p2Picture: room.seats.get(PlayerRole.Player2)?.picture ?? room.postGame.p2Picture,
+      p1Points: room.snapshot.state.score[0],
+      p2Points: room.snapshot.state.score[1],
+      winnerRole: room.postGame.winnerRole,
+      winnerSessionID: room.postGame.winnerSessionID,
+      winnerName: room.postGame.winnerName,
+      winnerPicture: room.postGame.winnerPicture,
+      winnerPoints: room.postGame.winnerPoints,
+      totalPrize: room.postGame.totalPrize,
+      lnurlw: room.postGame.lnurlw,
+      payoutMethod: room.postGame.payoutMethod,
+      payoutTarget: room.postGame.payoutTarget,
+      rematchRequested: room.postGame.rematchRequested,
+      rematchRequiredAmount: room.postGame.rematchRequiredAmount,
+      rematchEventId: room.postGame.rematchEventId,
+      rematchNote1: room.postGame.rematchNote1,
+      rematchWaitingForSessionID: room.postGame.rematchWaitingForSessionID,
+      winnerLnAddress:
+        room.postGame.winnerRole != null
+          ? room.seats.get(room.postGame.winnerRole)?.lnAddress
+          : undefined,
+      doubleOrNothingVotes: room.postGame.doubleOrNothingVotes.size,
+    };
   }
-  ensurePostGameState(room);
-  return {
-    roomId: room.roomId,
-    phase: room.phase,
-    p1Name: room.seats.get(PlayerRole.Player1)?.name ?? 'Player 1',
-    p2Name: room.seats.get(PlayerRole.Player2)?.name ?? 'Player 2',
-    p1Picture: room.seats.get(PlayerRole.Player1)?.picture ?? room.postGame.p1Picture,
-    p2Picture: room.seats.get(PlayerRole.Player2)?.picture ?? room.postGame.p2Picture,
-    p1Points: room.snapshot.state.score[0],
-    p2Points: room.snapshot.state.score[1],
-    winnerRole: room.postGame.winnerRole,
-    winnerSessionID: room.postGame.winnerSessionID,
-    winnerName: room.postGame.winnerName,
-    winnerPicture: room.postGame.winnerPicture,
-    winnerPoints: room.postGame.winnerPoints,
-    totalPrize: room.postGame.totalPrize,
-    lnurlw: room.postGame.lnurlw,
-    payoutMethod: room.postGame.payoutMethod,
-    payoutTarget: room.postGame.payoutTarget,
-    rematchRequested: room.postGame.rematchRequested,
-    rematchRequiredAmount: room.postGame.rematchRequiredAmount,
-    rematchEventId: room.postGame.rematchEventId,
-    rematchNote1: room.postGame.rematchNote1,
-    rematchWaitingForSessionID: room.postGame.rematchWaitingForSessionID,
-    winnerLnAddress:
-      room.postGame.winnerRole != null
-        ? room.seats.get(room.postGame.winnerRole)?.lnAddress
-        : undefined,
-    doubleOrNothingVotes: room.postGame.doubleOrNothingVotes.size,
-  };
+  return getOnlinePostGameFromArchive(roomId);
 }
 
 export function setOnlinePostGameLnurlw(roomId: string, lnurlw: string) {
