@@ -87,10 +87,14 @@ export interface OnlineRoomListItem {
   roomCode: string;
   buyin: number;
   createdAt: number;
+  /** Wall time when the match ended (settled or last update), for sorting history. */
+  finishedAt?: number;
   phase: OnlineRoomPhase;
   playersPaid: number;
   seatsTotal: number;
   spectators: number;
+  /** True when loaded from `data/online_archive/` (not live memory). */
+  archived?: boolean;
   result?: {
     winnerName: string;
     p1Name: string;

@@ -9,9 +9,11 @@ import getInvoiceFromCallback from '../calls/LNAddress/getInvoiceFromCallback';
 import payInvoice from '../calls/LNBits/payInvoice';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
 import { GameMode, PlayerRole } from '../types/game';
+import type { OnlineRoomListItem } from '../types/online';
 import { io } from '../server';
 import { getKind1sfromSessionID } from '../state/nostrState';
 import { setIDToLNURLW, setLNURLWToID } from '../state/lnurlwState';
+import { listArchivedOnlineRoomsSync, loadSerializedRoomFromArchiveSync } from '../state/onlineRoomArchive';
 import { dateNow } from '../utils/time';
 import {
   areSeatsFilled,
@@ -166,6 +168,26 @@ export function listOnlineRoomsHandler(socket: Socket) {
   });
 }
 
+export function listOnlineArchivedRoomsHandler(socket: Socket) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  logOnline(sessionID, `listOnlineArchivedRooms requested`);
+  const rooms: OnlineRoomListItem[] = listArchivedOnlineRoomsSync().map((r) => ({
+    roomId: r.roomId,
+    roomCode: r.roomCode,
+    buyin: r.buyin,
+    createdAt: r.createdAt,
+    finishedAt: r.finishedAt,
+    phase: 'finished',
+    playersPaid: r.playersPaid,
+    seatsTotal: r.seatsTotal,
+    spectators: r.spectators,
+    archived: true,
+    replay: r.replay,
+    result: r.result,
+  }));
+  socket.emit('resListOnlineArchivedRooms', { rooms });
+}
+
 export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string }) {
   const sessionID = socket.data.sessionID as string | undefined;
   if (!sessionID) {
@@ -232,13 +254,19 @@ export function spectateOnlineRoomHandler(socket: Socket, payload: { roomId: str
 export function getOnlineRoomStateHandler(socket: Socket, payload: { roomId: string }) {
   const sessionID = socket.data.sessionID as string | undefined;
   const room = getRoomById(payload.roomId);
-  if (!room) {
-    logOnline(sessionID, `getOnlineRoomState failed roomId=${payload.roomId} reason=room_not_found`);
-    socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
+  if (room) {
+    logOnline(sessionID, `getOnlineRoomState roomId=${room.roomId} phase=${room.phase}`);
+    socket.emit('onlineRoomUpdated', serializeRoom(room));
     return;
   }
-  logOnline(sessionID, `getOnlineRoomState roomId=${room.roomId} phase=${room.phase}`);
-  socket.emit('onlineRoomUpdated', serializeRoom(room));
+  const archived = loadSerializedRoomFromArchiveSync(payload.roomId);
+  if (archived) {
+    logOnline(sessionID, `getOnlineRoomState from archive roomId=${payload.roomId}`);
+    socket.emit('onlineRoomUpdated', archived);
+    return;
+  }
+  logOnline(sessionID, `getOnlineRoomState failed roomId=${payload.roomId} reason=room_not_found`);
+  socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
 }
 
 export function leaveOnlineRoomHandler(socket: Socket, payload?: { roomId?: string }) {
@@ -365,11 +393,14 @@ export function getOnlinePostGameHandler(socket: Socket, payload: { roomId: stri
   if (!sessionID) {
     return;
   }
-  // Refresh room membership/socket mapping on postgame entry so seat ownership
-  // stays associated through reconnects and route transitions.
-  joinRoom(payload.roomId, sessionID, socket.id);
-  socket.join(payload.roomId);
-  socket.data.currentOnlineRoomId = payload.roomId;
+  const room = getRoomById(payload.roomId);
+  if (room) {
+    // Refresh room membership/socket mapping on postgame entry so seat ownership
+    // stays associated through reconnects and route transitions.
+    joinRoom(payload.roomId, sessionID, socket.id);
+    socket.join(payload.roomId);
+    socket.data.currentOnlineRoomId = payload.roomId;
+  }
   const info = getOnlinePostGame(payload.roomId);
   if (!info) {
     logOnline(sessionID, `getOnlinePostGame failed roomId=${payload.roomId}`);
