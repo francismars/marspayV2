@@ -20,18 +20,23 @@ export default function middleware(
   };
   const validID = sanitiseID(sessionID);
   if (sessionID && validID) {
-    console.error(
-      `${dateNow()} [${sessionID}] Existing sessionID sent by client.`
+    // Always re-bind this socket to the client's sessionID when the format is valid.
+    // Previously we only called setIDToSocket when an entry already existed; after a
+    // process restart (or any empty IDToSocket map) the client still had a valid
+    // session from localStorage while the server created a *new* session — LNURL/game
+    // stayed on the old id and webhooks could not emit (no socket row for that id).
+    const hadMapping = Boolean(getSocketFromID(sessionID));
+    console.log(
+      `${dateNow()} [${sessionID}] Client sessionID accepted (${
+        hadMapping ? 'reconnect' : 'restored map entry'
+      }).`
     );
-    const socketID = getSocketFromID(sessionID);
-    if (socketID) {
-      socket.data.sessionID = sessionID;
-      setIDToSocket(sessionID, session);
-      socket.emit('session', {
-        sessionID,
-      });
-      return next();
-    }
+    socket.data.sessionID = sessionID;
+    setIDToSocket(sessionID, session);
+    socket.emit('session', {
+      sessionID,
+    });
+    return next();
   }
   const emoji = ALLOWEDEMOJIS[Math.floor(Math.random() * ALLOWEDEMOJIS.length)];
   const newID = customAlphabet(nolookalikes, SESSIONIDLENGHT);
