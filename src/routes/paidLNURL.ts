@@ -78,6 +78,10 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
   if (LNURLPs) {
     const lnurlp = LNURLPs.find((lnurlp) => lnurlp.id === reqLNURLP);
     if (!lnurlp) {
+      console.error(
+        `${dateNow()} [${sessionID}] LNURLp ${reqLNURLP} not found for session.`
+      );
+      res.status(404).send('LNURLp not found for session.');
       return;
     }
     const playerRole = decidePlayerRole(lnurlp, sessionID);
@@ -105,13 +109,16 @@ router.post('/', ipFilter, (req: Request, res: Response) => {
       players: newPlayerInfo,
     };
     setGameInfoByID(sessionID, gameInfo);
-    const socketID = getSocketFromID(sessionID)?.socketID;
-    if (!socketID) {
-      console.error("Couldn't find SocketID to send notification of payment");
-      return;
-    }
+    // Splits must run even when no socket is connected (UI missed update otherwise).
     paySplits(sessionID, amount, lnurlp.hostLNAddress);
-    io.to(socketID!).emit('updatePayments', serializeGameInfoFromID(sessionID));
+    const socketID = getSocketFromID(sessionID)?.socketID;
+    if (socketID) {
+      io.to(socketID).emit('updatePayments', serializeGameInfoFromID(sessionID));
+    } else {
+      console.error(
+        `${dateNow()} [${sessionID}] Couldn't find SocketID to send notification of payment`
+      );
+    }
     res.status(200).send('OK');
   }
 });
