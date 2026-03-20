@@ -138,7 +138,8 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 
 ### Persistence (replay + history)
 
-- **Per match:** when the sim ends (`playing` → **`postgame`**), the server writes **`data/online_archive/<roomId>-r<matchRound>.json`** (serialized room + full replay for that round) and appends an index line (`archiveKind: 'match'`, `phase: 'postgame'`).
+- **Per match:** when the sim ends (`playing` → **`postgame`**), the server writes **`data/online_archive/<roomId>-r<matchRound>.json`** (serialized room + replay for that round) and appends an index line (`archiveKind: 'match'`, `phase: 'postgame'`).
+- **Replay on disk (`compact-v2`):** new archives store **`replay: { format: 'compact-v2', tickMs, gzipBase64, frameCount }`** — gzip’d JSON with a one-time header (grid, names, meta, initial scores) plus thin per-frame rows (snakes as head + flat body coords, direction indices, flags, scores, etc.). **Legacy** archives with **`replay.frames: OnlineRoomSnapshot[]`** are still read. **`getOnlineReplay`** always returns **expanded** full snapshots (same shape as live play).
 - **Session (after payout):** when a **`finished`** room is **deleted** from memory (~2 min after `postGame.settledAt`, etc.), **`data/online_archive/<roomId>-session.json`** is written (`archiveKind: 'session'`, `phase: 'finished'`). Legacy **`roomId.json`** from older builds is still read for fallback.
 - **`getOnlineReplay`**, **`getOnlineRoomState`**, **`getOnlinePostGame`** fall back to disk when the room is not in RAM (optional **`matchRound`** for a specific stored match).
 - **`listOnlineArchivedRooms`** merges index lines (deduped by **`archiveId`**, capped ~**400** rows). Add retention/rotation later if disk grows.

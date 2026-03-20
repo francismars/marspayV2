@@ -7,6 +7,11 @@ import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { PlayerRole } from '../types/game';
 import type { OnlineRoomSnapshot } from '../types/online';
+import {
+  expandReplayPayload,
+  replayFrameCount,
+  type PackedReplay,
+} from './onlineReplayCompact';
 
 const INDEX_FILE = 'index.jsonl';
 
@@ -22,10 +27,10 @@ export interface OnlineRoomArchiveFile {
   archiveId: string;
   finishedAt: number;
   serializedRoom: Record<string, unknown>;
-  replay: {
-    tickMs: number;
-    frames: OnlineRoomSnapshot[];
-  };
+  /** Legacy full JSON frames, or compact-v2 gzip blob (see `onlineReplayCompact.ts`). */
+  replay:
+    | { tickMs: number; frames: OnlineRoomSnapshot[] }
+    | PackedReplay;
 }
 
 export interface OnlineArchivedListItem {
@@ -114,11 +119,11 @@ export async function appendOnlineMatchArchive(payload: OnlineRoomArchiveFile): 
       replay: sr.replay
         ? {
             available: (sr.replay.frameCount ?? 0) > 0,
-            frameCount: sr.replay.frameCount ?? payload.replay.frames.length,
+            frameCount: sr.replay.frameCount ?? replayFrameCount(payload.replay),
             tickMs: sr.replay.tickMs ?? payload.replay.tickMs,
             durationMs:
               sr.replay.durationMs ??
-              payload.replay.frames.length * payload.replay.tickMs,
+              replayFrameCount(payload.replay) * payload.replay.tickMs,
           }
         : undefined,
       result: sr.result,
@@ -126,7 +131,7 @@ export async function appendOnlineMatchArchive(payload: OnlineRoomArchiveFile): 
     const indexPath = path.join(archiveDir(), INDEX_FILE);
     await fsPromises.appendFile(indexPath, JSON.stringify(indexLine) + '\n', 'utf8');
     console.log(
-      `[online_archive] match ${payload.archiveId} (${payload.replay.frames.length} frames)`
+      `[online_archive] match ${payload.archiveId} (${replayFrameCount(payload.replay)} frames)`
     );
   } catch (e) {
     console.error('[online_archive] append match failed', e);
@@ -141,7 +146,7 @@ export async function appendOnlineRoomArchive(payload: {
   archiveId: string;
   finishedAt: number;
   serializedRoom: Record<string, unknown>;
-  replay: { tickMs: number; frames: OnlineRoomSnapshot[] };
+  replay: PackedReplay;
 }): Promise<void> {
   try {
     await ensureDir();
@@ -180,18 +185,24 @@ export async function appendOnlineRoomArchive(payload: {
       replay: sr.replay
         ? {
             available: (sr.replay.frameCount ?? 0) > 0,
-            frameCount: sr.replay.frameCount ?? payload.replay.frames.length,
+            frameCount: sr.replay.frameCount ?? replayFrameCount(payload.replay),
             tickMs: sr.replay.tickMs ?? payload.replay.tickMs,
             durationMs:
               sr.replay.durationMs ??
-              payload.replay.frames.length * payload.replay.tickMs,
+              replayFrameCount(payload.replay) * payload.replay.tickMs,
           }
         : undefined,
       result: sr.result,
     };
     const indexPath = path.join(archiveDir(), INDEX_FILE);
-    await fsPromises.appendFile(indexPath, JSON.stringify(indexLine) + '\n', 'utf8');
-    console.log(`[online_archive] session ${payload.archiveId} (${payload.replay.frames.length} frames)`);
+    await fsPromises.appendFile(
+      indexPath,
+      JSON.stringify(indexLine) + '\n',
+      'utf8'
+    );
+    console.log(
+      `[online_archive] session ${payload.archiveId} (${replayFrameCount(payload.replay)} frames)`
+    );
   } catch (e) {
     console.error('[online_archive] append session failed', e);
   }
@@ -204,7 +215,7 @@ function readArchiveJsonFile(filePath: string): OnlineRoomArchiveFile | null {
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(raw) as OnlineRoomArchiveFile;
-    if (parsed.version !== 1 || !parsed.replay?.frames) {
+    if (parsed.version !== 1 || !parsed.replay || expandReplayPayload(parsed.replay) == null) {
       return null;
     }
     return parsed;
@@ -229,40 +240,43 @@ function readArchiveFileAny(filePath: string): OnlineRoomArchiveFile | null {
   }
 }
 
+function loadReplayFromArchiveRecord(
+  m: OnlineRoomArchiveFile | null
+): { roomId: string; tickMs: number; frames: OnlineRoomSnapshot[]; matchRound?: number } | undefined {
+  if (!m?.replay) {
+    return undefined;
+  }
+  const expanded = expandReplayPayload(m.replay);
+  if (!expanded?.frames.length) {
+    return undefined;
+  }
+  return {
+    roomId: m.roomId,
+    tickMs: expanded.tickMs,
+    frames: expanded.frames,
+    matchRound: m.matchRound,
+  };
+}
+
 /** Load replay: live memory preferred; else `roomId-rN` match file; else session/legacy. */
 export function loadReplayFromArchiveSync(
   roomId: string,
   matchRound?: number
 ): { roomId: string; tickMs: number; frames: OnlineRoomSnapshot[]; matchRound?: number } | undefined {
   if (matchRound != null) {
-    const m = readArchiveJsonFile(path.join(archiveDir(), matchFileName(roomId, matchRound)));
-    if (m?.replay?.frames?.length) {
-      return {
-        roomId: m.roomId,
-        tickMs: m.replay.tickMs,
-        frames: m.replay.frames,
-        matchRound: m.matchRound,
-      };
-    }
-    return undefined;
+    return loadReplayFromArchiveRecord(
+      readArchiveJsonFile(path.join(archiveDir(), matchFileName(roomId, matchRound)))
+    );
   }
-  const session = readArchiveJsonFile(path.join(archiveDir(), sessionFileName(roomId)));
-  if (session?.replay?.frames?.length) {
-    return {
-      roomId: session.roomId,
-      tickMs: session.replay.tickMs,
-      frames: session.replay.frames,
-    };
+  const fromSession = loadReplayFromArchiveRecord(
+    readArchiveJsonFile(path.join(archiveDir(), sessionFileName(roomId)))
+  );
+  if (fromSession) {
+    return fromSession;
   }
-  const legacy = readArchiveJsonFile(path.join(archiveDir(), legacyRoomFileName(roomId)));
-  if (legacy?.replay?.frames?.length) {
-    return {
-      roomId: legacy.roomId,
-      tickMs: legacy.replay.tickMs,
-      frames: legacy.replay.frames,
-    };
-  }
-  return undefined;
+  return loadReplayFromArchiveRecord(
+    readArchiveJsonFile(path.join(archiveDir(), legacyRoomFileName(roomId)))
+  );
 }
 
 function tryLoadSerializedFromFile(filePath: string): Record<string, unknown> | undefined {
