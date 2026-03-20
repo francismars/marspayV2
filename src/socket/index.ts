@@ -189,7 +189,7 @@ export default function registerSocketHandlers(io: Server) {
     socket.on('getOnlinePostGame', (payload: { roomId: string }) => {
       getOnlinePostGameHandler(socket, payload);
     });
-    socket.on('getOnlineReplay', (payload: { roomId: string }) => {
+    socket.on('getOnlineReplay', (payload: { roomId: string; matchRound?: number }) => {
       getOnlineReplayHandler(socket, payload);
     });
     socket.on(
