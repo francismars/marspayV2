@@ -157,7 +157,7 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `resListOnlineArchivedRooms` | `{ rooms: OnlineRoomListItem[] }` | After `listOnlineArchivedRooms`; items include `archived: true`, `finishedAt`, `result`, `replay` meta |
 | `resOnlineHistory` | `{ rooms: OnlineRoomListItem[] }` | After `listOnlineHistory` or broadcast with live list; merged archive + live-finished |
 | `onlineRoomUpdated` | `OnlineRoomState` | Room membership, seats, phase, postgame fields, etc. |
-| `onlineRoomSnapshot` | `{ roomId, snapshot: OnlineRoomSnapshot }` | Each **100 ms** tick while `playing`. Payload is **wrapped**: use **`data.snapshot`** (not `data` alone). **`snapshot.state`** holds authoritative sim state (snakes, coinbases, scores, etc.); **`snapshot.hud`** holds derived/display-friendly values (bars, labels). |
+| `onlineRoomSnapshot` | `{ roomId, snapshot: OnlineRoomSnapshot }` | Each **100 ms** tick while `playing`. Payload is **wrapped**: use **`data.snapshot`** (not `data` alone). **`snapshot.state`** holds authoritative sim state (snakes, coinbases, scores, etc.); **`snapshot.hud`** holds derived/display-friendly values (bars, labels). **Wire pruning:** live ticks omit duplicate **`currentCapture*`** (use **`hud.capture*`**), slim **`meta`** to **`modeLabel`**, and cap **`pointChanges`**; clients should **normalize** before render (see `chain-duel-react` `normalizeOnlineRoomSnapshot`). |
 | `onlineSeatAssigned` | `{ roomId, playerRole, sessionId }` | After successful zap + seat assignment |
 | `onlinePinInvalid` | `{ reason: string }` | Many failures (see table below) |
 | `resOnlinePostGameInfo` | See `socket.ts` | Successful `getOnlinePostGame` |

@@ -18,6 +18,7 @@ import {
   listArchivedOnlineRoomsSync,
   loadSerializedRoomFromArchiveSync,
 } from '../state/onlineRoomArchive';
+import { pruneOnlineSnapshotForWire } from '../state/onlineSnapshotWire';
 import { dateNow } from '../utils/time';
 import {
   areSeatsFilled,
@@ -310,6 +311,13 @@ export function cancelOnlineRoomHandler(socket: Socket, payload: { roomId: strin
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
   deleteRoom(room.roomId);
   broadcastOnlineRoomLists();
+}
+
+/** RTT probe: client `emit('pingLatency', () => { ... })` — ack runs on server immediately. */
+export function pingLatencyHandler(_socket: Socket, cb?: () => void) {
+  if (typeof cb === 'function') {
+    cb();
+  }
 }
 
 export function roomInputHandler(
@@ -649,7 +657,7 @@ export function startOnlineLoop() {
       if (live) {
         io.to(room.roomId).emit('onlineRoomSnapshot', {
           roomId: live.roomId,
-          snapshot: live.snapshot,
+          snapshot: pruneOnlineSnapshotForWire(live.snapshot),
         });
         if (live.phase !== room.phase) {
           const roomEmojis = live.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
