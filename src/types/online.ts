@@ -1,7 +1,8 @@
 import { PlayerRole } from './game';
 import { OnlineAuthoritativeState, OnlineHudState } from '../game/onlineEngine';
 
-export type OnlineRoomPhase = 'lobby' | 'playing' | 'finished' | 'cancelled';
+/** `postgame` = match sim ended (DoN / rematch / payout). `finished` = winner closed round (payout chosen). */
+export type OnlineRoomPhase = 'lobby' | 'playing' | 'postgame' | 'finished' | 'cancelled';
 
 export interface OnlineRoomNostrMeta {
   note1: string;
@@ -47,6 +48,8 @@ export interface OnlineRoom {
   createdAt: number;
   updatedAt: number;
   buyin: number;
+  /** Incremented each time lobby → playing (match 1, 2, … for DoN rematches). */
+  matchRound: number;
   kind1EventId?: string;
   phase: OnlineRoomPhase;
   nostrMeta?: OnlineRoomNostrMeta;
@@ -95,6 +98,10 @@ export interface OnlineRoomListItem {
   spectators: number;
   /** True when loaded from `data/online_archive/` (not live memory). */
   archived?: boolean;
+  /** Which match in a multi-game room (double-or-nothing); from per-match archive rows. */
+  matchRound?: number;
+  /** From archive index: `match` = one sim; `session` = room after winner closed payout. */
+  archiveKind?: 'match' | 'session';
   result?: {
     winnerName: string;
     p1Name: string;

@@ -177,11 +177,13 @@ export function listOnlineArchivedRoomsHandler(socket: Socket) {
     buyin: r.buyin,
     createdAt: r.createdAt,
     finishedAt: r.finishedAt,
-    phase: 'finished',
+    phase: r.phase ?? 'finished',
     playersPaid: r.playersPaid,
     seatsTotal: r.seatsTotal,
     spectators: r.spectators,
     archived: true,
+    matchRound: r.matchRound,
+    archiveKind: r.archiveKind ?? 'session',
     replay: r.replay,
     result: r.result,
   }));
@@ -414,12 +416,12 @@ export function getOnlinePostGameHandler(socket: Socket, payload: { roomId: stri
   socket.emit('resOnlinePostGameInfo', info);
 }
 
-export function getOnlineReplayHandler(socket: Socket, payload: { roomId: string }) {
+export function getOnlineReplayHandler(socket: Socket, payload: { roomId: string; matchRound?: number }) {
   const sessionID = socket.data.sessionID as string | undefined;
   if (!sessionID) {
     return;
   }
-  const replay = getOnlineReplay(payload.roomId);
+  const replay = getOnlineReplay(payload.roomId, payload.matchRound);
   if (!replay) {
     logOnline(sessionID, `getOnlineReplay unavailable roomId=${payload.roomId}`);
     socket.emit('onlinePinInvalid', { reason: 'replay_unavailable' });
@@ -642,7 +644,7 @@ export function startOnlineLoop() {
         });
         if (live.phase !== room.phase) {
           const roomEmojis = live.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
-          if (room.phase === 'playing' && live.phase === 'finished') {
+          if (room.phase === 'playing' && live.phase === 'postgame') {
             const winnerName = live.postGame.winnerName || live.snapshot.state.winnerName || 'Unknown winner';
             const winnerSeat = [...live.seats.values()].find(
               (seat) => seat.status === 'paid' && seat.sessionID === live.postGame.winnerSessionID
