@@ -48,7 +48,7 @@ function guardSocketAsync<T extends unknown[]>(
 
 export default function registerSocketHandlers(io: Server) {
   io.use((socket: Socket, next) => {
-    middleware(io, socket, next);
+    void middleware(io, socket, next).catch(next);
   });
 
   io.on('connection', (socket: Socket) => {

@@ -1,7 +1,7 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { getKind1FromID, getSessionIDfromKind1ID } from '../../state/nostrState';
 import { dateNow } from '../../utils/time';
-import { getSocketFromID } from '../../state/sessionState';
+import { sessionSocketRoomName } from '../../state/sessionState';
 import { decode } from 'light-bolt11-decoder';
 import {
   getGameInfoFromID,
@@ -62,14 +62,10 @@ async function listenToSubscriptions(event: NDKEvent) {
     return;
   }
   console.log(`${dateNow()} [${sessionID}] Event ${eventID[1]} was Zapped.`);
+  const hostSessionRoom = sessionSocketRoomName(sessionID);
   const eventdescription = event.tags.find((tag) => tag[0] == 'description');
   if (!eventdescription || !eventdescription[1]) {
     console.log('Event description not found');
-    return;
-  }
-  const socketID = getSocketFromID(sessionID)?.socketID;
-  if (!socketID) {
-    console.error("Couldn't find SocketID to send notification of payment");
     return;
   }
   const descriptionParsed = JSON.parse(eventdescription[1]);
@@ -142,7 +138,7 @@ async function listenToSubscriptions(event: NDKEvent) {
         console.log(
           `${dateNow()} [${sessionID}] [ONLINE] rematch zap rejected roomId=${room.roomId} reason=${rematch.reason}`
         );
-        io.to(socketID).emit('onlinePinInvalid', { reason: rematch.reason });
+        io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: rematch.reason });
         return;
       }
       console.log(
@@ -158,13 +154,13 @@ async function listenToSubscriptions(event: NDKEvent) {
       console.log(
         `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=amount_too_low min=${minBuyIn} got=${zapAmount}`
       );
-      io.to(socketID).emit('onlinePinInvalid', { reason: 'amount_too_low' });
+      io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: 'amount_too_low' });
       return;
     }
     const pin = extractPinFromComment(finalContent);
     if (!pin) {
       console.log(`${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=pin_missing`);
-      io.to(socketID).emit('onlinePinInvalid', { reason: 'pin_missing' });
+      io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: 'pin_missing' });
       return;
     }
     console.log(`${dateNow()} [${sessionID}] [ONLINE] zap pin parsed roomId=${room.roomId} pin=${pin}`);
@@ -173,7 +169,7 @@ async function listenToSubscriptions(event: NDKEvent) {
       console.log(
         `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=${consumed.reason}`
       );
-      io.to(socketID).emit('onlinePinInvalid', { reason: consumed.reason });
+      io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: consumed.reason });
       return;
     }
     const seatResult = seatPaidPlayer({
@@ -190,7 +186,7 @@ async function listenToSubscriptions(event: NDKEvent) {
       console.log(
         `${dateNow()} [${sessionID}] [ONLINE] seat assignment failed roomId=${room.roomId} reason=${seatResult.reason}`
       );
-      io.to(consumed.record.socketID).emit('onlinePinInvalid', {
+      io.to(sessionSocketRoomName(consumed.record.sessionID)).emit('onlinePinInvalid', {
         reason: seatResult.reason,
       });
       return;
@@ -228,7 +224,7 @@ async function listenToSubscriptions(event: NDKEvent) {
       username: zapperName,
       profile: avatar,
     };
-    io.to(socketID).emit('zapReceived', resZap);
+    io.to(hostSessionRoom).emit('zapReceived', resZap);
     return;
   }
   const currentPlayersSize = getGameInfoFromID(sessionID)?.players?.size ?? 0;
@@ -295,9 +291,9 @@ async function listenToSubscriptions(event: NDKEvent) {
   }
   const serialized = serializeGameInfoFromID(sessionID);
   if (modeToPersist === GameMode.TOURNAMENTNOSTR) {
-    io.to(socketID).emit('updatePaymentsNostrTournament', serialized);
+    io.to(hostSessionRoom).emit('updatePaymentsNostrTournament', serialized);
   }
-  io.to(socketID).emit('updatePayments', serialized);
+  io.to(hostSessionRoom).emit('updatePayments', serialized);
 }
 
 function normalizeLnAddress(value: unknown): string | undefined {

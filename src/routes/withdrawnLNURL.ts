@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getIDFromLNURLW, getLNURLWFromID } from '../state/lnurlwState';
-import { getSocketFromID } from '../state/sessionState';
+import { sessionSocketRoomName } from '../state/sessionState';
 import { dateNow } from '../utils/time';
 import { io } from '../server';
 import { handleEndOfSession } from '../state/cleanupState';
@@ -23,14 +23,8 @@ router.post('/', (req: Request, res: Response) => {
     res.status(404).send('Session ID not found.');
     return;
   }
-  const socketID = getSocketFromID(sessionID)?.socketID;
-  if (!socketID) {
-    console.error(`${dateNow()} [${sessionID}] Socket ID not found.`);
-    res.status(404).send('Socket ID not found.');
-    return;
-  }
   console.log(`${dateNow()} [${sessionID}] Claimed LNURLw ${lnurlw}.`);
-  io.to(socketID).emit('prizeWithdrawn');
+  io.to(sessionSocketRoomName(sessionID)).emit('prizeWithdrawn');
   markOnlineRoomSettledBySession(sessionID);
   res.send({ body: 'Withdrawn' });
   const gameInfos = getGameInfoFromID(sessionID);
