@@ -675,8 +675,44 @@ export function updateRoomInput(
   if (!room) {
     return;
   }
-  room.inputBySession.set(sessionID, input);
+  room.inputBySession.set(sessionID, {
+    up: !!input.up,
+    down: !!input.down,
+    left: !!input.left,
+    right: !!input.right,
+  });
   room.updatedAt = Date.now();
+  applyOnlineInputsToState(room);
+}
+
+/**
+ * Apply latest held keys to dirWanted immediately (called on every roomInput and each sim tick).
+ * Physics still advances at ONLINE_TICK_MS; this avoids missed taps between 100ms steps.
+ */
+export function applyOnlineInputsToState(room: OnlineRoom): void {
+  if (room.phase !== 'playing') {
+    return;
+  }
+  const p1 = room.seats.get(PlayerRole.Player1);
+  const p2 = room.seats.get(PlayerRole.Player2);
+  if (!p1?.sessionID || !p2?.sessionID) {
+    return;
+  }
+
+  const p1Input = room.inputBySession.get(p1.sessionID) ?? {};
+  const p2Input = room.inputBySession.get(p2.sessionID) ?? {};
+  const state = room.snapshot.state;
+  if (!state.gameStarted && !state.countdownStart) {
+    startOnlineCountdown(state);
+  }
+  if (p1Input.up) setOnlineWantedDirection(state, 'P1', 'Up');
+  if (p1Input.down) setOnlineWantedDirection(state, 'P1', 'Down');
+  if (p1Input.left) setOnlineWantedDirection(state, 'P1', 'Left');
+  if (p1Input.right) setOnlineWantedDirection(state, 'P1', 'Right');
+  if (p2Input.up) setOnlineWantedDirection(state, 'P2', 'Up');
+  if (p2Input.down) setOnlineWantedDirection(state, 'P2', 'Down');
+  if (p2Input.left) setOnlineWantedDirection(state, 'P2', 'Left');
+  if (p2Input.right) setOnlineWantedDirection(state, 'P2', 'Right');
 }
 
 export function stepRoomSnapshot(roomId: string) {
@@ -690,22 +726,8 @@ export function stepRoomSnapshot(roomId: string) {
     return;
   }
 
-  const p1Input = room.inputBySession.get(p1.sessionID) ?? {};
-  const p2Input = room.inputBySession.get(p2.sessionID) ?? {};
   const state = room.snapshot.state;
-  // Safety: if room is already in playing phase but countdown has not started,
-  // force-start countdown so clients never get stuck on "press button to start".
-  if (!state.gameStarted && !state.countdownStart) {
-    startOnlineCountdown(state);
-  }
-  if (p1Input.up) setOnlineWantedDirection(state, 'P1', 'Up');
-  if (p1Input.down) setOnlineWantedDirection(state, 'P1', 'Down');
-  if (p1Input.left) setOnlineWantedDirection(state, 'P1', 'Left');
-  if (p1Input.right) setOnlineWantedDirection(state, 'P1', 'Right');
-  if (p2Input.up) setOnlineWantedDirection(state, 'P2', 'Up');
-  if (p2Input.down) setOnlineWantedDirection(state, 'P2', 'Down');
-  if (p2Input.left) setOnlineWantedDirection(state, 'P2', 'Left');
-  if (p2Input.right) setOnlineWantedDirection(state, 'P2', 'Right');
+  applyOnlineInputsToState(room);
 
   stepOnlineGame(state);
   room.snapshot.hud = getOnlineHudState(state);
