@@ -121,7 +121,8 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `createOnlineNostrPayout` | `{ roomId: string }` | Winner only; needs `winnerLnAddress` on postgame |
 | `onlineDoubleOrNothing` | `{ roomId: string }` | Both players vote; on agreement publishes rematch Kind1 |
 | `getOnlineReplay` | `{ roomId: string; matchRound?: number }` | **`resOnlineReplay`** returns **compact-v2** (`gzipBase64` + `frameCount` + `tickMs`); client gunzips + decodes to full frames. Live room or disk **`roomId-rN`** / session; omit **`matchRound`** for latest session replay when archived |
-| `listOnlineArchivedRooms` | — | Returns persisted rows (`resListOnlineArchivedRooms`), including **per-match** and **session** entries |
+| `listOnlineArchivedRooms` | — | Raw archive index rows only (`resListOnlineArchivedRooms`) |
+| `listOnlineHistory` | — | **Preferred:** merged history (`resOnlineHistory`) — archive index **plus** `finished` rooms still in RAM; same merge rules as UI |
 
 > **No `sessionID`:** Most handlers no-op silently (no response) if `socket.data.sessionID` is missing. `createOnlineRoom` returns early without emitting if there is no session.
 
@@ -132,7 +133,7 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `lobby` | Waiting for ready / rematch paid |
 | `playing` | Sim running |
 | `postgame` | **Match sim ended** — payout, Double or Nothing, rematch Kind1, etc. |
-| `finished` | **Winner closed the round** (LNURLw created or Nostr payout chosen). Session can be deleted after `settledAt` + TTL. |
+| `finished` | **Winner closed the round** (LNURLw created or Nostr payout chosen). Room is removed from RAM **immediately** after LNURL claim (`markOnlineRoomSettledBySession`) or after **Nostr** payout success; session JSON is written on delete. |
 
 **`matchRound`** increments on each **lobby → playing** (match 1, 2, … for DoN rematches).
 
@@ -140,9 +141,9 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 
 - **Per match:** when the sim ends (`playing` → **`postgame`**), the server writes **`data/online_archive/<roomId>-r<matchRound>.json`** (serialized room + replay for that round) and appends an index line (`archiveKind: 'match'`, `phase: 'postgame'`).
 - **Replay (`compact-v2`):** archives and **`resOnlineReplay`** use **`{ format: 'compact-v2', tickMs, gzipBase64, frameCount }`** (gzip’d JSON: one-time header + thin per-frame rows). The **browser** gunzips and decodes via **`onlineReplayCodec.ts`** (shared with marspayTS). No legacy full-frame JSON.
-- **Session (after payout):** when a **`finished`** room is **deleted** from memory (~2 min after `postGame.settledAt`, etc.), **`data/online_archive/<roomId>-session.json`** is written (`archiveKind: 'session'`, `phase: 'finished'`). Legacy **`roomId.json`** from older builds is still read for fallback.
+- **Session (after payout):** on delete (right after settlement), **`data/online_archive/<roomId>-session.json`** is written (`archiveKind: 'session'`, `phase: 'finished'`). Legacy **`roomId.json`** from older builds is still read for fallback.
 - **`getOnlineReplay`**, **`getOnlineRoomState`**, **`getOnlinePostGame`** fall back to disk when the room is not in RAM (optional **`matchRound`** for a specific stored match).
-- **`listOnlineArchivedRooms`** merges index lines (deduped by **`archiveId`**, capped ~**400** rows). Add retention/rotation later if disk grows.
+- **`listArchivedOnlineRoomsSync`** reads **`index.jsonl`** (deduped by **`archiveId`**, capped ~**400** rows). **`listOnlineHistory`** merges that with **`finished`** rooms still in RAM. Add retention/rotation later if disk grows.
 
 ---
 
@@ -154,6 +155,7 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `resJoinOnlineRoom` | Same shape | Join by id/code |
 | `resListOnlineRooms` | `{ rooms: OnlineRoomListItem[] }` | After `listOnlineRooms`; also **broadcast** `io.emit` when room list changes |
 | `resListOnlineArchivedRooms` | `{ rooms: OnlineRoomListItem[] }` | After `listOnlineArchivedRooms`; items include `archived: true`, `finishedAt`, `result`, `replay` meta |
+| `resOnlineHistory` | `{ rooms: OnlineRoomListItem[] }` | After `listOnlineHistory` or broadcast with live list; merged archive + live-finished |
 | `onlineRoomUpdated` | `OnlineRoomState` | Room membership, seats, phase, postgame fields, etc. |
 | `onlineRoomSnapshot` | `{ roomId, snapshot: OnlineRoomSnapshot }` | Each **100 ms** tick while `playing`. Payload is **wrapped**: use **`data.snapshot`** (not `data` alone). **`snapshot.state`** holds authoritative sim state (snakes, coinbases, scores, etc.); **`snapshot.hud`** holds derived/display-friendly values (bars, labels). |
 | `onlineSeatAssigned` | `{ roomId, playerRole, sessionId }` | After successful zap + seat assignment |
