@@ -1,6 +1,6 @@
-import { PlayerInfoFromRole, PlayerRole } from '../types/game';
+import { PlayerInfo, PlayerInfoFromRole, PlayerRole } from '../types/game';
 
-/** Bracket slot order: Player 1 … Player N (same as client `computeBracketState`). */
+/** Bracket slot order: index 0 = Player 1 role, 1 = Player 2 role, … (matches TournamentBracket `playersList`). */
 const TOURNAMENT_ENTRANT_ROLES: PlayerRole[] = [
   PlayerRole.Player1,
   PlayerRole.Player2,
@@ -20,6 +20,20 @@ const TOURNAMENT_ENTRANT_ROLES: PlayerRole[] = [
   PlayerRole.Player16,
 ];
 
+export function parsePlayerRoleNumber(role: string): number {
+  const n = parseInt(String(role).replace(/\D/g, ''), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Stable bracket order for logs/API: Player 1, Player 2, … (not Map insertion order or JSON key order). */
+export function sortPlayerEntriesByBracketSlot(
+  players: PlayerInfoFromRole
+): [PlayerRole, PlayerInfo][] {
+  return [...players.entries()].sort(
+    (a, b) => parsePlayerRoleNumber(a[0]) - parsePlayerRoleNumber(b[0])
+  );
+}
+
 export function getTournamentEntrantRolesSlice(
   numberOfPlayers: number
 ): PlayerRole[] {
@@ -28,17 +42,22 @@ export function getTournamentEntrantRolesSlice(
 
 /**
  * Each match records which **seat** won (`Player 1` or `Player 2` in that duel).
- * Walk the bracket to find which **entrant** (Player 1 … Player N) is champion.
- * Must match client `computeBracketState` and publishGameKind1 `resolveTournamentMatchResult`.
+ * Walk the bracket using **slot order** Player 1 … Player N (same as `computeBracketState` in chain-duel-react).
+ * Do not use JSON/Object.keys order — that is not bracket order.
  */
 export function resolveTournamentChampionEntrantRole(
+  players: PlayerInfoFromRole,
   winnersList: PlayerRole[],
   numberOfPlayers: number
 ): PlayerRole | undefined {
   if (!winnersList.length) {
     return undefined;
   }
-  const entrantRoles = getTournamentEntrantRolesSlice(numberOfPlayers);
+  const requiredSlots = getTournamentEntrantRolesSlice(numberOfPlayers);
+  if (!requiredSlots.every((r) => players.has(r))) {
+    return undefined;
+  }
+  const leafRoles = requiredSlots;
   const round1Games = Math.max(1, Math.floor(numberOfPlayers / 2));
   const winnerEntrantRoles: PlayerRole[] = [];
   for (let i = 0; i < winnersList.length; i += 1) {
@@ -46,8 +65,8 @@ export function resolveTournamentChampionEntrantRole(
     let p1Role: PlayerRole | undefined;
     let p2Role: PlayerRole | undefined;
     if (i < round1Games) {
-      p1Role = entrantRoles[i * 2];
-      p2Role = entrantRoles[i * 2 + 1];
+      p1Role = leafRoles[i * 2];
+      p2Role = leafRoles[i * 2 + 1];
     } else {
       const p1i = (i - round1Games) * 2;
       p1Role = winnerEntrantRoles[p1i];
@@ -69,6 +88,7 @@ export function resolveChampionDisplayNameFromTournamentWinners(
   numberOfPlayers: number
 ): string | undefined {
   const championRole = resolveTournamentChampionEntrantRole(
+    playersInfos,
     winnersList,
     numberOfPlayers
   );
