@@ -740,11 +740,12 @@ export function stepRoomSnapshot(roomId: string) {
 
   stepOnlineGame(state);
   room.snapshot.hud = getOnlineHudState(state);
+  room.snapshot.tick += 1;
+  // Record this tick before postgame: `setRoomPhase` archives replay and must run after the final frame exists.
+  pushReplayFrame(room);
   if (state.gameEnded) {
     setRoomPhase(roomId, 'postgame');
   }
-  room.snapshot.tick += 1;
-  pushReplayFrame(room);
   room.updatedAt = Date.now();
 }
 
