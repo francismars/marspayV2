@@ -1,4 +1,5 @@
 import { Socket } from 'socket.io';
+import { verifyEvent, type Event } from 'nostr-tools';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 import { publishOnlineKind1Reply } from '../calls/NDK/publishOnlineKind1Reply';
 import { publishOnlineRematchKind1 } from '../calls/NDK/publishOnlineRematchKind1';
@@ -31,7 +32,11 @@ import {
   hasAnyPaidSeat,
   isPaidSeatSession,
   issueJoinPin,
+  issueNostrLinkChallenge,
   joinRoom,
+  peekPendingNostrChallenge,
+  clearPendingNostrChallenge,
+  registerNostrLink,
   leaveRoom,
   listOnlineHistoryMerged,
   listOnlineRooms,
@@ -675,6 +680,69 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
     io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
     broadcastOnlineRoomLists();
   }
+}
+
+export function requestOnlineNostrLinkChallengeHandler(socket: Socket, payload: { roomId: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const roomId = payload?.roomId;
+  if (!roomId) {
+    socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
+    return;
+  }
+  const issued = issueNostrLinkChallenge(sessionID, roomId);
+  if (!issued) {
+    socket.emit('onlinePinInvalid', { reason: 'nostr_challenge_denied' });
+    return;
+  }
+  socket.emit('resOnlineNostrLinkChallenge', {
+    roomId,
+    challenge: issued.challenge,
+    expiresAt: issued.expiresAt,
+  });
+}
+
+export function confirmOnlineNostrLinkHandler(
+  socket: Socket,
+  payload: { roomId: string; event: unknown }
+) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const roomId = payload?.roomId;
+  if (!roomId) {
+    socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
+    return;
+  }
+  const ev = payload?.event;
+  if (!ev || typeof ev !== 'object') {
+    socket.emit('onlinePinInvalid', { reason: 'nostr_invalid_event' });
+    return;
+  }
+  if (!verifyEvent(ev as Event)) {
+    socket.emit('onlinePinInvalid', { reason: 'nostr_invalid_signature' });
+    return;
+  }
+  const event = ev as Event;
+  if (event.kind !== 1) {
+    socket.emit('onlinePinInvalid', { reason: 'nostr_invalid_kind' });
+    return;
+  }
+  const pending = peekPendingNostrChallenge(sessionID, roomId);
+  if (!pending || pending.challenge !== event.content.trim()) {
+    socket.emit('onlinePinInvalid', { reason: 'nostr_challenge_mismatch' });
+    return;
+  }
+  clearPendingNostrChallenge(sessionID);
+  const reg = registerNostrLink(roomId, sessionID, socket.id, event.pubkey);
+  if (!reg.ok) {
+    socket.emit('onlinePinInvalid', { reason: reg.reason });
+    return;
+  }
+  socket.emit('resOnlineNostrLinkOk', { expiresAt: reg.expiresAt });
 }
 
 export function startOnlineLoop() {

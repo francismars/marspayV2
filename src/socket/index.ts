@@ -27,6 +27,8 @@ import {
   listOnlineHistoryHandler,
   onlineDoubleOrNothingHandler,
   onlineSetReadyHandler,
+  requestOnlineNostrLinkChallengeHandler,
+  confirmOnlineNostrLinkHandler,
   roomInputHandler,
   spectateOnlineRoomHandler,
   startOnlineGameHandler,
@@ -222,6 +224,12 @@ export default function registerSocketHandlers(io: Server) {
     );
     socket.on('onlineDoubleOrNothing', (payload: { roomId: string }) => {
       onlineDoubleOrNothingHandler(socket, payload);
+    });
+    socket.on('requestOnlineNostrLinkChallenge', (payload: { roomId: string }) => {
+      requestOnlineNostrLinkChallengeHandler(socket, payload);
+    });
+    socket.on('confirmOnlineNostrLink', (payload: { roomId: string; event: unknown }) => {
+      confirmOnlineNostrLinkHandler(socket, payload);
     });
 
     socket.on('disconnect', () => {
