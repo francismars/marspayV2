@@ -188,7 +188,8 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 ### Nostr pubkey link (no PIN in zap comment)
 
 - **When:** Home / private play — link a **Nostr pubkey** to the browser **`sessionID`** so the Kind1 zap can be sent **without** putting the PIN in the comment; the server matches **`payerPubkey`** on the zap receipt to the pre-linked record.
-- **Socket flow:** `requestOnlineNostrLinkChallenge` `{ roomId }` → `resOnlineNostrLinkChallenge` `{ roomId, challenge, expiresAt }` → client signs **`kind: 1`** with **`content` exactly the `challenge`** (NIP-07 `window.nostr.signEvent`) → `confirmOnlineNostrLink` `{ roomId, event }` → `resOnlineNostrLinkOk` `{ expiresAt }` or `onlinePinInvalid`.
+- **Socket flow:** `requestOnlineNostrLinkChallenge` `{ roomId }` → `resOnlineNostrLinkChallenge` `{ roomId, challenge, expiresAt }` → client signs **`kind: 1`** with **`content` exactly the `challenge`** → `confirmOnlineNostrLink` `{ roomId, event }` → `resOnlineNostrLinkOk` `{ expiresAt }` or `onlinePinInvalid`.
+- **Client signing:** **`chain-duel-react`** supports **NIP-07** (`window.nostr`) or **NIP-46** bunker / Nostr Connect (`nostr-tools` `BunkerSigner` + `parseBunkerInput` on a `bunker://…` URI or NIP-05). Same server verification either way.
 - **Server:** Verifies the event with **`nostr-tools` `verifyEvent`**, then stores **`roomId:pubkey` → `{ sessionID, socketID }`** until consumed or TTL (**~15 min**).
 - **Zap routing (`subscribeEvent.ts`, ONLINE):** If the zap comment yields a **PIN** (4-digit rule below), the **PIN path runs first**. Otherwise, if the zapper has a **`pubkey`**, the server tries **`consumeNostrLinkForZap`**. If that fails, the client sees `onlinePinInvalid` (e.g. `nostr_link_not_found`, `pin_missing` when anon and no link).
 - **Arcades / shared screens:** Prefer the **PIN** path; no extension required.
