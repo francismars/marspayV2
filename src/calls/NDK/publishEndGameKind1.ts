@@ -22,6 +22,7 @@ export async function publishEndGameKind1(sessionID: string) {
   const championEntrantRole =
     gameInfo.mode === GameMode.TOURNAMENTNOSTR && gameInfo.winners
       ? resolveTournamentChampionEntrantRole(
+          gameInfo.players,
           gameInfo.winners,
           gameInfo.numberOfPlayers ?? gameInfo.players.size
         )
