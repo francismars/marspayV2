@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { BUYINMIN } from '../consts/values';
 import { PlayerRole } from '../types/game';
 import { dateNow } from '../utils/time';
@@ -27,6 +28,9 @@ import {
 import { packReplayForArchive, type OnlineReplayWirePayload } from './onlineReplayCompact';
 
 const PIN_TTL_MS = 2 * 60 * 1000;
+/** Home / NIP-07 path: pubkey linked to session before zap (no PIN in comment). */
+const NOSTR_LINK_TTL_MS = 15 * 60 * 1000;
+const NOSTR_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const ROOM_IDLE_TTL_MS = 20 * 60 * 1000;
 const ROOM_CLEANUP_MS = 15 * 1000;
 const SEAT_DISCONNECT_TTL_MS = 15 * 60 * 1000;
@@ -41,6 +45,23 @@ const roomIdByCode = new Map<string, string>();
 const roomIdBySession = new Map<string, string>();
 const roomIdByKind1EventId = new Map<string, string>();
 const pinByValue = new Map<string, JoinPinRecord>();
+
+type PendingNostrChallenge = { roomId: string; challenge: string; expiresAt: number };
+const pendingNostrChallengeBySession = new Map<string, PendingNostrChallenge>();
+
+export type OnlineNostrLinkRecord = {
+  roomId: string;
+  sessionID: string;
+  socketID: string;
+  pubkey: string;
+  expiresAt: number;
+};
+
+const nostrLinkByRoomPubkey = new Map<string, OnlineNostrLinkRecord>();
+
+function nostrLinkKey(roomId: string, pubkey: string) {
+  return `${roomId}:${pubkey.toLowerCase()}`;
+}
 
 function logOnlineState(message: string) {
   console.log(`${dateNow()} [ONLINE_STATE] ${message}`);
@@ -285,6 +306,7 @@ export function joinRoom(roomId: string, sessionID: string, socketID: string) {
   }
   room.updatedAt = now;
   roomIdBySession.set(sessionID, roomId);
+  refreshNostrLinkSocket(roomId, sessionID, socketID);
   logOnlineState(`join roomId=${roomId} session=${sessionID} socket=${socketID}`);
   return room;
 }
@@ -335,6 +357,7 @@ export function leaveRoom(sessionID: string, options?: { releaseSeat?: boolean }
     }
   }
   room.updatedAt = Date.now();
+  clearNostrSessionStateOnLeave(sessionID, roomId, { releaseSeat, hasPaidSeat });
   logOnlineState(
     `leave roomId=${roomId} session=${sessionID} releaseSeat=${releaseSeat} hadPaidSeat=${hasPaidSeat}`
   );
@@ -372,6 +395,18 @@ export function deleteRoom(roomId: string) {
   for (const [pin, record] of pinByValue.entries()) {
     if (record.roomId === roomId) {
       pinByValue.delete(pin);
+    }
+  }
+  for (const key of [...nostrLinkByRoomPubkey.keys()]) {
+    const rec = nostrLinkByRoomPubkey.get(key);
+    if (rec?.roomId === roomId) {
+      nostrLinkByRoomPubkey.delete(key);
+    }
+  }
+  for (const sid of [...pendingNostrChallengeBySession.keys()]) {
+    const p = pendingNostrChallengeBySession.get(sid);
+    if (p?.roomId === roomId) {
+      pendingNostrChallengeBySession.delete(sid);
     }
   }
   for (const [eventId, mappedRoomId] of roomIdByKind1EventId.entries()) {
@@ -466,6 +501,145 @@ export function issueJoinPin(roomId: string, sessionID: string, socketID: string
     `issued pin roomId=${roomId} session=${sessionID} socket=${socketID} expiresAt=${record.expiresAt}`
   );
   return record;
+}
+
+function canIssueNostrLinkChallenge(roomId: string, sessionID: string): boolean {
+  const room = roomById.get(roomId);
+  if (!room) {
+    return false;
+  }
+  if (room.phase === 'finished') {
+    return false;
+  }
+  if (room.phase === 'postgame' && !room.postGame.rematchRequested) {
+    return false;
+  }
+  if (room.postGame.rematchRequested) {
+    const isSeatedPlayer = [...room.seats.values()].some(
+      (seat) => seat.status === 'paid' && seat.sessionID === sessionID
+    );
+    if (!isSeatedPlayer) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function issueNostrLinkChallenge(
+  sessionID: string,
+  roomId: string
+): { challenge: string; expiresAt: number } | undefined {
+  if (!canIssueNostrLinkChallenge(roomId, sessionID)) {
+    logOnlineState(`nostr challenge denied roomId=${roomId} session=${sessionID}`);
+    return undefined;
+  }
+  const challenge = randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + NOSTR_CHALLENGE_TTL_MS;
+  pendingNostrChallengeBySession.set(sessionID, { roomId, challenge, expiresAt });
+  logOnlineState(`issued nostr challenge roomId=${roomId} session=${sessionID} expiresAt=${expiresAt}`);
+  return { challenge, expiresAt };
+}
+
+export function peekPendingNostrChallenge(
+  sessionID: string,
+  roomId: string
+): { challenge: string } | undefined {
+  const p = pendingNostrChallengeBySession.get(sessionID);
+  if (!p || p.roomId !== roomId || p.expiresAt <= Date.now()) {
+    return undefined;
+  }
+  return { challenge: p.challenge };
+}
+
+export function clearPendingNostrChallenge(sessionID: string) {
+  pendingNostrChallengeBySession.delete(sessionID);
+}
+
+export function registerNostrLink(
+  roomId: string,
+  sessionID: string,
+  socketID: string,
+  pubkeyHex: string
+): { ok: true; expiresAt: number } | { ok: false; reason: string } {
+  const room = roomById.get(roomId);
+  if (!room) {
+    return { ok: false, reason: 'room_not_found' };
+  }
+  if (!canIssueNostrLinkChallenge(roomId, sessionID)) {
+    return { ok: false, reason: 'nostr_link_not_allowed' };
+  }
+  const pk = pubkeyHex.toLowerCase();
+  const key = nostrLinkKey(roomId, pk);
+  const existing = nostrLinkByRoomPubkey.get(key);
+  if (existing && existing.sessionID !== sessionID && existing.expiresAt > Date.now()) {
+    return { ok: false, reason: 'pubkey_already_linked' };
+  }
+  for (const seat of room.seats.values()) {
+    if (
+      seat.pubkey &&
+      seat.pubkey.toLowerCase() === pk &&
+      seat.status === 'paid' &&
+      seat.sessionID !== sessionID
+    ) {
+      return { ok: false, reason: 'pubkey_already_seated' };
+    }
+  }
+  const expiresAt = Date.now() + NOSTR_LINK_TTL_MS;
+  nostrLinkByRoomPubkey.set(key, {
+    roomId,
+    sessionID,
+    socketID,
+    pubkey: pk,
+    expiresAt,
+  });
+  logOnlineState(`registered nostr link roomId=${roomId} session=${sessionID} pubkey=${pk.slice(0, 8)}…`);
+  return { ok: true, expiresAt };
+}
+
+export function consumeNostrLinkForZap(
+  roomId: string,
+  pubkeyHex: string
+): { ok: true; record: { sessionID: string; socketID: string } } | { ok: false; reason: string } {
+  const pk = pubkeyHex.toLowerCase();
+  const key = nostrLinkKey(roomId, pk);
+  const rec = nostrLinkByRoomPubkey.get(key);
+  if (!rec || rec.roomId !== roomId) {
+    return { ok: false, reason: 'nostr_link_not_found' };
+  }
+  if (rec.expiresAt <= Date.now()) {
+    nostrLinkByRoomPubkey.delete(key);
+    return { ok: false, reason: 'nostr_link_expired' };
+  }
+  const sessionID = rec.sessionID;
+  const sid = rec.socketID;
+  nostrLinkByRoomPubkey.delete(key);
+  logOnlineState(`consumed nostr link roomId=${roomId} session=${sessionID}`);
+  return { ok: true, record: { sessionID, socketID: sid } };
+}
+
+export function refreshNostrLinkSocket(roomId: string, sessionID: string, socketID: string) {
+  for (const [key, rec] of nostrLinkByRoomPubkey.entries()) {
+    if (rec.roomId === roomId && rec.sessionID === sessionID) {
+      rec.socketID = socketID;
+      nostrLinkByRoomPubkey.set(key, rec);
+    }
+  }
+}
+
+export function clearNostrSessionStateOnLeave(
+  sessionID: string,
+  roomId: string,
+  opts: { releaseSeat: boolean; hasPaidSeat: boolean }
+) {
+  pendingNostrChallengeBySession.delete(sessionID);
+  if (!opts.hasPaidSeat || opts.releaseSeat) {
+    for (const key of [...nostrLinkByRoomPubkey.keys()]) {
+      const rec = nostrLinkByRoomPubkey.get(key);
+      if (rec && rec.roomId === roomId && rec.sessionID === sessionID) {
+        nostrLinkByRoomPubkey.delete(key);
+      }
+    }
+  }
 }
 
 export function consumePin(pinRaw: string, roomId: string) {
@@ -1036,6 +1210,17 @@ function cleanupExpiredState() {
     ) {
       logOnlineState(`cleanup pin roomId=${record.roomId} pin=${record.pin}`);
       pinByValue.delete(key);
+    }
+  }
+  for (const [sid, p] of pendingNostrChallengeBySession.entries()) {
+    if (p.expiresAt <= now) {
+      pendingNostrChallengeBySession.delete(sid);
+    }
+  }
+  for (const key of [...nostrLinkByRoomPubkey.keys()]) {
+    const rec = nostrLinkByRoomPubkey.get(key);
+    if (rec && rec.expiresAt <= now) {
+      nostrLinkByRoomPubkey.delete(key);
     }
   }
   for (const room of roomById.values()) {

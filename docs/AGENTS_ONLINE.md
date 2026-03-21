@@ -68,6 +68,8 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 |----------|-------|----------|
 | Simulation tick | **100 ms** | `ONLINE_TICK_MS` in `onlineRoom.ts` |
 | Join PIN TTL | **2 min** | `PIN_TTL_MS` in `onlineRoomState.ts` |
+| Nostr link TTL (pubkey → session) | **15 min** | `NOSTR_LINK_TTL_MS` |
+| Nostr challenge TTL | **5 min** | `NOSTR_CHALLENGE_TTL_MS` |
 | Join PIN format | **4 decimal digits** | `issueJoinPin` |
 | Payout fee factor | **0.95** of winner points (floor) | `ONLINE_PAYOUT_MULTIPLIER` |
 | Replay max frames | **3600** | `ONLINE_REPLAY_MAX_FRAMES` |
@@ -125,6 +127,8 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `listOnlineHistory` | — | **Preferred:** merged history (`resOnlineHistory`) — archive index **plus** `finished` rooms still in RAM; same merge rules as UI |
 | `pingLatency` | ack callback `() => void` | Immediate ack for RTT; client measures `Date.now()` delta. |
 | `reportOnlineRoomPing` | `{ roomId: string; latencyMs: number }` | **Paid seat only** (matches `sessionID`). Writes **`seat.pingMs`** and emits **`onlineRoomUpdated`** so all clients can show **both** players’ ping. |
+| `requestOnlineNostrLinkChallenge` | `{ roomId: string }` | NIP-07 pubkey link: server issues a random **`challenge`** (`resOnlineNostrLinkChallenge`) |
+| `confirmOnlineNostrLink` | `{ roomId: string; event: Nostr kind 1 }` | Signed kind **1** with **`content` = challenge**; server verifies and binds **`event.pubkey` → session** |
 
 > **No `sessionID`:** Most handlers no-op silently (no response) if `socket.data.sessionID` is missing. `createOnlineRoom` returns early without emitting if there is no session.
 
@@ -164,6 +168,8 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `resOnlineReplay` | compact-v2 + optional **`blockEvents`** | **`blockEvents`**: `{ frameIndex, blockHeight, medianFeeSatPerVb }[]` — when **`replayIndex`** hits **`frameIndex`**, clients should replay block SFX/flash (same as live `onlineBitcoinBlock`). Omitted on older archives. |
 | `onlineSeatAssigned` | `{ roomId, playerRole, sessionId }` | After successful zap + seat assignment |
 | `onlinePinInvalid` | `{ reason: string }` | Many failures (see table below) |
+| `resOnlineNostrLinkChallenge` | `{ roomId, challenge, expiresAt }` | After `requestOnlineNostrLinkChallenge`; client signs **`kind: 1`**, **`content` = challenge** |
+| `resOnlineNostrLinkOk` | `{ expiresAt: number }` | Pubkey linked to session until consumed or TTL |
 | `resOnlinePostGameInfo` | See `socket.ts` | Successful `getOnlinePostGame` |
 | `resCreateOnlineWithdrawal` | `{ roomId, lnurlw: string }` | `lnurlw` may be `'pass'` if zero amount |
 | `resCreateOnlineNostrPayout` | `{ roomId, lnAddress, amount, ok: boolean }` | Successful zap payout |
@@ -178,6 +184,14 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 - `joinPin` is issued on `createOnlineRoom` / `joinOnlineRoom` / `joinOnlineRoomByCode` (not on spectate).
 - PIN is **4 digits**, TTL **2 minutes**, unless extended while still valid and user remains eligible (`shouldPinStayActive` in state).
 - One PIN is **consumed** on first successful zap that matches it for that `roomId`.
+
+### Nostr pubkey link (no PIN in zap comment)
+
+- **When:** Home / private play — link a **Nostr pubkey** to the browser **`sessionID`** so the Kind1 zap can be sent **without** putting the PIN in the comment; the server matches **`payerPubkey`** on the zap receipt to the pre-linked record.
+- **Socket flow:** `requestOnlineNostrLinkChallenge` `{ roomId }` → `resOnlineNostrLinkChallenge` `{ roomId, challenge, expiresAt }` → client signs **`kind: 1`** with **`content` exactly the `challenge`** (NIP-07 `window.nostr.signEvent`) → `confirmOnlineNostrLink` `{ roomId, event }` → `resOnlineNostrLinkOk` `{ expiresAt }` or `onlinePinInvalid`.
+- **Server:** Verifies the event with **`nostr-tools` `verifyEvent`**, then stores **`roomId:pubkey` → `{ sessionID, socketID }`** until consumed or TTL (**~15 min**).
+- **Zap routing (`subscribeEvent.ts`, ONLINE):** If the zap comment yields a **PIN** (4-digit rule below), the **PIN path runs first**. Otherwise, if the zapper has a **`pubkey`**, the server tries **`consumeNostrLinkForZap`**. If that fails, the client sees `onlinePinInvalid` (e.g. `nostr_link_not_found`, `pin_missing` when anon and no link).
+- **Arcades / shared screens:** Prefer the **PIN** path; no extension required.
 
 ### Zap comment parsing (`extractPinFromComment`)
 
@@ -218,6 +232,7 @@ For several zap failures, `subscribeEvent.ts` emits `onlinePinInvalid` to `getSo
 | `nostr_payout_failed` | Pay invoice path threw |
 | **Ready / lobby** | From `setSeatReady`: `room_not_ready`, `postgame_settled`, `not_paid_player` |
 | **Zap / PIN** | `amount_too_low`, `pin_missing`, `not_found`, `room_mismatch`, `already_used`, `expired` |
+| **Zap / Nostr link** | `nostr_link_not_found`, `nostr_link_expired`, `pubkey_already_linked`, `pubkey_already_seated`, `nostr_challenge_denied`, `nostr_challenge_mismatch`, `nostr_invalid_signature`, `nostr_invalid_kind`, `nostr_invalid_event`, `nostr_link_not_allowed` |
 | **Seat assignment** | `room_not_found`, `rematch_locked`, `seats_full` |
 | **Double-or-nothing / rematch zap** | `room_not_finished`, `withdraw_started`, `rematch_pending`, `not_player`, rematch: `rematch_not_requested`, `amount_too_low`, `winner_unknown`, `seats_not_ready`, `not_loser`, `winner_cannot_match` |
 

@@ -15,6 +15,7 @@
     "morgan": "^1.10.0",
     "nanoid": "^5.1.5",
     "nanoid-dictionary": "^4.3.0",
+    "nostr-tools": "^2.14.0",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
