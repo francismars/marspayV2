@@ -6,6 +6,7 @@ import { getGameInfoFromID } from '../../state/gameState';
 import { appendKind1toSessionID, getKind1sfromSessionID, setKind1IDtoSessionID } from '../../state/nostrState';
 import { getOpponent } from '../../socket/game';
 import { GameInfo, GameMode, PlayerRole } from '../../types/game';
+import { getTournamentEntrantRolesSlice } from '../../utils/winnerNames';
 import { Kind1 } from '../../types/nostr';
 import { dateNow } from '../../utils/time';
 import { ndkInstance } from './setNDKInstance';
@@ -186,7 +187,7 @@ function resolveTournamentMatchResult(gameInfo: GameInfo | undefined, gameIndex:
     return;
   }
   const numberOfPlayers = gameInfo.numberOfPlayers ?? gameInfo.players.size;
-  const entrantRoles = Object.values(PlayerRole).slice(0, numberOfPlayers);
+  const entrantRoles = getTournamentEntrantRolesSlice(numberOfPlayers);
   const round1Games = Math.max(1, Math.floor(numberOfPlayers / 2));
   const winnerEntrantRoles: PlayerRole[] = [];
   for (let i = 0; i <= gameIndex; i += 1) {
