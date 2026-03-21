@@ -1,5 +1,8 @@
 import { PlayerInfo, PlayerRole, GameInfo, GameMode } from '../types/game';
-import { resolveChampionDisplayNameFromTournamentWinners } from '../utils/winnerNames';
+import {
+  resolveChampionDisplayNameFromTournamentWinners,
+  sortPlayerEntriesByBracketSlot,
+} from '../utils/winnerNames';
 
 const IDToGameInfo = new Map<string, GameInfo>();
 
@@ -72,7 +75,7 @@ export function serializeGameInfoFromID(sessionId: string) {
   return {
     mode: gameInfo.mode,
     numberOfPlayers: gameInfo.numberOfPlayers,
-    players: Object.fromEntries(gameInfo.players),
+    players: Object.fromEntries(sortPlayerEntriesByBracketSlot(gameInfo.players)),
     winners: gameInfo.winners,
     champion: gameInfo.champion,
   };
@@ -92,7 +95,7 @@ export function getSerializedIDToGameInfo() {
   for (const [sessionID, gameInfo] of IDToGameInfo.entries()) {
     serializedIDToGameInfo[sessionID] = {
       ...gameInfo,
-      players: Object.fromEntries(gameInfo.players),
+      players: Object.fromEntries(sortPlayerEntriesByBracketSlot(gameInfo.players)),
     };
   }
   return serializedIDToGameInfo;
