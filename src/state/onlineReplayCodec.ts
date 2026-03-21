@@ -1,6 +1,6 @@
 /**
- * Isomorphic compact replay codec (no Node/zlib). Used by marspayTS pack/expand and chain-duel-react.
- * Keeps capture % / HUD math in sync with onlineEngine (duplicate of small helpers).
+ * Compact replay codec (no Node/zlib). Server packs replays here.
+ * **Keep in sync** with `chain-duel-react/src/replay/codec/onlineReplayCodec.ts` (client decode).
  */
 import type {
   Coinbase,
