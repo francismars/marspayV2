@@ -5,7 +5,8 @@ import { getKind1sfromSessionID } from '../../state/nostrState';
 import { dateNow } from '../../utils/time';
 import { nip19 } from 'nostr-tools';
 import { ndkInstance } from './setNDKInstance';
-import { GameMode, PlayerRole } from '../../types/game';
+import { GameMode } from '../../types/game';
+import { resolveTournamentChampionEntrantRole } from '../../utils/winnerNames';
 
 export async function publishEndGameKind1(sessionID: string) {
   const gameInfo = getGameInfoFromID(sessionID);
@@ -18,13 +19,16 @@ export async function publishEndGameKind1(sessionID: string) {
     console.error(`${dateNow()} [${sessionID}] Winner not found.`);
     return;
   }
-  const finalResult =
-    gameInfo.mode === GameMode.TOURNAMENTNOSTR
-      ? resolveTournamentFinalResult(gameInfo)
+  const championEntrantRole =
+    gameInfo.mode === GameMode.TOURNAMENTNOSTR && gameInfo.winners
+      ? resolveTournamentChampionEntrantRole(
+          gameInfo.winners,
+          gameInfo.numberOfPlayers ?? gameInfo.players.size
+        )
       : undefined;
   const winnerRole =
     gameInfo.mode === GameMode.TOURNAMENTNOSTR
-      ? finalResult?.winnerRole
+      ? championEntrantRole
       : winner;
   if (!winnerRole) {
     console.error(`${dateNow()} [${sessionID}] Unable to resolve winner role.`);
@@ -72,41 +76,4 @@ export async function publishEndGameKind1(sessionID: string) {
     ndkEvent.content = `Chain Duel P2P Game ${emojisGame} is finished.\nnostr:${winnernprofile} wins ${winnerAmount} sats!\nBetter luck next time nostr:${losernprofile}.`;
   }
   await ndkEvent.publish();
-}
-
-function resolveTournamentFinalResult(gameInfo: {
-  winners?: PlayerRole[];
-  players: Map<PlayerRole, { name: string; id?: string }>;
-  numberOfPlayers?: number;
-}) {
-  if (!gameInfo.winners || gameInfo.winners.length === 0) {
-    return;
-  }
-  const numberOfPlayers = gameInfo.numberOfPlayers ?? gameInfo.players.size;
-  const entrantRoles = Object.values(PlayerRole).slice(0, numberOfPlayers);
-  const round1Games = Math.max(1, Math.floor(numberOfPlayers / 2));
-  const winnerEntrantRoles: PlayerRole[] = [];
-  for (let i = 0; i < gameInfo.winners.length; i += 1) {
-    const winnerSide = gameInfo.winners[i];
-    let p1Role: PlayerRole | undefined;
-    let p2Role: PlayerRole | undefined;
-    if (i < round1Games) {
-      p1Role = entrantRoles[i * 2] as PlayerRole | undefined;
-      p2Role = entrantRoles[i * 2 + 1] as PlayerRole | undefined;
-    } else {
-      const p1i = (i - round1Games) * 2;
-      p1Role = winnerEntrantRoles[p1i];
-      p2Role = winnerEntrantRoles[p1i + 1];
-    }
-    if (!p1Role || !p2Role) {
-      return;
-    }
-    const winnerRole = winnerSide === PlayerRole.Player1 ? p1Role : p2Role;
-    winnerEntrantRoles.push(winnerRole);
-  }
-  const winnerRole = winnerEntrantRoles[winnerEntrantRoles.length - 1];
-  if (!winnerRole) {
-    return;
-  }
-  return { winnerRole };
 }

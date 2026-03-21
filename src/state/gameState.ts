@@ -1,5 +1,5 @@
 import { PlayerInfo, PlayerRole, GameInfo, GameMode } from '../types/game';
-import { buildWinnerNamesList } from '../utils/winnerNames';
+import { resolveChampionDisplayNameFromTournamentWinners } from '../utils/winnerNames';
 
 const IDToGameInfo = new Map<string, GameInfo>();
 
@@ -112,8 +112,12 @@ export function setChampionToGameInfo(sessionID: string) {
     console.error('Could not set Champion.');
     return;
   }
-  const champion = buildWinnerNamesList(gameInfo.players, gameInfo.winners).at(
-    -1
+  const numberOfPlayers =
+    gameInfo.numberOfPlayers ?? gameInfo.players.size;
+  const champion = resolveChampionDisplayNameFromTournamentWinners(
+    gameInfo.players,
+    gameInfo.winners,
+    numberOfPlayers
   );
   gameInfo.champion = champion;
   IDToGameInfo.set(sessionID, gameInfo);
