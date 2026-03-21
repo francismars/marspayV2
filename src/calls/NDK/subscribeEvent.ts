@@ -19,6 +19,7 @@ import {
 } from '../../types/game';
 import { ndkInstance } from '../../calls/NDK/setNDKInstance';
 import {
+  consumeNostrLinkForZap,
   consumePin,
   getRoomByKind1EventId,
   getRoomBySession,
@@ -158,51 +159,93 @@ async function listenToSubscriptions(event: NDKEvent) {
       return;
     }
     const pin = extractPinFromComment(finalContent);
-    if (!pin) {
-      console.log(`${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=pin_missing`);
-      io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: 'pin_missing' });
-      return;
-    }
-    console.log(`${dateNow()} [${sessionID}] [ONLINE] zap pin parsed roomId=${room.roomId} pin=${pin}`);
-    const consumed = consumePin(pin, room.roomId);
-    if (!consumed.ok) {
+    if (pin) {
+      console.log(`${dateNow()} [${sessionID}] [ONLINE] zap pin parsed roomId=${room.roomId} pin=${pin}`);
+      const consumed = consumePin(pin, room.roomId);
+      if (!consumed.ok) {
+        console.log(
+          `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=${consumed.reason}`
+        );
+        io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: consumed.reason });
+        return;
+      }
+      const seatResult = seatPaidPlayer({
+        roomId: room.roomId,
+        sessionID: consumed.record.sessionID,
+        socketID: consumed.record.socketID,
+        amount: zapAmount,
+        name: zapperName,
+        picture: avatar,
+        pubkey: payerPubKey,
+        lnAddress,
+      });
+      if (!seatResult.ok) {
+        console.log(
+          `${dateNow()} [${sessionID}] [ONLINE] seat assignment failed roomId=${room.roomId} reason=${seatResult.reason}`
+        );
+        io.to(sessionSocketRoomName(consumed.record.sessionID)).emit('onlinePinInvalid', {
+          reason: seatResult.reason,
+        });
+        return;
+      }
       console.log(
-        `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=${consumed.reason}`
+        `${dateNow()} [${sessionID}] [ONLINE] seat assigned roomId=${room.roomId} role=${seatResult.role} session=${consumed.record.sessionID}`
       );
-      io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: consumed.reason });
-      return;
-    }
-    const seatResult = seatPaidPlayer({
-      roomId: room.roomId,
-      sessionID: consumed.record.sessionID,
-      socketID: consumed.record.socketID,
-      amount: zapAmount,
-      name: zapperName,
-      picture: avatar,
-      pubkey: payerPubKey,
-      lnAddress,
-    });
-    if (!seatResult.ok) {
-      console.log(
-        `${dateNow()} [${sessionID}] [ONLINE] seat assignment failed roomId=${room.roomId} reason=${seatResult.reason}`
-      );
-      io.to(sessionSocketRoomName(consumed.record.sessionID)).emit('onlinePinInvalid', {
-        reason: seatResult.reason,
+      io.to(room.roomId).emit('onlineSeatAssigned', {
+        roomId: room.roomId,
+        playerRole: seatResult.role,
+        sessionId: consumed.record.sessionID,
+      });
+      io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(seatResult.room));
+      io.emit('resListOnlineRooms', {
+        rooms: listOnlineRooms(),
       });
       return;
     }
-    console.log(
-      `${dateNow()} [${sessionID}] [ONLINE] seat assigned roomId=${room.roomId} role=${seatResult.role} session=${consumed.record.sessionID}`
-    );
-    io.to(room.roomId).emit('onlineSeatAssigned', {
-      roomId: room.roomId,
-      playerRole: seatResult.role,
-      sessionId: consumed.record.sessionID,
-    });
-    io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(seatResult.room));
-    io.emit('resListOnlineRooms', {
-      rooms: listOnlineRooms(),
-    });
+    if (payerPubKey) {
+      const nostrConsumed = consumeNostrLinkForZap(room.roomId, payerPubKey);
+      if (!nostrConsumed.ok) {
+        console.log(
+          `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=${nostrConsumed.reason}`
+        );
+        io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: nostrConsumed.reason });
+        return;
+      }
+      const seatResult = seatPaidPlayer({
+        roomId: room.roomId,
+        sessionID: nostrConsumed.record.sessionID,
+        socketID: nostrConsumed.record.socketID,
+        amount: zapAmount,
+        name: zapperName,
+        picture: avatar,
+        pubkey: payerPubKey,
+        lnAddress,
+      });
+      if (!seatResult.ok) {
+        console.log(
+          `${dateNow()} [${sessionID}] [ONLINE] seat assignment failed roomId=${room.roomId} reason=${seatResult.reason}`
+        );
+        io.to(sessionSocketRoomName(nostrConsumed.record.sessionID)).emit('onlinePinInvalid', {
+          reason: seatResult.reason,
+        });
+        return;
+      }
+      console.log(
+        `${dateNow()} [${sessionID}] [ONLINE] seat assigned (nostr link) roomId=${room.roomId} role=${seatResult.role} session=${nostrConsumed.record.sessionID}`
+      );
+      io.to(room.roomId).emit('onlineSeatAssigned', {
+        roomId: room.roomId,
+        playerRole: seatResult.role,
+        sessionId: nostrConsumed.record.sessionID,
+      });
+      io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(seatResult.room));
+      io.emit('resListOnlineRooms', {
+        rooms: listOnlineRooms(),
+      });
+      return;
+    }
+    console.log(`${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=pin_missing`);
+    io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: 'pin_missing' });
     return;
   }
   console.log(
