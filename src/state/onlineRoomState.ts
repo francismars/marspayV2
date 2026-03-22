@@ -217,20 +217,26 @@ export function createOnlineRoom(params: {
 }
 
 function roomToFinishedResult(room: OnlineRoom): NonNullable<OnlineRoomListItem['result']> {
+  const p1Seat = room.seats.get(PlayerRole.Player1);
+  const p2Seat = room.seats.get(PlayerRole.Player2);
   return {
     winnerName:
       room.postGame.winnerName ||
       room.snapshot.state.winnerName ||
       room.snapshot.state.p1Name ||
       'Winner',
-    p1Name: room.snapshot.state.p1Name ?? 'Player 1',
-    p2Name: room.snapshot.state.p2Name ?? 'Player 2',
+    p1Name: p1Seat?.name ?? room.snapshot.state.p1Name ?? 'Player 1',
+    p2Name: p2Seat?.name ?? room.snapshot.state.p2Name ?? 'Player 2',
     p1Score: room.snapshot.state.score?.[0] ?? 0,
     p2Score: room.snapshot.state.score?.[1] ?? 0,
     netPrize: Math.max(
       0,
       Math.floor((room.postGame.totalPrize ?? room.snapshot.state.totalPoints ?? 0) * ONLINE_PAYOUT_MULTIPLIER)
     ),
+    p1Picture: p1Seat?.picture ?? room.postGame.p1Picture,
+    p2Picture: p2Seat?.picture ?? room.postGame.p2Picture,
+    winnerPicture: room.postGame.winnerPicture,
+    winnerRole: room.postGame.winnerRole,
   };
 }
 

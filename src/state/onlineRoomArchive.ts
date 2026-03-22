@@ -59,6 +59,10 @@ export interface OnlineArchivedListItem {
     p1Score: number;
     p2Score: number;
     netPrize: number;
+    p1Picture?: string;
+    p2Picture?: string;
+    winnerPicture?: string;
+    winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
   };
 }
 
@@ -130,7 +134,8 @@ export async function appendOnlineMatchArchive(payload: OnlineRoomArchiveFile): 
       buyin: sr.buyin ?? 0,
       createdAt: sr.createdAt ?? payload.finishedAt,
       finishedAt: payload.finishedAt,
-      phase: 'postgame',
+      /** Index row is a completed match for history UI; use `finished` (not live `postgame`). */
+      phase: 'finished',
       archiveKind: 'match',
       matchRound: payload.matchRound,
       playersPaid: 2,
