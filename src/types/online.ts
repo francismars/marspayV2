@@ -120,6 +120,10 @@ export interface OnlineRoomListItem {
     p1Score: number;
     p2Score: number;
     netPrize: number;
+    p1Picture?: string;
+    p2Picture?: string;
+    winnerPicture?: string;
+    winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
   };
   replay?: {
     available: boolean;
