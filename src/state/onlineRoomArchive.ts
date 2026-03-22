@@ -66,6 +66,42 @@ export interface OnlineArchivedListItem {
   };
 }
 
+/**
+ * History list reads `result` from index.jsonl only. Merge in avatars/names from the same
+ * `serializedRoom` wire object used in lobby/game (`seats`, `postGame`) so URLs are not lost
+ * when `result` was serialized without optional picture fields.
+ */
+function resultForArchiveIndex(serializedRoom: Record<string, unknown>): OnlineArchivedListItem['result'] | undefined {
+  const base = serializedRoom.result as OnlineArchivedListItem['result'] | undefined;
+  if (!base) {
+    return undefined;
+  }
+  const seats = serializedRoom.seats as Record<string, { picture?: string; name?: string }> | undefined;
+  const postGame = serializedRoom.postGame as
+    | {
+        p1Picture?: string;
+        p2Picture?: string;
+        winnerPicture?: string;
+        winnerName?: string;
+        winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
+      }
+    | undefined;
+
+  const p1Seat = seats?.[PlayerRole.Player1];
+  const p2Seat = seats?.[PlayerRole.Player2];
+
+  return {
+    ...base,
+    p1Name: base.p1Name || p1Seat?.name || 'Player 1',
+    p2Name: base.p2Name || p2Seat?.name || 'Player 2',
+    p1Picture: base.p1Picture ?? p1Seat?.picture ?? postGame?.p1Picture,
+    p2Picture: base.p2Picture ?? p2Seat?.picture ?? postGame?.p2Picture,
+    winnerPicture: base.winnerPicture ?? postGame?.winnerPicture,
+    winnerRole: base.winnerRole ?? postGame?.winnerRole,
+    winnerName: base.winnerName || postGame?.winnerName || 'Winner',
+  };
+}
+
 /** Map index row → list item (shared with merged history). */
 export function archivedRowToOnlineRoomListItem(
   r: OnlineArchivedListItem
@@ -125,7 +161,6 @@ export async function appendOnlineMatchArchive(payload: OnlineRoomArchiveFile): 
       buyin?: number;
       createdAt?: number;
       replay?: { frameCount?: number; tickMs?: number; durationMs?: number };
-      result?: OnlineArchivedListItem['result'];
     };
     const indexLine: OnlineArchivedListItem = {
       archiveId: payload.archiveId,
@@ -152,7 +187,7 @@ export async function appendOnlineMatchArchive(payload: OnlineRoomArchiveFile): 
               replayFrameCount(payload.replay) * payload.replay.tickMs,
           }
         : undefined,
-      result: sr.result,
+      result: resultForArchiveIndex(payload.serializedRoom as Record<string, unknown>),
     };
     const indexPath = path.join(archiveDir(), INDEX_FILE);
     await fsPromises.appendFile(indexPath, JSON.stringify(indexLine) + '\n', 'utf8');
@@ -193,7 +228,6 @@ export async function appendOnlineRoomArchive(payload: {
       buyin?: number;
       createdAt?: number;
       replay?: { frameCount?: number; tickMs?: number; durationMs?: number };
-      result?: OnlineArchivedListItem['result'];
     };
     const indexLine: OnlineArchivedListItem = {
       archiveId: payload.archiveId,
@@ -218,7 +252,7 @@ export async function appendOnlineRoomArchive(payload: {
               replayFrameCount(payload.replay) * payload.replay.tickMs,
           }
         : undefined,
-      result: sr.result,
+      result: resultForArchiveIndex(payload.serializedRoom as Record<string, unknown>),
     };
     const indexPath = path.join(archiveDir(), INDEX_FILE);
     await fsPromises.appendFile(
