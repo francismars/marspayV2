@@ -29,6 +29,7 @@ import {
   onlineSetReadyHandler,
   requestOnlineNostrLinkChallengeHandler,
   confirmOnlineNostrLinkHandler,
+  requestOnlineKind1PostHandler,
   requestOnlineSeatLightningHandler,
   cancelOnlineSeatLightningHandler,
   roomInputHandler,
@@ -231,7 +232,10 @@ export default function registerSocketHandlers(io: Server) {
       requestOnlineNostrLinkChallengeHandler(socket, payload);
     });
     socket.on('confirmOnlineNostrLink', (payload: { roomId: string; event: unknown }) => {
-      confirmOnlineNostrLinkHandler(socket, payload);
+      void confirmOnlineNostrLinkHandler(socket, payload);
+    });
+    socket.on('requestOnlineKind1Post', (payload: { roomId: string }) => {
+      requestOnlineKind1PostHandler(socket, payload);
     });
     socket.on(
       'requestOnlineSeatLightning',
