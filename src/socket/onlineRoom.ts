@@ -33,7 +33,7 @@ import { P2PMAXWITHDRAWALS } from '../consts/values';
 import { GameMode, PlayerRole } from '../types/game';
 import type { OnlineRoomListItem } from '../types/online';
 import { io } from '../server';
-import { getKind1FromID, getKind1sfromSessionID } from '../state/nostrState';
+import { getKind1sfromSessionID } from '../state/nostrState';
 import { setIDToLNURLW, setLNURLWToID } from '../state/lnurlwState';
 import {
   archivedRowToOnlineRoomListItem,
@@ -886,10 +886,9 @@ export function requestOnlineSeatZapPayPrepareHandler(socket: Socket, payload: {
     socket.emit('resOnlineSeatZapPayError', { reason: 'kind1_not_ready' });
     return;
   }
-  const kind1Info = getKind1FromID(room.kind1EventId);
   void (async () => {
     try {
-      const hostLud16 = await resolveHostLud16ForOnlineSeat(room.kind1EventId!, kind1Info);
+      const hostLud16 = await resolveHostLud16ForOnlineSeat(room.kind1EventId!);
       if (!hostLud16) {
         socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
         return;
@@ -973,10 +972,9 @@ export function confirmOnlineSeatZapPayHandler(
     socket.emit('resOnlineSeatZapPayError', { reason: 'pubkey_mismatch' });
     return;
   }
-  const kind1Info = room.kind1EventId ? getKind1FromID(room.kind1EventId) : undefined;
   void (async () => {
     try {
-      const hostLud16 = await resolveHostLud16ForOnlineSeat(room.kind1EventId!, kind1Info);
+      const hostLud16 = await resolveHostLud16ForOnlineSeat(room.kind1EventId!);
       if (!hostLud16) {
         socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
         return;
