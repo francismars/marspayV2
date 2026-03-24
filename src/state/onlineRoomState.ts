@@ -216,6 +216,14 @@ export function createOnlineRoom(params: {
   return room;
 }
 
+function winnerPointsFromSnapshot(room: OnlineRoom): number {
+  const s = room.snapshot.state;
+  const p1 = s.score?.[0] ?? 0;
+  const p2 = s.score?.[1] ?? 0;
+  const winningRole = s.winnerPlayer === 'P2' ? PlayerRole.Player2 : PlayerRole.Player1;
+  return winningRole === PlayerRole.Player1 ? p1 : p2;
+}
+
 function roomToFinishedResult(room: OnlineRoom): NonNullable<OnlineRoomListItem['result']> {
   const p1Seat = room.seats.get(PlayerRole.Player1);
   const p2Seat = room.seats.get(PlayerRole.Player2);
@@ -231,13 +239,33 @@ function roomToFinishedResult(room: OnlineRoom): NonNullable<OnlineRoomListItem[
     p2Score: room.snapshot.state.score?.[1] ?? 0,
     netPrize: Math.max(
       0,
-      Math.floor((room.postGame.totalPrize ?? room.snapshot.state.totalPoints ?? 0) * ONLINE_PAYOUT_MULTIPLIER)
+      Math.floor(winnerPointsFromSnapshot(room) * ONLINE_PAYOUT_MULTIPLIER)
     ),
     p1Picture: p1Seat?.picture ?? room.postGame.p1Picture,
     p2Picture: p2Seat?.picture ?? room.postGame.p2Picture,
     winnerPicture: room.postGame.winnerPicture,
     winnerRole: room.postGame.winnerRole,
   };
+}
+
+/**
+ * When multiple archive index rows share a `roomId` (per-round match + session), pick the row
+ * that represents the final session (payout) or the latest match round — not the first round.
+ */
+function pickBetterHistoryForRoom(prev: OnlineRoomListItem, next: OnlineRoomListItem): OnlineRoomListItem {
+  const prevSession = prev.archiveKind === 'session' ? 1 : 0;
+  const nextSession = next.archiveKind === 'session' ? 1 : 0;
+  if (prevSession !== nextSession) {
+    return prevSession > nextSession ? prev : next;
+  }
+  const pr = prev.matchRound ?? 0;
+  const nr = next.matchRound ?? 0;
+  if (pr !== nr) {
+    return nr > pr ? next : prev;
+  }
+  const pt = prev.finishedAt ?? prev.createdAt;
+  const nt = next.finishedAt ?? next.createdAt;
+  return nt >= pt ? next : prev;
 }
 
 /**
@@ -249,7 +277,9 @@ export function listOnlineHistoryMerged(): OnlineRoomListItem[] {
   const liveFinished = listOnlineRooms().filter((r) => r.phase === 'finished');
   const byId = new Map<string, OnlineRoomListItem>();
   for (const a of archived) {
-    byId.set(a.roomId, { ...a, archived: true });
+    const row = { ...a, archived: true as const };
+    const prev = byId.get(a.roomId);
+    byId.set(a.roomId, prev ? pickBetterHistoryForRoom(prev, row) : row);
   }
   for (const f of liveFinished) {
     if (!byId.has(f.roomId)) {
