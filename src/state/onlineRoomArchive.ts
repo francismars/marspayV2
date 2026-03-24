@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { PlayerRole } from '../types/game';
-import type { OnlineRoomListItem } from '../types/online';
+import type { OnlineMatchRoundSummary, OnlineRoomListItem } from '../types/online';
 import {
   COMPACT_REPLAY_FORMAT,
   replayFrameCount,
@@ -393,6 +393,56 @@ export function loadSerializedRoomFromArchiveSync(roomId: string): Record<string
 }
 
 const MAX_LIST = 400;
+
+/**
+ * All completed match rows for a room from `index.jsonl` (per-round archives from DoN sessions).
+ */
+export function listArchivedMatchRoundsForRoomSync(roomId: string): OnlineMatchRoundSummary[] {
+  const indexPath = path.join(archiveDir(), INDEX_FILE);
+  if (!fs.existsSync(indexPath)) {
+    return [];
+  }
+  try {
+    const raw = fs.readFileSync(indexPath, 'utf8');
+    const lines = raw.split('\n').filter(Boolean);
+    const byRound = new Map<number, OnlineArchivedListItem>();
+    for (const line of lines) {
+      try {
+        const row = JSON.parse(line) as OnlineArchivedListItem;
+        if (row.roomId !== roomId || row.archived !== true) {
+          continue;
+        }
+        if (row.archiveKind === 'session') {
+          continue;
+        }
+        const round = row.matchRound;
+        if (round == null || round < 1) {
+          continue;
+        }
+        const prev = byRound.get(round);
+        if (!prev || row.finishedAt >= prev.finishedAt) {
+          byRound.set(round, row);
+        }
+      } catch {
+        /* skip line */
+      }
+    }
+    const sorted = [...byRound.entries()].sort((a, b) => a[0] - b[0]);
+    return sorted.map(([matchRound, item]) => ({
+      matchRound,
+      finishedAt: item.finishedAt,
+      winnerName: item.result?.winnerName ?? '—',
+      p1Name: item.result?.p1Name ?? 'Player 1',
+      p2Name: item.result?.p2Name ?? 'Player 2',
+      p1Score: item.result?.p1Score ?? 0,
+      p2Score: item.result?.p2Score ?? 0,
+      netPrize: item.result?.netPrize ?? 0,
+      winnerRole: item.result?.winnerRole,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 export function listArchivedOnlineRoomsSync(): OnlineArchivedListItem[] {
   const indexPath = path.join(archiveDir(), INDEX_FILE);

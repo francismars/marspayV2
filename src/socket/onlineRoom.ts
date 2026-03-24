@@ -27,6 +27,7 @@ import {
   deleteRoom,
   getOnlineReplay,
   getOnlinePostGame,
+  getOnlineMatchRoundHistory,
   getRoomByCode,
   getRoomById,
   hasAnyPaidSeat,
@@ -460,11 +461,12 @@ export function getOnlinePostGameHandler(socket: Socket, payload: { roomId: stri
     socket.emit('onlinePinInvalid', { reason: 'postgame_unavailable' });
     return;
   }
+  const matchRounds = getOnlineMatchRoundHistory(payload.roomId);
   logOnline(
     sessionID,
-    `getOnlinePostGame roomId=${payload.roomId} winner=${info.winnerName} points=${info.winnerPoints}`
+    `getOnlinePostGame roomId=${payload.roomId} winner=${info.winnerName} points=${info.winnerPoints} rounds=${matchRounds.length}`
   );
-  socket.emit('resOnlinePostGameInfo', info);
+  socket.emit('resOnlinePostGameInfo', { ...info, matchRounds });
 }
 
 export function getOnlineReplayHandler(socket: Socket, payload: { roomId: string; matchRound?: number }) {
