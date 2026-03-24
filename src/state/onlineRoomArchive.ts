@@ -380,6 +380,22 @@ function tryLoadSerializedFromFile(filePath: string): Record<string, unknown> | 
   return parsed.serializedRoom as Record<string, unknown>;
 }
 
+/**
+ * `matchRound` from `roomId-session.json` (set when the room was deleted after payout).
+ * Use with index rows so replay targets the **last** game when the index is incomplete.
+ */
+export function readSessionMatchRoundFromArchiveSync(roomId: string): number | undefined {
+  const sr = tryLoadSerializedFromFile(path.join(archiveDir(), sessionFileName(roomId)));
+  if (!sr) {
+    return undefined;
+  }
+  const mr = sr.matchRound;
+  if (typeof mr === 'number' && Number.isFinite(mr) && mr >= 1) {
+    return Math.floor(mr);
+  }
+  return undefined;
+}
+
 type SeatWire = { picture?: string; name?: string; [key: string]: unknown };
 
 /** Fill missing seat name/picture on `primary` from `fallback` (e.g. session vs per-match archive). */
