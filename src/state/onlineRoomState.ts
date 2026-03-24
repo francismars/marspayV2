@@ -29,6 +29,13 @@ import {
   readSessionMatchRoundFromArchiveSync,
 } from './onlineRoomArchive';
 import { packReplayForArchive, type OnlineReplayWirePayload } from './onlineReplayCompact';
+import {
+  peekOnlineSeatLightningForSession,
+  refreshOnlineSeatLightningSocket,
+  removeOnlineSeatLightningForRoom,
+  removeOnlineSeatLightningForSession,
+  listOnlineSeatLightningRecordsForRoom,
+} from './onlineSeatLightningState';
 
 const PIN_TTL_MS = 2 * 60 * 1000;
 /** Home / NIP-07 path: pubkey linked to session before zap (no PIN in comment). */
@@ -427,6 +434,7 @@ export function joinRoom(roomId: string, sessionID: string, socketID: string) {
   room.updatedAt = now;
   roomIdBySession.set(sessionID, roomId);
   refreshNostrLinkSocket(roomId, sessionID, socketID);
+  refreshOnlineSeatLightningSocket(sessionID, socketID);
   logOnlineState(`join roomId=${roomId} session=${sessionID} socket=${socketID}`);
   return room;
 }
@@ -478,6 +486,11 @@ export function leaveRoom(sessionID: string, options?: { releaseSeat?: boolean }
   }
   room.updatedAt = Date.now();
   clearNostrSessionStateOnLeave(sessionID, roomId, { releaseSeat, hasPaidSeat });
+  const lnRec = peekOnlineSeatLightningForSession(sessionID);
+  if (lnRec?.zapPubkeyHex) {
+    removeNostrLinkRegistrationForPubkey(roomId, lnRec.zapPubkeyHex, sessionID);
+  }
+  removeOnlineSeatLightningForSession(sessionID);
   logOnlineState(
     `leave roomId=${roomId} session=${sessionID} releaseSeat=${releaseSeat} hadPaidSeat=${hasPaidSeat}`
   );
@@ -534,6 +547,12 @@ export function deleteRoom(roomId: string) {
       roomIdByKind1EventId.delete(eventId);
     }
   }
+  for (const rec of listOnlineSeatLightningRecordsForRoom(roomId)) {
+    if (rec.zapPubkeyHex) {
+      removeNostrLinkRegistrationForPubkey(roomId, rec.zapPubkeyHex, rec.sessionID);
+    }
+  }
+  removeOnlineSeatLightningForRoom(roomId);
   logOnlineState(`deleted roomId=${roomId} code=${room.roomCode}`);
 }
 
@@ -714,6 +733,21 @@ export function registerNostrLink(
   });
   logOnlineState(`registered nostr link roomId=${roomId} session=${sessionID} pubkey=${pk.slice(0, 8)}…`);
   return { ok: true, expiresAt };
+}
+
+/** Remove a pre-registered pubkey binding (Nostr link or Lightning→zap ephemeral key). */
+export function removeNostrLinkRegistrationForPubkey(
+  roomId: string,
+  pubkeyHex: string,
+  sessionID: string
+): void {
+  const pk = pubkeyHex.toLowerCase();
+  const key = nostrLinkKey(roomId, pk);
+  const rec = nostrLinkByRoomPubkey.get(key);
+  if (rec && rec.sessionID === sessionID) {
+    nostrLinkByRoomPubkey.delete(key);
+    logOnlineState(`removed nostr link registration roomId=${roomId} session=${sessionID}`);
+  }
 }
 
 export function consumeNostrLinkForZap(
