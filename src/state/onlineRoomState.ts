@@ -780,6 +780,17 @@ export function refreshNostrLinkSocket(roomId: string, sessionID: string, socket
   }
 }
 
+/** Active Nostr link pubkey for this session in this room (not consumed). */
+export function getActiveNostrLinkPubkey(roomId: string, sessionID: string): string | undefined {
+  const now = Date.now();
+  for (const rec of nostrLinkByRoomPubkey.values()) {
+    if (rec.roomId === roomId && rec.sessionID === sessionID && rec.expiresAt > now) {
+      return rec.pubkey;
+    }
+  }
+  return undefined;
+}
+
 export function clearNostrSessionStateOnLeave(
   sessionID: string,
   roomId: string,
