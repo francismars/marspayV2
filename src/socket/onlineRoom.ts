@@ -1,11 +1,27 @@
 import { Socket } from 'socket.io';
 import { bytesToHex } from '@noble/hashes/utils';
-import { generateSecretKey, getPublicKey, nip19, verifyEvent, type Event } from 'nostr-tools';
+import {
+  generateSecretKey,
+  getPublicKey,
+  nip19,
+  nip57,
+  verifyEvent,
+  type Event,
+  type EventTemplate,
+} from 'nostr-tools';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 import { publishOnlineKind1Reply } from '../calls/NDK/publishOnlineKind1Reply';
 import { publishOnlineRematchKind1 } from '../calls/NDK/publishOnlineRematchKind1';
 import { fetchKind1NoteEvent } from '../calls/nostr/fetchKind1NoteEvent';
 import { fetchNostrProfileMetadata } from '../calls/nostr/fetchNostrProfileMetadata';
+import {
+  encodeLnurlBech32,
+  fetchLnurlPayMetadata,
+  fetchZapInvoiceFromCallback,
+  lud16ToLnurlPayUrl,
+} from '../calls/nostr/lnurlZapShared';
+import { parsePubpayZapTags } from '../calls/nostr/parsePubpayZapTags';
+import { relaysNostr } from '../consts/nostrRelays';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import createLNURLW from '../calls/LNBits/createLNURLW';
 import createLNURLP from '../calls/LNBits/createLNURLP';
@@ -16,7 +32,7 @@ import { P2PMAXWITHDRAWALS } from '../consts/values';
 import { GameMode, PlayerRole } from '../types/game';
 import type { OnlineRoomListItem } from '../types/online';
 import { io } from '../server';
-import { getKind1sfromSessionID } from '../state/nostrState';
+import { getKind1FromID, getKind1sfromSessionID } from '../state/nostrState';
 import { setIDToLNURLW, setLNURLWToID } from '../state/lnurlwState';
 import {
   archivedRowToOnlineRoomListItem,
@@ -38,6 +54,7 @@ import {
   getOnlinePostGame,
   getOnlineMatchRoundHistory,
   getRoomByCode,
+  getActiveNostrLinkPubkey,
   getRoomById,
   getRoomBySession,
   hasAnyPaidSeat,
@@ -68,6 +85,8 @@ const ONLINE_TICK_MS = 100;
 const ONLINE_PAYOUT_MULTIPLIER = 0.95;
 /** LNURL-pay pending link TTL for anonymous online seat (must match client UX). */
 const ONLINE_SEAT_LIGHTNING_TTL_MS = 15 * 60 * 1000;
+
+const uniqueRelays = [...new Set(relaysNostr)];
 
 function logOnline(sessionID: string | undefined, message: string) {
   const sessionTag = sessionID ?? 'unknown-session';
@@ -801,9 +820,13 @@ export function requestOnlineKind1PostHandler(socket: Socket, payload: { roomId:
       const ev = await fetchKind1NoteEvent(noteRef);
       const npub = nip19.npubEncode(ev.pubkey);
       const npubDisplay = `${npub.slice(0, 18)}…${npub.slice(-12)}`;
+      const pubpayZap = parsePubpayZapTags(ev.tags);
       socket.emit('resOnlineKind1Post', {
         roomId,
         ok: true,
+        eventId: ev.id,
+        tags: ev.tags,
+        pubpayZap,
         content: ev.content,
         created_at: ev.created_at,
         pubkey: ev.pubkey,
@@ -814,6 +837,170 @@ export function requestOnlineKind1PostHandler(socket: Socket, payload: { roomId:
         roomId,
         ok: false,
         reason: e instanceof Error ? e.message : 'fetch_failed',
+      });
+    }
+  })();
+}
+
+export function requestOnlineSeatZapPayPrepareHandler(socket: Socket, payload: { roomId: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const roomId = payload?.roomId;
+  if (!roomId) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'room_not_found' });
+    return;
+  }
+  const room = getRoomById(roomId);
+  if (!room) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'room_not_found' });
+    return;
+  }
+  if (!getActiveNostrLinkPubkey(roomId, sessionID)) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'nostr_not_linked' });
+    return;
+  }
+  if (room.phase !== 'lobby') {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'room_not_accepting' });
+    return;
+  }
+  if (room.postGame.rematchRequested) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'rematch_use_nostr' });
+    return;
+  }
+  const alreadyPaid = [...room.seats.values()].some(
+    (s) => s.sessionID === sessionID && s.status === 'paid'
+  );
+  if (alreadyPaid) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'already_seated' });
+    return;
+  }
+  const hasOpen = [...room.seats.values()].some((s) => s.status === 'open');
+  if (!hasOpen) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'seats_full' });
+    return;
+  }
+  if (!room.kind1EventId) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'kind1_not_ready' });
+    return;
+  }
+  const kind1Info = getKind1FromID(room.kind1EventId);
+  const hostLud16 =
+    kind1Info?.hostLNAddress?.trim() || (process.env.ONLINE_DEFAULT_HOST_LUD16 || '').trim();
+  if (!hostLud16) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
+    return;
+  }
+  void (async () => {
+    try {
+      const meta = await fetchLnurlPayMetadata(hostLud16);
+      if (!meta.allowsNostr || !meta.nostrPubkey) {
+        socket.emit('resOnlineSeatZapPayError', { reason: 'recipient_lnurl_no_zap' });
+        return;
+      }
+      const lnurlpHttpsUrl = lud16ToLnurlPayUrl(hostLud16);
+      const lnurlBech32 = encodeLnurlBech32(lnurlpHttpsUrl);
+      const millisats = room.buyin * 1000;
+      const zapRequestTpl = nip57.makeZapRequest({
+        profile: meta.nostrPubkey,
+        event: room.kind1EventId!,
+        amount: millisats,
+        relays: uniqueRelays,
+        comment: '',
+      }) as EventTemplate;
+      zapRequestTpl.tags.push(['lnurl', lnurlBech32]);
+      zapRequestTpl.tags.push(['k', '1']);
+      socket.emit('resOnlineSeatZapPayPrepare', {
+        roomId,
+        unsignedZap: {
+          kind: zapRequestTpl.kind,
+          created_at: zapRequestTpl.created_at,
+          tags: zapRequestTpl.tags,
+          content: zapRequestTpl.content,
+        },
+        millisats,
+        lnurlBech32,
+        buyinSats: room.buyin,
+        hostLud16,
+      });
+    } catch (e) {
+      socket.emit('resOnlineSeatZapPayError', {
+        reason: e instanceof Error ? e.message : 'prepare_failed',
+      });
+    }
+  })();
+}
+
+export function confirmOnlineSeatZapPayHandler(
+  socket: Socket,
+  payload: { roomId: string; event: unknown }
+) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const roomId = payload?.roomId;
+  if (!roomId) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'room_not_found' });
+    return;
+  }
+  const raw = payload?.event;
+  if (!raw || typeof raw !== 'object') {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'invalid_event' });
+    return;
+  }
+  if (!verifyEvent(raw as Event)) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'invalid_signature' });
+    return;
+  }
+  const signed = raw as Event;
+  if (signed.kind !== 9734) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'invalid_kind' });
+    return;
+  }
+  const room = getRoomById(roomId);
+  if (!room) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'room_not_found' });
+    return;
+  }
+  const linkedPk = getActiveNostrLinkPubkey(roomId, sessionID);
+  if (!linkedPk) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'nostr_not_linked' });
+    return;
+  }
+  if (signed.pubkey.toLowerCase() !== linkedPk.toLowerCase()) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'pubkey_mismatch' });
+    return;
+  }
+  const kind1Info = room.kind1EventId ? getKind1FromID(room.kind1EventId) : undefined;
+  const hostLud16 =
+    kind1Info?.hostLNAddress?.trim() || (process.env.ONLINE_DEFAULT_HOST_LUD16 || '').trim();
+  if (!hostLud16) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
+    return;
+  }
+  void (async () => {
+    try {
+      const meta = await fetchLnurlPayMetadata(hostLud16);
+      if (!meta.allowsNostr || !meta.callback) {
+        socket.emit('resOnlineSeatZapPayError', { reason: 'recipient_lnurl_no_zap' });
+        return;
+      }
+      const lnurlpHttpsUrl = lud16ToLnurlPayUrl(hostLud16);
+      const lnurlBech32 = encodeLnurlBech32(lnurlpHttpsUrl);
+      const millisats = room.buyin * 1000;
+      const pr = await fetchZapInvoiceFromCallback(meta.callback, signed, lnurlBech32, millisats);
+      const lightningUri = pr.startsWith('lightning:') ? pr : `lightning:${pr}`;
+      socket.emit('resOnlineSeatZapPayInvoice', {
+        roomId,
+        pr,
+        lightningUri,
+        buyinSats: room.buyin,
+      });
+    } catch (e) {
+      socket.emit('resOnlineSeatZapPayError', {
+        reason: e instanceof Error ? e.message : 'invoice_failed',
       });
     }
   })();
