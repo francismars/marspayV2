@@ -30,6 +30,8 @@ import {
   requestOnlineNostrLinkChallengeHandler,
   confirmOnlineNostrLinkHandler,
   requestOnlineKind1PostHandler,
+  requestOnlineSeatZapPayPrepareHandler,
+  confirmOnlineSeatZapPayHandler,
   requestOnlineSeatLightningHandler,
   cancelOnlineSeatLightningHandler,
   roomInputHandler,
@@ -236,6 +238,12 @@ export default function registerSocketHandlers(io: Server) {
     });
     socket.on('requestOnlineKind1Post', (payload: { roomId: string }) => {
       requestOnlineKind1PostHandler(socket, payload);
+    });
+    socket.on('requestOnlineSeatZapPayPrepare', (payload: { roomId: string }) => {
+      requestOnlineSeatZapPayPrepareHandler(socket, payload);
+    });
+    socket.on('confirmOnlineSeatZapPay', (payload: { roomId: string; event: unknown }) => {
+      confirmOnlineSeatZapPayHandler(socket, payload);
     });
     socket.on(
       'requestOnlineSeatLightning',
