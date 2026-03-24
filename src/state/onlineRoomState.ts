@@ -270,24 +270,95 @@ function pickBetterHistoryForRoom(prev: OnlineRoomListItem, next: OnlineRoomList
   return nt >= pt ? next : prev;
 }
 
+function pickPrimaryHistoryRow(rows: OnlineRoomListItem[]): OnlineRoomListItem {
+  if (rows.length === 0) {
+    throw new Error('pickPrimaryHistoryRow: empty');
+  }
+  return rows.reduce((acc, row) => pickBetterHistoryForRoom(acc, row));
+}
+
+/**
+ * Combine `result` blobs from multiple index rows for the same room so avatar URLs are kept:
+ * session vs per-match rows sometimes only one has full `seats` / picture merge in `result`.
+ */
+function mergeHistoryResultPortraits(
+  primary: NonNullable<OnlineRoomListItem['result']>,
+  extras: (NonNullable<OnlineRoomListItem['result']> | undefined)[]
+): NonNullable<OnlineRoomListItem['result']> {
+  let out = { ...primary };
+  for (const o of extras) {
+    if (!o) {
+      continue;
+    }
+    out = {
+      ...out,
+      p1Picture: out.p1Picture || o.p1Picture,
+      p2Picture: out.p2Picture || o.p2Picture,
+      winnerPicture: out.winnerPicture || o.winnerPicture,
+      p1Name: out.p1Name || o.p1Name,
+      p2Name: out.p2Name || o.p2Name,
+    };
+  }
+  return out;
+}
+
 /**
  * Single source of truth for History: archived index rows + finished rooms still in RAM
  * (archived wins when both exist for the same `roomId`).
  */
 export function listOnlineHistoryMerged(): OnlineRoomListItem[] {
   const archived = listArchivedOnlineRoomsSync().map(archivedRowToOnlineRoomListItem);
-  const liveFinished = listOnlineRooms().filter((r) => r.phase === 'finished');
-  const byId = new Map<string, OnlineRoomListItem>();
+  const byRoomId = new Map<string, OnlineRoomListItem[]>();
   for (const a of archived) {
     const row = { ...a, archived: true as const };
-    const prev = byId.get(a.roomId);
-    byId.set(a.roomId, prev ? pickBetterHistoryForRoom(prev, row) : row);
+    const list = byRoomId.get(row.roomId) ?? [];
+    list.push(row);
+    byRoomId.set(row.roomId, list);
   }
+
+  const mergedArchived: OnlineRoomListItem[] = [];
+  for (const rows of byRoomId.values()) {
+    const primary = pickPrimaryHistoryRow(rows);
+    const allResults = rows
+      .map((r) => r.result)
+      .filter((r): r is NonNullable<OnlineRoomListItem['result']> => Boolean(r));
+    const baseResult = primary.result ?? allResults[0];
+    const mergedResult = baseResult
+      ? mergeHistoryResultPortraits(
+          baseResult,
+          allResults.filter((r) => r !== baseResult)
+        )
+      : primary.result;
+    mergedArchived.push({
+      ...primary,
+      result: mergedResult ?? primary.result,
+    });
+  }
+
+  const byId = new Map<string, OnlineRoomListItem>();
+  for (const m of mergedArchived) {
+    byId.set(m.roomId, m);
+  }
+
+  const liveFinished = listOnlineRooms().filter((r) => r.phase === 'finished');
   for (const f of liveFinished) {
-    if (!byId.has(f.roomId)) {
+    const prev = byId.get(f.roomId);
+    if (!prev) {
       byId.set(f.roomId, { ...f, archived: false });
+      continue;
     }
+    const mergedResult =
+      prev.result && f.result
+        ? mergeHistoryResultPortraits(f.result, [prev.result])
+        : f.result ?? prev.result;
+    byId.set(f.roomId, {
+      ...prev,
+      ...f,
+      archived: false,
+      result: mergedResult,
+    });
   }
+
   return [...byId.values()].sort(
     (a, b) => (b.finishedAt ?? b.createdAt) - (a.finishedAt ?? a.createdAt)
   );
