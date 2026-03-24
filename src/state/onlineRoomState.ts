@@ -319,6 +319,8 @@ export function listOnlineHistoryMerged(): OnlineRoomListItem[] {
   const mergedArchived: OnlineRoomListItem[] = [];
   for (const rows of byRoomId.values()) {
     const primary = pickPrimaryHistoryRow(rows);
+    /** Max round among index rows so merged session rows still get `matchRound` for replay URLs. */
+    const maxMatchRound = Math.max(0, ...rows.map((r) => r.matchRound ?? 0));
     const allResults = rows
       .map((r) => r.result)
       .filter((r): r is NonNullable<OnlineRoomListItem['result']> => Boolean(r));
@@ -332,6 +334,7 @@ export function listOnlineHistoryMerged(): OnlineRoomListItem[] {
     mergedArchived.push({
       ...primary,
       result: mergedResult ?? primary.result,
+      ...(maxMatchRound > 0 ? { matchRound: maxMatchRound } : {}),
     });
   }
 
@@ -351,11 +354,13 @@ export function listOnlineHistoryMerged(): OnlineRoomListItem[] {
       prev.result && f.result
         ? mergeHistoryResultPortraits(f.result, [prev.result])
         : f.result ?? prev.result;
+    const mergedRound = Math.max(prev.matchRound ?? 0, f.matchRound ?? 0);
     byId.set(f.roomId, {
       ...prev,
       ...f,
       archived: false,
       result: mergedResult,
+      ...(mergedRound > 0 ? { matchRound: mergedRound } : {}),
     });
   }
 
