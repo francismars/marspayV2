@@ -21,6 +21,7 @@ import {
   lud16ToLnurlPayUrl,
 } from '../calls/nostr/lnurlZapShared';
 import { parsePubpayZapTags } from '../calls/nostr/parsePubpayZapTags';
+import { resolveHostLud16ForOnlineSeat } from '../calls/nostr/resolveHostLud16ForOnlineSeat';
 import { relaysNostr } from '../consts/nostrRelays';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import createLNURLW from '../calls/LNBits/createLNURLW';
@@ -886,14 +887,13 @@ export function requestOnlineSeatZapPayPrepareHandler(socket: Socket, payload: {
     return;
   }
   const kind1Info = getKind1FromID(room.kind1EventId);
-  const hostLud16 =
-    kind1Info?.hostLNAddress?.trim() || (process.env.ONLINE_DEFAULT_HOST_LUD16 || '').trim();
-  if (!hostLud16) {
-    socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
-    return;
-  }
   void (async () => {
     try {
+      const hostLud16 = await resolveHostLud16ForOnlineSeat(room.kind1EventId!, kind1Info);
+      if (!hostLud16) {
+        socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
+        return;
+      }
       const meta = await fetchLnurlPayMetadata(hostLud16);
       if (!meta.allowsNostr || !meta.nostrPubkey) {
         socket.emit('resOnlineSeatZapPayError', { reason: 'recipient_lnurl_no_zap' });
@@ -974,14 +974,13 @@ export function confirmOnlineSeatZapPayHandler(
     return;
   }
   const kind1Info = room.kind1EventId ? getKind1FromID(room.kind1EventId) : undefined;
-  const hostLud16 =
-    kind1Info?.hostLNAddress?.trim() || (process.env.ONLINE_DEFAULT_HOST_LUD16 || '').trim();
-  if (!hostLud16) {
-    socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
-    return;
-  }
   void (async () => {
     try {
+      const hostLud16 = await resolveHostLud16ForOnlineSeat(room.kind1EventId!, kind1Info);
+      if (!hostLud16) {
+        socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
+        return;
+      }
       const meta = await fetchLnurlPayMetadata(hostLud16);
       if (!meta.allowsNostr || !meta.callback) {
         socket.emit('resOnlineSeatZapPayError', { reason: 'recipient_lnurl_no_zap' });
