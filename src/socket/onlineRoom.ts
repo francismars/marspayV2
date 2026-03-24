@@ -822,6 +822,7 @@ export function requestOnlineKind1PostHandler(socket: Socket, payload: { roomId:
       const npub = nip19.npubEncode(ev.pubkey);
       const npubDisplay = `${npub.slice(0, 18)}…${npub.slice(-12)}`;
       const pubpayZap = parsePubpayZapTags(ev.tags);
+      const profile = await fetchNostrProfileMetadata(ev.pubkey);
       socket.emit('resOnlineKind1Post', {
         roomId,
         ok: true,
@@ -832,6 +833,8 @@ export function requestOnlineKind1PostHandler(socket: Socket, payload: { roomId:
         created_at: ev.created_at,
         pubkey: ev.pubkey,
         npubDisplay,
+        authorName: profile.name,
+        authorPicture: profile.picture,
       });
     } catch (e) {
       socket.emit('resOnlineKind1Post', {
