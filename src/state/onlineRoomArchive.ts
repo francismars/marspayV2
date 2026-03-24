@@ -380,12 +380,62 @@ function tryLoadSerializedFromFile(filePath: string): Record<string, unknown> | 
   return parsed.serializedRoom as Record<string, unknown>;
 }
 
-export function loadSerializedRoomFromArchiveSync(roomId: string): Record<string, unknown> | undefined {
-  const session = tryLoadSerializedFromFile(path.join(archiveDir(), sessionFileName(roomId)));
+type SeatWire = { picture?: string; name?: string; [key: string]: unknown };
+
+/** Fill missing seat name/picture on `primary` from `fallback` (e.g. session vs per-match archive). */
+function mergeSerializedSeatPortraits(
+  primary: Record<string, unknown>,
+  fallback?: Record<string, unknown>
+): Record<string, unknown> {
+  if (!fallback) {
+    return primary;
+  }
+  const pSeats = primary.seats as Record<string, SeatWire> | undefined;
+  const fSeats = fallback.seats as Record<string, SeatWire> | undefined;
+  if (!pSeats || !fSeats) {
+    return primary;
+  }
+  const roles = [PlayerRole.Player1, PlayerRole.Player2] as const;
+  const nextSeats: Record<string, SeatWire> = { ...pSeats };
+  for (const role of roles) {
+    const ps = pSeats[role];
+    const fs = fSeats[role];
+    if (!fs) {
+      continue;
+    }
+    nextSeats[role] = {
+      ...(ps ?? {}),
+      picture: ps?.picture || fs.picture,
+      name: ps?.name || fs.name,
+    };
+  }
+  return { ...primary, seats: nextSeats };
+}
+
+/**
+ * Load wire room for clients (lobby UI / replay header). Optional `matchRound` loads the per-match
+ * archive (`roomId-rN.json`) so replay viewers get seats/avatars for that game, not only session.json.
+ */
+export function loadSerializedRoomFromArchiveSync(
+  roomId: string,
+  matchRound?: number
+): Record<string, unknown> | undefined {
+  const sessionPath = path.join(archiveDir(), sessionFileName(roomId));
+  const legacyPath = path.join(archiveDir(), legacyRoomFileName(roomId));
+  const session = tryLoadSerializedFromFile(sessionPath);
+  const legacy = tryLoadSerializedFromFile(legacyPath);
+  const sessionOrLegacy = session ?? legacy;
+
+  if (matchRound != null && matchRound >= 1) {
+    const fromMatch = tryLoadSerializedFromFile(path.join(archiveDir(), matchFileName(roomId, matchRound)));
+    if (fromMatch) {
+      return mergeSerializedSeatPortraits(fromMatch, sessionOrLegacy);
+    }
+  }
+
   if (session) {
     return session;
   }
-  const legacy = tryLoadSerializedFromFile(path.join(archiveDir(), legacyRoomFileName(roomId)));
   if (legacy) {
     return legacy;
   }

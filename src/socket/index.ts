@@ -186,7 +186,7 @@ export default function registerSocketHandlers(io: Server) {
     socket.on('cancelOnlineRoom', (payload: { roomId: string }) => {
       cancelOnlineRoomHandler(socket, payload);
     });
-    socket.on('getOnlineRoomState', (payload: { roomId: string }) => {
+    socket.on('getOnlineRoomState', (payload: { roomId: string; matchRound?: number }) => {
       getOnlineRoomStateHandler(socket, payload);
     });
     socket.on(

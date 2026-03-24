@@ -266,7 +266,10 @@ export function spectateOnlineRoomHandler(socket: Socket, payload: { roomId: str
   broadcastOnlineRoomLists();
 }
 
-export function getOnlineRoomStateHandler(socket: Socket, payload: { roomId: string }) {
+export function getOnlineRoomStateHandler(
+  socket: Socket,
+  payload: { roomId: string; matchRound?: number }
+) {
   const sessionID = socket.data.sessionID as string | undefined;
   const room = getRoomById(payload.roomId);
   if (room) {
@@ -274,9 +277,12 @@ export function getOnlineRoomStateHandler(socket: Socket, payload: { roomId: str
     socket.emit('onlineRoomUpdated', serializeRoom(room));
     return;
   }
-  const archived = loadSerializedRoomFromArchiveSync(payload.roomId);
+  const archived = loadSerializedRoomFromArchiveSync(payload.roomId, payload.matchRound);
   if (archived) {
-    logOnline(sessionID, `getOnlineRoomState from archive roomId=${payload.roomId}`);
+    logOnline(
+      sessionID,
+      `getOnlineRoomState from archive roomId=${payload.roomId} matchRound=${payload.matchRound ?? 'n/a'}`
+    );
     socket.emit('onlineRoomUpdated', archived);
     return;
   }
