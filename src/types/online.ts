@@ -96,6 +96,19 @@ export interface OnlineRoom {
   };
 }
 
+/** One completed sim in a room (match 1, 2, … for double-or-nothing sessions). */
+export interface OnlineMatchRoundSummary {
+  matchRound: number;
+  finishedAt: number;
+  winnerName: string;
+  p1Name: string;
+  p2Name: string;
+  p1Score: number;
+  p2Score: number;
+  netPrize: number;
+  winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
+}
+
 export interface OnlineRoomListItem {
   roomId: string;
   roomCode: string;

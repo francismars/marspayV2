@@ -5,6 +5,7 @@ import { dateNow } from '../utils/time';
 import {
   JoinPinRecord,
   OnlineRoom,
+  OnlineMatchRoundSummary,
   OnlineRoomListItem,
   OnlineRoomMember,
   OnlineRoomNostrMeta,
@@ -22,6 +23,7 @@ import {
   appendOnlineRoomArchive,
   archivedRowToOnlineRoomListItem,
   getOnlinePostGameFromArchive,
+  listArchivedMatchRoundsForRoomSync,
   listArchivedOnlineRoomsSync,
   loadCompactReplayFromArchiveSync,
 } from './onlineRoomArchive';
@@ -1063,6 +1065,38 @@ export function getOnlinePostGame(roomId: string) {
     };
   }
   return getOnlinePostGameFromArchive(roomId);
+}
+
+/**
+ * Per-round results for victory/history UI: index rows for each completed sim, plus the current
+ * postgame round from RAM if the async match archive has not landed yet.
+ */
+export function getOnlineMatchRoundHistory(roomId: string): OnlineMatchRoundSummary[] {
+  const fromArchive = listArchivedMatchRoundsForRoomSync(roomId);
+  const room = roomById.get(roomId);
+  if (!room || (room.phase !== 'postgame' && room.phase !== 'finished')) {
+    return fromArchive;
+  }
+  const mr = room.matchRound;
+  if (mr < 1) {
+    return fromArchive;
+  }
+  if (fromArchive.some((r) => r.matchRound === mr)) {
+    return fromArchive;
+  }
+  const res = roomToFinishedResult(room);
+  const synthesized: OnlineMatchRoundSummary = {
+    matchRound: mr,
+    finishedAt: room.postGame.settledAt ?? room.updatedAt,
+    winnerName: res.winnerName,
+    p1Name: res.p1Name,
+    p2Name: res.p2Name,
+    p1Score: res.p1Score,
+    p2Score: res.p2Score,
+    netPrize: res.netPrize,
+    winnerRole: res.winnerRole,
+  };
+  return [...fromArchive, synthesized].sort((a, b) => a.matchRound - b.matchRound);
 }
 
 export function setOnlinePostGameLnurlw(roomId: string, lnurlw: string) {
