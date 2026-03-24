@@ -26,6 +26,7 @@ import {
   listArchivedMatchRoundsForRoomSync,
   listArchivedOnlineRoomsSync,
   loadCompactReplayFromArchiveSync,
+  readSessionMatchRoundFromArchiveSync,
 } from './onlineRoomArchive';
 import { packReplayForArchive, type OnlineReplayWirePayload } from './onlineReplayCompact';
 
@@ -319,8 +320,11 @@ export function listOnlineHistoryMerged(): OnlineRoomListItem[] {
   const mergedArchived: OnlineRoomListItem[] = [];
   for (const rows of byRoomId.values()) {
     const primary = pickPrimaryHistoryRow(rows);
-    /** Max round among index rows so merged session rows still get `matchRound` for replay URLs. */
-    const maxMatchRound = Math.max(0, ...rows.map((r) => r.matchRound ?? 0));
+    /** Last game in session: max of per-match index rows and session file `serializedRoom.matchRound`. */
+    const roomId = rows[0].roomId;
+    const fromIndex = Math.max(0, ...rows.map((r) => r.matchRound ?? 0));
+    const fromSessionFile = readSessionMatchRoundFromArchiveSync(roomId) ?? 0;
+    const replayRound = Math.max(fromIndex, fromSessionFile);
     const allResults = rows
       .map((r) => r.result)
       .filter((r): r is NonNullable<OnlineRoomListItem['result']> => Boolean(r));
@@ -334,7 +338,7 @@ export function listOnlineHistoryMerged(): OnlineRoomListItem[] {
     mergedArchived.push({
       ...primary,
       result: mergedResult ?? primary.result,
-      ...(maxMatchRound > 0 ? { matchRound: maxMatchRound } : {}),
+      ...(replayRound > 0 ? { matchRound: replayRound } : {}),
     });
   }
 
@@ -374,6 +378,8 @@ export function listOnlineRooms(): OnlineRoomListItem[] {
     roomId: room.roomId,
     roomCode: room.roomCode,
     buyin: room.buyin,
+    /** Last completed lobby→playing cycle (for replay URL / history). */
+    matchRound: room.matchRound,
     createdAt: room.createdAt,
     finishedAt:
       room.phase === 'finished'
