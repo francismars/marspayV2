@@ -1,9 +1,11 @@
 import { Socket } from 'socket.io';
 import { bytesToHex } from '@noble/hashes/utils';
-import { generateSecretKey, getPublicKey, verifyEvent, type Event } from 'nostr-tools';
+import { generateSecretKey, getPublicKey, nip19, verifyEvent, type Event } from 'nostr-tools';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 import { publishOnlineKind1Reply } from '../calls/NDK/publishOnlineKind1Reply';
 import { publishOnlineRematchKind1 } from '../calls/NDK/publishOnlineRematchKind1';
+import { fetchKind1NoteEvent } from '../calls/nostr/fetchKind1NoteEvent';
+import { fetchNostrProfileMetadata } from '../calls/nostr/fetchNostrProfileMetadata';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import createLNURLW from '../calls/LNBits/createLNURLW';
 import createLNURLP from '../calls/LNBits/createLNURLP';
@@ -723,7 +725,7 @@ export function requestOnlineNostrLinkChallengeHandler(socket: Socket, payload: 
   });
 }
 
-export function confirmOnlineNostrLinkHandler(
+export async function confirmOnlineNostrLinkHandler(
   socket: Socket,
   payload: { roomId: string; event: unknown }
 ) {
@@ -761,7 +763,60 @@ export function confirmOnlineNostrLinkHandler(
     socket.emit('onlinePinInvalid', { reason: reg.reason });
     return;
   }
-  socket.emit('resOnlineNostrLinkOk', { expiresAt: reg.expiresAt });
+  let profile: { pubkey: string; name: string; picture: string | null };
+  try {
+    profile = await fetchNostrProfileMetadata(event.pubkey);
+  } catch {
+    const pk = event.pubkey;
+    profile = {
+      pubkey: pk,
+      name: `${pk.slice(0, 12)}…`,
+      picture: null,
+    };
+  }
+  socket.emit('resOnlineNostrLinkOk', { expiresAt: reg.expiresAt, profile });
+}
+
+export function requestOnlineKind1PostHandler(socket: Socket, payload: { roomId: string }) {
+  const roomId = payload?.roomId;
+  if (!roomId) {
+    socket.emit('resOnlineKind1Post', { roomId: '', ok: false, reason: 'room_not_found' });
+    return;
+  }
+  const room = getRoomById(roomId);
+  if (!room) {
+    socket.emit('resOnlineKind1Post', { roomId, ok: false, reason: 'room_not_found' });
+    return;
+  }
+  const rematchPending = Boolean(room.postGame.rematchRequested);
+  const noteRef = rematchPending
+    ? room.postGame.rematchNote1 ?? ''
+    : room.nostrMeta?.note1 ?? '';
+  if (!noteRef) {
+    socket.emit('resOnlineKind1Post', { roomId, ok: false, reason: 'note_not_ready' });
+    return;
+  }
+  void (async () => {
+    try {
+      const ev = await fetchKind1NoteEvent(noteRef);
+      const npub = nip19.npubEncode(ev.pubkey);
+      const npubDisplay = `${npub.slice(0, 18)}…${npub.slice(-12)}`;
+      socket.emit('resOnlineKind1Post', {
+        roomId,
+        ok: true,
+        content: ev.content,
+        created_at: ev.created_at,
+        pubkey: ev.pubkey,
+        npubDisplay,
+      });
+    } catch (e) {
+      socket.emit('resOnlineKind1Post', {
+        roomId,
+        ok: false,
+        reason: e instanceof Error ? e.message : 'fetch_failed',
+      });
+    }
+  })();
 }
 
 export async function requestOnlineSeatLightningHandler(
