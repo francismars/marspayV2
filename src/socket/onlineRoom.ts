@@ -1,10 +1,12 @@
 import { Socket } from 'socket.io';
-import { verifyEvent, type Event } from 'nostr-tools';
+import { bytesToHex } from '@noble/hashes/utils';
+import { generateSecretKey, getPublicKey, verifyEvent, type Event } from 'nostr-tools';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 import { publishOnlineKind1Reply } from '../calls/NDK/publishOnlineKind1Reply';
 import { publishOnlineRematchKind1 } from '../calls/NDK/publishOnlineRematchKind1';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import createLNURLW from '../calls/LNBits/createLNURLW';
+import createLNURLP from '../calls/LNBits/createLNURLP';
 import getLNURLCallback from '../calls/LNAddress/getLNURLCallback';
 import getInvoiceFromCallback from '../calls/LNAddress/getInvoiceFromCallback';
 import payInvoice from '../calls/LNBits/payInvoice';
@@ -19,6 +21,11 @@ import {
   listArchivedOnlineRoomsSync,
   loadSerializedRoomFromArchiveSync,
 } from '../state/onlineRoomArchive';
+import {
+  peekOnlineSeatLightningForSession,
+  registerOnlineSeatLightning,
+  removeOnlineSeatLightningForSession,
+} from '../state/onlineSeatLightningState';
 import { pruneOnlineSnapshotForWire } from '../state/onlineSnapshotWire';
 import { dateNow } from '../utils/time';
 import {
@@ -30,6 +37,7 @@ import {
   getOnlineMatchRoundHistory,
   getRoomByCode,
   getRoomById,
+  getRoomBySession,
   hasAnyPaidSeat,
   isPaidSeatSession,
   issueJoinPin,
@@ -38,6 +46,7 @@ import {
   peekPendingNostrChallenge,
   clearPendingNostrChallenge,
   registerNostrLink,
+  removeNostrLinkRegistrationForPubkey,
   leaveRoom,
   listOnlineHistoryMerged,
   listOnlineRooms,
@@ -55,6 +64,8 @@ import {
 
 const ONLINE_TICK_MS = 100;
 const ONLINE_PAYOUT_MULTIPLIER = 0.95;
+/** LNURL-pay pending link TTL for anonymous online seat (must match client UX). */
+const ONLINE_SEAT_LIGHTNING_TTL_MS = 15 * 60 * 1000;
 
 function logOnline(sessionID: string | undefined, message: string) {
   const sessionTag = sessionID ?? 'unknown-session';
@@ -751,6 +762,101 @@ export function confirmOnlineNostrLinkHandler(
     return;
   }
   socket.emit('resOnlineNostrLinkOk', { expiresAt: reg.expiresAt });
+}
+
+export async function requestOnlineSeatLightningHandler(
+  socket: Socket,
+  payload: { roomId: string }
+) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const roomId = payload?.roomId;
+  if (!roomId) {
+    socket.emit('resOnlineSeatLightningError', { reason: 'room_not_found' });
+    return;
+  }
+  const room = getRoomById(roomId);
+  if (!room) {
+    socket.emit('resOnlineSeatLightningError', { reason: 'room_not_found' });
+    return;
+  }
+  if (room.phase !== 'lobby') {
+    socket.emit('resOnlineSeatLightningError', { reason: 'room_not_accepting' });
+    return;
+  }
+  if (room.postGame.rematchRequested) {
+    socket.emit('resOnlineSeatLightningError', { reason: 'rematch_use_nostr' });
+    return;
+  }
+  const alreadyPaid = [...room.seats.values()].some(
+    (s) => s.sessionID === sessionID && s.status === 'paid'
+  );
+  if (alreadyPaid) {
+    socket.emit('resOnlineSeatLightningError', { reason: 'already_seated' });
+    return;
+  }
+  const hasOpen = [...room.seats.values()].some((s) => s.status === 'open');
+  if (!hasOpen) {
+    socket.emit('resOnlineSeatLightningError', { reason: 'seats_full' });
+    return;
+  }
+  if (!room.kind1EventId) {
+    socket.emit('resOnlineSeatLightningError', { reason: 'kind1_not_ready' });
+    return;
+  }
+  const pending = peekOnlineSeatLightningForSession(sessionID);
+  if (pending?.zapPubkeyHex) {
+    removeNostrLinkRegistrationForPubkey(room.roomId, pending.zapPubkeyHex, sessionID);
+  }
+  const sk = generateSecretKey();
+  const pkHex = getPublicKey(sk);
+  const nostrReg = registerNostrLink(room.roomId, sessionID, socket.id, pkHex);
+  if (!nostrReg.ok) {
+    socket.emit('resOnlineSeatLightningError', { reason: nostrReg.reason });
+    return;
+  }
+  const desc = `CD online ${room.roomCode}`;
+  const created = await createLNURLP(desc, room.buyin, room.buyin, 0);
+  if (!created) {
+    removeNostrLinkRegistrationForPubkey(room.roomId, pkHex, sessionID);
+    socket.emit('resOnlineSeatLightningError', { reason: 'lnbits_unavailable' });
+    return;
+  }
+  const expiresAt = Date.now() + ONLINE_SEAT_LIGHTNING_TTL_MS;
+  registerOnlineSeatLightning({
+    roomId: room.roomId,
+    sessionID,
+    socketID: socket.id,
+    buyin: room.buyin,
+    expiresAt,
+    lnurlpId: created.id,
+    zapSecretKeyHex: bytesToHex(sk),
+    zapPubkeyHex: pkHex,
+  });
+  const raw = created.lnurlp;
+  const lightningUri = raw.startsWith('lightning:') ? raw : `lightning:${raw}`;
+  socket.emit('resOnlineSeatLightning', {
+    lnurl: raw,
+    lightningUri,
+    buyin: room.buyin,
+    expiresAt,
+  });
+}
+
+export function cancelOnlineSeatLightningHandler(socket: Socket) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const lnRec = peekOnlineSeatLightningForSession(sessionID);
+  const room = getRoomBySession(sessionID);
+  if (lnRec?.zapPubkeyHex && room) {
+    removeNostrLinkRegistrationForPubkey(room.roomId, lnRec.zapPubkeyHex, sessionID);
+  }
+  removeOnlineSeatLightningForSession(sessionID);
+  socket.emit('resOnlineSeatLightningCancelled', {});
 }
 
 export function startOnlineLoop() {

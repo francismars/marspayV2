@@ -29,6 +29,8 @@ import {
   onlineSetReadyHandler,
   requestOnlineNostrLinkChallengeHandler,
   confirmOnlineNostrLinkHandler,
+  requestOnlineSeatLightningHandler,
+  cancelOnlineSeatLightningHandler,
   roomInputHandler,
   spectateOnlineRoomHandler,
   startOnlineGameHandler,
@@ -230,6 +232,15 @@ export default function registerSocketHandlers(io: Server) {
     });
     socket.on('confirmOnlineNostrLink', (payload: { roomId: string; event: unknown }) => {
       confirmOnlineNostrLinkHandler(socket, payload);
+    });
+    socket.on(
+      'requestOnlineSeatLightning',
+      guardSocketAsync(socket, 'requestOnlineSeatLightning', async (payload: { roomId: string }) => {
+        await requestOnlineSeatLightningHandler(socket, payload);
+      })
+    );
+    socket.on('cancelOnlineSeatLightning', () => {
+      cancelOnlineSeatLightningHandler(socket);
     });
 
     socket.on('disconnect', () => {

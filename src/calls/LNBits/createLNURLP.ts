@@ -6,7 +6,9 @@ import { PAYURL } from '../../consts/lnbits';
 export default async function createLNURLP(
   description: string,
   buyInMin: number,
-  buyInMax: number
+  buyInMax: number,
+  /** LNURL-pay comment field length; use `0` for anonymous fixed seats (no PIN in comment). */
+  commentChars: number = 10
 ): Promise<LNURLP | null> {
   dotenv.config();
   const lnbitsURL = process.env.LNBITS_URL;
@@ -30,7 +32,7 @@ export default async function createLNURLP(
         description: description,
         min: buyInMin,
         max: buyInMax,
-        comment_chars: 10,
+        comment_chars: commentChars,
         webhook_url: lnbitsHook,
       }),
     });
