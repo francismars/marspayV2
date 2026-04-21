@@ -22,7 +22,7 @@ import {
 } from '../calls/nostr/lnurlZapShared';
 import { parsePubpayZapTags } from '../calls/nostr/parsePubpayZapTags';
 import { resolveHostLud16ForOnlineSeat } from '../calls/nostr/resolveHostLud16ForOnlineSeat';
-import { relaysNostr } from '../consts/nostrRelays';
+import { NOSTR_RELAYS } from '../consts/nostrRelays';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import createLNURLW from '../calls/LNBits/createLNURLW';
 import createLNURLP from '../calls/LNBits/createLNURLP';
@@ -87,7 +87,6 @@ const ONLINE_PAYOUT_MULTIPLIER = 0.95;
 /** LNURL-pay pending link TTL for anonymous online seat (must match client UX). */
 const ONLINE_SEAT_LIGHTNING_TTL_MS = 15 * 60 * 1000;
 
-const uniqueRelays = [...new Set(relaysNostr)];
 
 function logOnline(sessionID: string | undefined, message: string) {
   const sessionTag = sessionID ?? 'unknown-session';
@@ -908,7 +907,7 @@ export function requestOnlineSeatZapPayPrepareHandler(socket: Socket, payload: {
         profile: meta.nostrPubkey,
         event: room.kind1EventId!,
         amount: millisats,
-        relays: uniqueRelays,
+        relays: NOSTR_RELAYS,
         comment: '',
       }) as EventTemplate;
       zapRequestTpl.tags.push(['lnurl', lnurlBech32]);

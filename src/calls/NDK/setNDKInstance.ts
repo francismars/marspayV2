@@ -1,6 +1,6 @@
 import NDK, { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk';
 import dotenv from 'dotenv';
-import { relaysNostr } from '../../consts/nostrRelays';
+import { NOSTR_RELAYS } from '../../consts/nostrRelays';
 import { dateNow } from '../../utils/time';
 
 export let ndkInstance: NDK;
@@ -18,23 +18,23 @@ export async function setNDKInstance() {
   const pksigner = new NDKPrivateKeySigner(nostrPrivKey!);
   ndkInstance = new NDK({
     signer: pksigner,
-    explicitRelayUrls: relaysNostr,
+    explicitRelayUrls: NOSTR_RELAYS,
   });
-  console.log(`${dateNow()} [NDK] initializing with ${relaysNostr.length} relays`);
+  console.log(`${dateNow()} [NDK] initializing with ${NOSTR_RELAYS.length} relays`);
   let connectedRelays = 0;
   const relayConnected = new Promise<void>((resolve) => {
     const timeout = setTimeout(() => {
       console.log(
-        `${dateNow()} [NDK] relay wait timeout after ${NDK_CONNECT_TIMEOUT_MS}ms (${connectedRelays}/${relaysNostr.length} connected)`
+        `${dateNow()} [NDK] relay wait timeout after ${NDK_CONNECT_TIMEOUT_MS}ms (${connectedRelays}/${NOSTR_RELAYS.length} connected)`
       );
       resolve();
     }, NDK_CONNECT_TIMEOUT_MS);
     ndkInstance.pool.on('relay:connect', () => {
       connectedRelays++;
       console.log(
-        `${dateNow()} [NDK] relay connected (${connectedRelays}/${relaysNostr.length})`
+        `${dateNow()} [NDK] relay connected (${connectedRelays}/${NOSTR_RELAYS.length})`
       );
-      if (connectedRelays > relaysNostr.length / 2) {
+      if (connectedRelays > NOSTR_RELAYS.length / 2) {
         clearTimeout(timeout);
         resolve();
       }
@@ -43,6 +43,6 @@ export async function setNDKInstance() {
   await ndkInstance.connect();
   await relayConnected;
   console.log(
-    `${dateNow()} [NDK] ready (${connectedRelays}/${relaysNostr.length} relays connected)`
+    `${dateNow()} [NDK] ready (${connectedRelays}/${NOSTR_RELAYS.length} relays connected)`
   );
 }
