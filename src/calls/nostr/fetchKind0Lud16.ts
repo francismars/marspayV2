@@ -1,16 +1,11 @@
 import { SimplePool } from 'nostr-tools';
-
-const READ_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.nostr.band',
-];
+import { NOSTR_RELAYS } from '../../consts/nostrRelays';
 
 /** Reads `lud16` from the author's latest kind 0 profile JSON (NIP-57 / LUD-16). */
 export async function fetchKind0Lud16(pubkey: string): Promise<string | undefined> {
   const pool = new SimplePool();
   try {
-    const events = await pool.querySync(READ_RELAYS, {
+    const events = await pool.querySync(NOSTR_RELAYS, {
       kinds: [0],
       authors: [pubkey],
       limit: 1,
@@ -31,6 +26,6 @@ export async function fetchKind0Lud16(pubkey: string): Promise<string | undefine
     }
     return undefined;
   } finally {
-    pool.close(READ_RELAYS);
+    pool.close(NOSTR_RELAYS);
   }
 }
