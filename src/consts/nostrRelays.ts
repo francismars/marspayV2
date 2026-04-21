@@ -1,20 +1,7 @@
-export const relaysNostr = [
+export const NOSTR_RELAYS = [
   'wss://relay.damus.io',
-  'wss://nostr.wine',
-  'wss://paid.nostrified.org',
-  'wss://lightningrelay.com',
-  'wss://relay.nostr.wf',
-  'wss://nostr.land',
   'wss://relay.nos.social',
   'wss://relay.primal.net',
-  'wss://relay.damus.io',
-  'wss://relay.mutinywallet.com',
-  'wss://damus.relay.center',
-  'wss://relay.snort.social',
-  'wss://relay.f7z.io',
-  'wss://satellite.hzrd149.com',
-  'wss://relay.zap.store',
   'wss://nos.lol',
-  'wss://relay.hrf.org',
   'wss://relay.nostr.net',
 ];

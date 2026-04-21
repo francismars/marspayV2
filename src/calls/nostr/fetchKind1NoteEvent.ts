@@ -1,10 +1,5 @@
 import { nip19, SimplePool, type Event } from 'nostr-tools';
-
-const DEFAULT_READ_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.nostr.band',
-];
+import { NOSTR_RELAYS } from '../../consts/nostrRelays';
 
 const HEX64 = /^[0-9a-f]{64}$/i;
 
@@ -12,15 +7,15 @@ function parseNoteId(noteRef: string): { id: string; relays: string[] } {
   const trimmed = noteRef.trim();
   const withoutScheme = trimmed.replace(/^nostr:/i, '');
   if (HEX64.test(withoutScheme)) {
-    return { id: withoutScheme.toLowerCase(), relays: DEFAULT_READ_RELAYS };
+    return { id: withoutScheme.toLowerCase(), relays: NOSTR_RELAYS };
   }
   try {
     const d = nip19.decode(withoutScheme);
     if (d.type === 'note') {
-      return { id: d.data, relays: DEFAULT_READ_RELAYS };
+      return { id: d.data, relays: NOSTR_RELAYS };
     }
     if (d.type === 'nevent') {
-      const relays = d.data.relays?.length ? d.data.relays : DEFAULT_READ_RELAYS;
+      const relays = d.data.relays?.length ? d.data.relays : NOSTR_RELAYS;
       return { id: d.data.id, relays };
     }
   } catch {
