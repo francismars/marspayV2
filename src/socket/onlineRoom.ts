@@ -46,6 +46,10 @@ import {
   removeOnlineSeatLightningForSession,
 } from '../state/onlineSeatLightningState';
 import { pruneOnlineSnapshotForWire } from '../state/onlineSnapshotWire';
+import {
+  getAppNostrPubkeyForSession,
+  getAppNostrSession,
+} from '../state/nostrAppSessionState';
 import { dateNow } from '../utils/time';
 import {
   areSeatsFilled,
@@ -731,6 +735,27 @@ export function requestOnlineNostrLinkChallengeHandler(socket: Socket, payload: 
   if (!roomId) {
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
+  }
+  const appPk = getAppNostrPubkeyForSession(sessionID);
+  if (appPk) {
+    const reg = registerNostrLink(roomId, sessionID, socket.id, appPk);
+    if (reg.ok) {
+      const appRec = getAppNostrSession(sessionID);
+      const profile = appRec?.profile ?? {
+        pubkey: appPk,
+        name: `${appPk.slice(0, 12)}…`,
+        picture: null,
+      };
+      socket.emit('resOnlineNostrLinkOk', {
+        expiresAt: reg.expiresAt,
+        profile: {
+          pubkey: profile.pubkey,
+          name: profile.name,
+          picture: profile.picture,
+        },
+      });
+      return;
+    }
   }
   const issued = issueNostrLinkChallenge(sessionID, roomId);
   if (!issued) {

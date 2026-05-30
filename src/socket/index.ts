@@ -42,6 +42,14 @@ import {
   reportOnlineRoomPingHandler,
 } from './onlineRoom';
 import { leaveRoom } from '../state/onlineRoomState';
+import {
+  clearAppNostrSessionHandler,
+  confirmAppNostrLinkHandler,
+  emitAppNostrSession,
+  getAppNostrSessionHandler,
+  requestAppNostrLinkChallengeHandler,
+} from './nostrAppSession';
+import { getNostrProfileHandler, publishSignedNostrEventHandler } from './nostrRelay';
 
 function guardSocketAsync<T extends unknown[]>(
   socket: Socket,
@@ -64,6 +72,40 @@ export default function registerSocketHandlers(io: Server) {
   });
 
   io.on('connection', (socket: Socket) => {
+    emitAppNostrSession(socket);
+
+    socket.on('requestAppNostrLinkChallenge', () => {
+      requestAppNostrLinkChallengeHandler(socket);
+    });
+    socket.on(
+      'confirmAppNostrLink',
+      guardSocketAsync(
+        socket,
+        'confirmAppNostrLink',
+        async (payload: { event: unknown; signerMode?: string }) => {
+          await confirmAppNostrLinkHandler(socket, payload);
+        }
+      )
+    );
+    socket.on('getAppNostrSession', () => {
+      getAppNostrSessionHandler(socket);
+    });
+    socket.on('clearAppNostrSession', () => {
+      clearAppNostrSessionHandler(socket);
+    });
+    socket.on(
+      'getNostrProfile',
+      guardSocketAsync(socket, 'getNostrProfile', async (payload: { pubkey?: string }) => {
+        await getNostrProfileHandler(socket, payload);
+      })
+    );
+    socket.on(
+      'publishSignedNostrEvent',
+      guardSocketAsync(socket, 'publishSignedNostrEvent', async (payload: { event: unknown }) => {
+        await publishSignedNostrEventHandler(socket, payload);
+      })
+    );
+
     // TODO: Change to getP2PMenuInfos
     socket.on(
       'getGameMenuInfos',

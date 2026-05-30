@@ -127,8 +127,10 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `listOnlineHistory` | — | **Preferred:** merged history (`resOnlineHistory`) — archive index **plus** `finished` rooms still in RAM; same merge rules as UI |
 | `pingLatency` | ack callback `() => void` | Immediate ack for RTT; client measures `Date.now()` delta. |
 | `reportOnlineRoomPing` | `{ roomId: string; latencyMs: number }` | **Paid seat only** (matches `sessionID`). Writes **`seat.pingMs`** and emits **`onlineRoomUpdated`** so all clients can show **both** players’ ping. |
-| `requestOnlineNostrLinkChallenge` | `{ roomId: string }` | NIP-07 pubkey link: server issues a random **`challenge`** (`resOnlineNostrLinkChallenge`) |
+| `requestOnlineNostrLinkChallenge` | `{ roomId: string }` | Room pubkey link: server issues **`challenge`** (`resOnlineNostrLinkChallenge`). If the socket has a valid **app Nostr session** for the same pubkey, the server may skip the challenge and emit **`resOnlineNostrLinkOk`** immediately — see [AGENTS_NOSTR_SESSION.md](./AGENTS_NOSTR_SESSION.md). |
 | `confirmOnlineNostrLink` | `{ roomId: string; event: Nostr kind 1 }` | Signed kind **1** with **`content` = challenge**; server verifies and binds **`event.pubkey` → session** |
+
+App-level sign-in (Config, global avatar, practice): **`requestAppNostrLinkChallenge` / `confirmAppNostrLink` / `getAppNostrSession` / `clearAppNostrSession`** and relay helpers **`getNostrProfile` / `publishSignedNostrEvent`** — documented in [AGENTS_NOSTR_SESSION.md](./AGENTS_NOSTR_SESSION.md).
 
 > **No `sessionID`:** Most handlers no-op silently (no response) if `socket.data.sessionID` is missing. `createOnlineRoom` returns early without emitting if there is no session.
 
@@ -187,8 +189,9 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 
 ### Nostr pubkey link (no PIN in zap comment)
 
-- **When:** Home / private play — link a **Nostr pubkey** to the browser **`sessionID`** so the Kind1 zap can be sent **without** putting the PIN in the comment; the server matches **`payerPubkey`** on the zap receipt to the pre-linked record.
-- **Socket flow:** `requestOnlineNostrLinkChallenge` `{ roomId }` → `resOnlineNostrLinkChallenge` `{ roomId, challenge, expiresAt }` → client signs **`kind: 1`** with **`content` exactly the `challenge`** → `confirmOnlineNostrLink` `{ roomId, event }` → `resOnlineNostrLinkOk` `{ expiresAt }` or `onlinePinInvalid`.
+- **When:** Online lobby — link a **Nostr pubkey** to the browser **`sessionID`** so the Kind1 zap can be sent **without** putting the PIN in the comment; the server matches **`payerPubkey`** on the zap receipt to the pre-linked record.
+- **App session shortcut:** If the user already completed **app sign-in** in Config (`confirmAppNostrLink`), `requestOnlineNostrLinkChallenge` may return **`resOnlineNostrLinkOk`** without a second kind-1 signature when the pubkey matches.
+- **Socket flow:** `requestOnlineNostrLinkChallenge` `{ roomId }` → `resOnlineNostrLinkChallenge` `{ roomId, challenge, expiresAt }` (or auto **`resOnlineNostrLinkOk`**) → client signs **`kind: 1`** with **`content` exactly the `challenge`** when needed → `confirmOnlineNostrLink` `{ roomId, event }` → `resOnlineNostrLinkOk` `{ expiresAt }` or `onlinePinInvalid`.
 - **Client signing:** **`chain-duel-react`** supports **NIP-07** (`window.nostr`) or **NIP-46** bunker / Nostr Connect (`nostr-tools` `BunkerSigner` + `parseBunkerInput` on a `bunker://…` URI or NIP-05). Same server verification either way.
 - **Server:** Verifies the event with **`nostr-tools` `verifyEvent`**, then stores **`roomId:pubkey` → `{ sessionID, socketID }`** until consumed or TTL (**~15 min**).
 - **Zap routing (`subscribeEvent.ts`, ONLINE):** If the zap comment yields a **PIN** (4-digit rule below), the **PIN path runs first**. Otherwise, if the zapper has a **`pubkey`**, the server tries **`consumeNostrLinkForZap`**. If that fails, the client sees `onlinePinInvalid` (e.g. `nostr_link_not_found`, `pin_missing` when anon and no link).
