@@ -50,6 +50,7 @@ import {
   requestAppNostrLinkChallengeHandler,
 } from './nostrAppSession';
 import { getNostrProfileHandler, publishSignedNostrEventHandler } from './nostrRelay';
+import type { AppNostrSignerMode } from '../state/nostrAppSessionState';
 
 function guardSocketAsync<T extends unknown[]>(
   socket: Socket,
@@ -82,7 +83,7 @@ export default function registerSocketHandlers(io: Server) {
       guardSocketAsync(
         socket,
         'confirmAppNostrLink',
-        async (payload: { event: unknown; signerMode?: string }) => {
+        async (payload: { event: unknown; signerMode?: AppNostrSignerMode | null }) => {
           await confirmAppNostrLinkHandler(socket, payload);
         }
       )
