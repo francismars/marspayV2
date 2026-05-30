@@ -51,7 +51,7 @@ npm install
 npm run dev
 ```
 
-- **Dev:** `npm run dev` (nodemon + `src/server.ts`) — **http://localhost:3000**
+- **Dev:** `npm run dev` (nodemon + `src/server.ts`) — **http://localhost:3001** (override with `PORT` in `.env`)
 - **Production:** `npm run build` then `npm start` (runs `dist/server.js`)
 
 ## Environment
@@ -59,6 +59,7 @@ npm run dev
 Create a `.env` file in the project root (values come from your LNbits deployment):
 
 ```
+PORT=3001
 LNBITS_URL=
 LNBITS_IP=
 LNBITS_KEY=

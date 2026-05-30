@@ -1,9 +1,12 @@
+import dotenv from 'dotenv';
 import http from 'http';
 import { Server } from 'socket.io';
 import registerSocketHandlers from './socket';
 import { app } from './app';
 
-const port = 3000;
+dotenv.config();
+
+const port = Number(process.env.PORT) || 3001;
 
 const httpServer = http.createServer(app);
 const io = new Server(httpServer);
