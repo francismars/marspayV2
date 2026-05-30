@@ -756,6 +756,8 @@ export function requestOnlineNostrLinkChallengeHandler(socket: Socket, payload: 
       });
       return;
     }
+    socket.emit('onlinePinInvalid', { reason: reg.reason });
+    return;
   }
   const issued = issueNostrLinkChallenge(sessionID, roomId);
   if (!issued) {
