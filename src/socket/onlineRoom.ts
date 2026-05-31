@@ -875,6 +875,7 @@ export function requestOnlineKind1PostHandler(socket: Socket, payload: { roomId:
 export function requestOnlineSeatZapPayPrepareHandler(socket: Socket, payload: { roomId: string }) {
   const sessionID = socket.data.sessionID as string | undefined;
   if (!sessionID) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'no_session' });
     return;
   }
   const roomId = payload?.roomId;
@@ -966,6 +967,7 @@ export function confirmOnlineSeatZapPayHandler(
 ) {
   const sessionID = socket.data.sessionID as string | undefined;
   if (!sessionID) {
+    socket.emit('resOnlineSeatZapPayError', { reason: 'no_session' });
     return;
   }
   const roomId = payload?.roomId;
