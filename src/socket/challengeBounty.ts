@@ -170,8 +170,13 @@ export async function submitChallengeWinHandler(
   }
 
   if (inputLog.length === 0) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'empty_input_log' });
-    return;
+    console.log(
+      `${dateNow()} [CHALLENGE_WIN] submit runId=${runId} challenge=${run.challengeId} inputs=0 (default direction only)`
+    );
+  } else {
+    console.log(
+      `${dateNow()} [CHALLENGE_WIN] submit runId=${runId} challenge=${run.challengeId} rawInputs=${Array.isArray(rawLog) ? rawLog.length : 0} parsedInputs=${inputLog.length}`
+    );
   }
 
   const replay = replayChallengeWin({
@@ -183,9 +188,16 @@ export async function submitChallengeWinHandler(
   });
 
   if (!replay.ok) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: replay.reason });
+    console.log(
+      `${dateNow()} [CHALLENGE_WIN] replay_failed runId=${runId} reason=${replay.reason} debug=${JSON.stringify(replay.debug ?? {})}`
+    );
+    socket.emit('resSubmitChallengeWin', { ok: false, reason: replay.reason, debug: replay.debug });
     return;
   }
+
+  console.log(
+    `${dateNow()} [CHALLENGE_WIN] replay_ok runId=${runId} simSteps=${replay.simSteps} tickCount=${replay.tickCount}`
+  );
 
   markRunWon(runId, inputLog, payload?.countdownStartTick ?? 0);
 

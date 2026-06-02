@@ -19,7 +19,18 @@ const PRACTICE_HUB_CONVERGENCE_SHRINK_INTERVAL_TICKS = 120;
 
 export type ReplayResult =
   | { ok: true; winnerPlayer: string; tickCount: number; simSteps: number }
-  | { ok: false; reason: string };
+  | {
+      ok: false;
+      reason: string;
+      debug?: {
+        winnerPlayer: string | null;
+        simSteps: number;
+        p1Score: number;
+        p2Score: number;
+        inputCount: number;
+        lastInputTick: number | null;
+      };
+    };
 
 function buildChallengeState(challenge: ChallengeCatalogEntry) {
   const isFfa = challenge.format === '4P FFA';
@@ -84,10 +95,36 @@ export function replayChallengeWin(params: {
     }
 
     if (!state.gameEnded) {
-      return { ok: false, reason: 'replay_no_end' };
+      return {
+        ok: false,
+        reason: 'replay_no_end',
+        debug: {
+          winnerPlayer: state.winnerPlayer,
+          simSteps: simStep,
+          p1Score: state.score[0],
+          p2Score: state.score[1],
+          inputCount: params.inputLog.length,
+          lastInputTick: params.inputLog.length
+            ? Math.max(...params.inputLog.map((e) => e.tick))
+            : null,
+        },
+      };
     }
     if (state.winnerPlayer !== 'P1') {
-      return { ok: false, reason: 'replay_not_p1_win' };
+      return {
+        ok: false,
+        reason: 'replay_not_p1_win',
+        debug: {
+          winnerPlayer: state.winnerPlayer,
+          simSteps: simStep,
+          p1Score: state.score[0],
+          p2Score: state.score[1],
+          inputCount: params.inputLog.length,
+          lastInputTick: params.inputLog.length
+            ? Math.max(...params.inputLog.map((e) => e.tick))
+            : null,
+        },
+      };
     }
 
     if (params.countdownStartTick != null && params.countdownStartTick > COUNTDOWN_END_TICK + 5) {
