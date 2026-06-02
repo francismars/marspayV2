@@ -19,7 +19,7 @@ Server checks (24h cache):
 - Kind-3 following count ≥ 100
 - Follows `CHAINDUEL_NOSTR_PUBKEY` (skipped if unset)
 - Account age ≥ 30 days (earliest relay event)
-- Valid `lud16` with NIP-57 zap support + pubkey match
+- Valid `lud16` with NIP-57 zap support (`allowsNostr` on LNURL-pay metadata)
 - App Nostr session at claim time
 
 ## Run flow
