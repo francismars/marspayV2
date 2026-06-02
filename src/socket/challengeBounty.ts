@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io';
-import { verifyEvent, type Event } from 'nostr-tools';
+import { verifyEvent, nip19, type Event } from 'nostr-tools';
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { dateNow } from '../utils/time';
 import { getAppNostrSession } from '../state/nostrAppSessionState';
@@ -24,18 +24,25 @@ import {
   type ChallengeInputEntry,
 } from '../state/challengeState';
 
+/** @chainduel — used in victory notes (NIP-27 mention). */
+const CHAINDUEL_NPUB = 'npub1kd3nlw09ufkgmts2kaf0x8m4mq57exn6l8rz50v5ngyr2h3j5cfswdsdth';
+const CHAINDUEL_PUBKEY_HEX = nip19.decode(CHAINDUEL_NPUB).data as string;
+
 function buildVictoryNoteContent(challengeName: string, bountySats: number): string {
-  return `I just beat the ${challengeName} challenge on Chain Duel ⚡\n\n${bountySats.toLocaleString()} sats bounty — challenge accepted and won.\n\nchainduel.xyz\n\n#ChainDuel #Bitcoin #Nostr`;
+  return [
+    `I just beat the ${challengeName} challenge on nostr:${CHAINDUEL_NPUB}`,
+    '',
+    `${bountySats.toLocaleString()} sats bounty ⚡`,
+    '',
+    'Can you beat it?',
+    'https://game.chainduel.net/',
+    '',
+    'Sign in with Nostr → pick a challenge → beat the bot → collect sats.',
+  ].join('\n');
 }
 
-function buildVictoryNoteTags(challengeId: string, runId: string): string[][] {
-  return [
-    ['t', 'ChainDuel'],
-    ['t', 'Bitcoin'],
-    ['t', 'Nostr'],
-    ['challenge', challengeId],
-    ['run', runId],
-  ];
+function buildVictoryNoteTags(): string[][] {
+  return [['p', CHAINDUEL_PUBKEY_HEX, '', 'mention']];
 }
 
 function tagsEqual(a: string[][], b: string[][]): boolean {
@@ -202,7 +209,7 @@ export async function submitChallengeWinHandler(
   markRunWon(runId, inputLog, payload?.countdownStartTick ?? 0);
 
   const noteContent = buildVictoryNoteContent(run.config.name, run.bountySats);
-  const noteTags = buildVictoryNoteTags(run.challengeId, run.runId);
+  const noteTags = buildVictoryNoteTags();
   const claim = createClaimToken({
     run,
     noteContent,
