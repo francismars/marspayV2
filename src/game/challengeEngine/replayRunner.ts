@@ -2,6 +2,7 @@ import {
   CONVERGENCE_MIN_COLS,
   CONVERGENCE_MIN_ROWS,
   COUNTDOWN_END_TICK,
+  PRACTICE_HUB_CONVERGENCE_SHRINK_INTERVAL_TICKS,
 } from './constants';
 import {
   createGameState,
@@ -15,7 +16,6 @@ import { initRunRng, clearRunRng } from './runRng';
 import type { Direction } from './types';
 
 const MAX_SIM_STEPS = 60_000;
-const PRACTICE_HUB_CONVERGENCE_SHRINK_INTERVAL_TICKS = 120;
 
 export type ReplayResult =
   | { ok: true; winnerPlayer: string; tickCount: number; simSteps: number }
