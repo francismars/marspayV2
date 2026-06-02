@@ -50,6 +50,14 @@ import {
   requestAppNostrLinkChallengeHandler,
 } from './nostrAppSession';
 import { getNostrProfileHandler, publishSignedNostrEventHandler } from './nostrRelay';
+import {
+  claimChallengeBountyHandler,
+  getChallengeCatalogHandler,
+  getChallengeEligibilityHandler,
+  requestChallengeRunHandler,
+  retryChallengeZapHandler,
+  submitChallengeWinHandler,
+} from './challengeBounty';
 import type { AppNostrSignerMode } from '../state/nostrAppSessionState';
 
 function guardSocketAsync<T extends unknown[]>(
@@ -104,6 +112,47 @@ export default function registerSocketHandlers(io: Server) {
       'publishSignedNostrEvent',
       guardSocketAsync(socket, 'publishSignedNostrEvent', async (payload: { event: unknown }) => {
         await publishSignedNostrEventHandler(socket, payload);
+      })
+    );
+
+    socket.on(
+      'getChallengeEligibility',
+      guardSocketAsync(socket, 'getChallengeEligibility', async () => {
+        await getChallengeEligibilityHandler(socket);
+      })
+    );
+    socket.on('getChallengeCatalog', () => {
+      getChallengeCatalogHandler(socket);
+    });
+    socket.on(
+      'requestChallengeRun',
+      guardSocketAsync(socket, 'requestChallengeRun', async (payload: { challengeId?: string }) => {
+        await requestChallengeRunHandler(socket, payload);
+      })
+    );
+    socket.on(
+      'submitChallengeWin',
+      guardSocketAsync(socket, 'submitChallengeWin', async (payload: {
+        runId?: string;
+        inputLog?: unknown;
+        countdownStartTick?: number;
+      }) => {
+        await submitChallengeWinHandler(socket, payload);
+      })
+    );
+    socket.on(
+      'claimChallengeBounty',
+      guardSocketAsync(socket, 'claimChallengeBounty', async (payload: {
+        claimToken?: string;
+        event?: unknown;
+      }) => {
+        await claimChallengeBountyHandler(socket, payload);
+      })
+    );
+    socket.on(
+      'retryChallengeZap',
+      guardSocketAsync(socket, 'retryChallengeZap', async (payload: { challengeId?: string }) => {
+        await retryChallengeZapHandler(socket, payload);
       })
     );
 

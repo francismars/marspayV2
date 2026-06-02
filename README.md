@@ -56,17 +56,13 @@ npm run dev
 
 ## Environment
 
-Create a `.env` file in the project root (values come from your LNbits deployment):
+Copy [`.env.example`](.env.example) to `.env` and fill in values from your LNbits deployment:
 
+```bash
+cp .env.example .env
 ```
-PORT=3001
-LNBITS_URL=
-LNBITS_IP=
-LNBITS_KEY=
-LNBITS_DEPOSITHOOK=
-LNBITS_WITHDRAWHOOK=
-ADMIN_PASSWORD=
-```
+
+See [docs/AGENTS_CHALLENGE_BOUNTY.md](docs/AGENTS_CHALLENGE_BOUNTY.md) for challenge-specific vars (`CHAINDUEL_NOSTR_PUBKEY`, `CHALLENGE_BOUNTY_DAILY_CAP_SATS`, `NOSTR_PK`).
 
 ## API and documentation
 
