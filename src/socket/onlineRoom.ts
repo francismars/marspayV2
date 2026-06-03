@@ -697,6 +697,7 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
             amount: requiredAmount,
             loserPubkey: loserSeat?.pubkey,
             loserName: loserSeat?.name,
+            loserPayMethod: loserSeat?.payMethod,
           });
           if (!published) {
             return;

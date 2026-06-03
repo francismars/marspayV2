@@ -1349,6 +1349,19 @@ export function setOnlineRematchRequested(params: {
   );
 }
 
+export function isNostrLinkPubkeyForSession(
+  roomId: string,
+  pubkeyHex: string,
+  sessionID: string
+): boolean {
+  const key = nostrLinkKey(roomId, pubkeyHex);
+  const rec = nostrLinkByRoomPubkey.get(key);
+  if (!rec || rec.roomId !== roomId || rec.sessionID !== sessionID) {
+    return false;
+  }
+  return rec.expiresAt > Date.now();
+}
+
 export function isRematchLoserSession(room: { phase: string; postGame: { rematchRequested?: boolean; rematchWaitingForSessionID?: string } }, sessionID: string): boolean {
   return (
     room.phase === 'postgame' &&
@@ -1383,11 +1396,35 @@ export function settleOnlineRematchPayment(params: {
   if (!winnerSeat || !loserSeat || !winnerSeat.sessionID || !loserSeat.sessionID) {
     return { ok: false as const, reason: 'seats_not_ready' };
   }
-  if (loserSeat.pubkey && (!params.payerPubkey || params.payerPubkey !== loserSeat.pubkey)) {
-    return { ok: false as const, reason: 'not_loser' };
-  }
   if (winnerSeat.pubkey && params.payerPubkey && params.payerPubkey === winnerSeat.pubkey) {
     return { ok: false as const, reason: 'winner_cannot_match' };
+  }
+  const loserSessionId = loserSeat.sessionID;
+  const waitingForLoser = room.postGame.rematchWaitingForSessionID === loserSessionId;
+  const payerPk = params.payerPubkey?.toLowerCase();
+  const payerOk = (() => {
+    if (!payerPk) {
+      return !loserSeat.pubkey && loserSeat.payMethod !== 'lightning';
+    }
+    if (loserSeat.payMethod === 'lightning') {
+      // Lightning buy-in uses a fresh ephemeral key per payment — match session link, not seat pubkey.
+      return Boolean(
+        waitingForLoser &&
+          loserSessionId &&
+          isNostrLinkPubkeyForSession(room.roomId, payerPk, loserSessionId)
+      );
+    }
+    return (
+      payerPk === loserSeat.pubkey?.toLowerCase() ||
+      Boolean(
+        waitingForLoser &&
+          loserSessionId &&
+          isNostrLinkPubkeyForSession(room.roomId, payerPk, loserSessionId)
+      )
+    );
+  })();
+  if (!payerOk) {
+    return { ok: false as const, reason: 'not_loser' };
   }
   room.seats.set(winnerRole, {
     ...winnerSeat,

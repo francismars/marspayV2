@@ -13,6 +13,8 @@ interface PublishOnlineRematchKind1Opts {
   amount: number;
   loserPubkey?: string;
   loserName?: string;
+  /** When `lightning`, note must not pin a Nostr identity — payer uses ephemeral keys per payment. */
+  loserPayMethod?: 'lightning' | 'nostr_web' | 'nostr_app';
 }
 
 export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1Opts) {
@@ -22,6 +24,8 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
   if (!ndkInstance) {
     await setNDKInstance();
   }
+  const pinNostrIdentity =
+    opts.loserPayMethod !== 'lightning' && Boolean(opts.loserPubkey?.trim());
   const ndkEvent = new NDKEvent(ndkInstance);
   ndkEvent.kind = 1;
   ndkEvent.tags = [
@@ -31,13 +35,13 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
     ['zap-uses', '1'],
     ['e', opts.rootEventId, '', 'root'],
   ];
-  if (opts.loserPubkey) {
+  if (pinNostrIdentity && opts.loserPubkey) {
     ndkEvent.tags.push(['p', opts.loserPubkey, '', 'mention']);
   }
-  const loserMention = opts.loserPubkey
-    ? `nostr:${nip19.npubEncode(opts.loserPubkey)}`
-    : opts.loserName ?? 'loser';
-  ndkEvent.content = `ONLINE REMATCH ${opts.emojis}\nDouble or Nothing accepted.\nWaiting for ${loserMention} to zap exactly ${opts.amount} sats to continue.`;
+  const loserLabel = pinNostrIdentity
+    ? `nostr:${nip19.npubEncode(opts.loserPubkey!)}`
+    : opts.loserName?.trim() || 'the losing player';
+  ndkEvent.content = `ONLINE REMATCH ${opts.emojis}\nDouble or Nothing accepted.\nWaiting for ${loserLabel} to zap exactly ${opts.amount} sats to continue.`;
   await ndkEvent.publish();
   setKind1IDtoSessionID(ndkEvent.id, opts.sessionID);
   const note1 = nip19.noteEncode(ndkEvent.id);

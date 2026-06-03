@@ -186,7 +186,7 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       return;
     }
     console.log(
-      `${dateNow()} [ONLINE_SEAT_LN] LN settled; zap receipt published for kind1=${kind1EventId} session=${onlineRec.sessionID.slice(0, 8)}… (${isRematchPay ? 'rematch' : 'seat on zap event'})`
+      `${dateNow()} [ONLINE_SEAT_LN] LN settled; zap invoice paid for kind1=${kind1EventId} session=${onlineRec.sessionID.slice(0, 8)}… (${isRematchPay ? 'rematch — awaiting 9735 on relays' : 'seat on zap event'})`
     );
     res.status(200).send('OK');
     return;

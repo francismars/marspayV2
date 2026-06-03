@@ -148,6 +148,7 @@ async function listenToSubscriptions(event: NDKEvent) {
           `${dateNow()} [${sessionID}] [ONLINE] rematch zap rejected roomId=${room.roomId} reason=${rematch.reason}`
         );
         io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: rematch.reason });
+        io.to(room.roomId).emit('onlinePinInvalid', { reason: rematch.reason });
         return;
       }
       console.log(
@@ -166,9 +167,16 @@ async function listenToSubscriptions(event: NDKEvent) {
           seat.pubkey?.toLowerCase() === payerPubKey.toLowerCase(),
       );
       if (alreadySeated) {
-        console.log(
-          `${dateNow()} [${sessionID}] [ONLINE] zap ignored (seat already assigned) roomId=${room.roomId} pubkey=${payerPubKey.slice(0, 8)}…`
-        );
+        if (room.postGame.rematchRequested) {
+          console.log(
+            `${dateNow()} [${sessionID}] [ONLINE] rematch zap on wrong note roomId=${room.roomId} event=${eventID[1]}`
+          );
+          io.to(room.roomId).emit('onlinePinInvalid', { reason: 'rematch_use_rematch_note' });
+        } else {
+          console.log(
+            `${dateNow()} [${sessionID}] [ONLINE] zap ignored (seat already assigned) roomId=${room.roomId} pubkey=${payerPubKey.slice(0, 8)}…`
+          );
+        }
         return;
       }
     }
