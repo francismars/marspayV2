@@ -30,9 +30,7 @@ const CHAINDUEL_PUBKEY_HEX = nip19.decode(CHAINDUEL_NPUB).data as string;
 
 function buildVictoryNoteContent(challengeName: string, bountySats: number): string {
   return [
-    `I just beat the ${challengeName} challenge on nostr:${CHAINDUEL_NPUB}`,
-    '',
-    `${bountySats.toLocaleString()} sats bounty ⚡`,
+    `I just beat the ${challengeName} challenge on nostr:${CHAINDUEL_NPUB} and got ${bountySats.toLocaleString()} sats ⚡`,
     '',
     'Can you beat it?',
     'https://game.chainduel.net/',
@@ -323,6 +321,7 @@ export async function claimChallengeBountyHandler(
   const zapComment = `Congrats on beating ${getChallengeById(claimRec.challengeId)?.name ?? 'the challenge'}! ⚡`;
   const zapResult = await zapRecipientKind1Note({
     kind1EventId: published.eventId,
+    kind1AuthorPubkey: event.pubkey,
     amountSats: claimRec.bountySats,
     recipientLud16: lud16Check.lud16,
     comment: zapComment,
@@ -386,6 +385,7 @@ export async function retryChallengeZapHandler(
     `Congrats on beating ${getChallengeById(challengeId)?.name ?? 'the challenge'}! ⚡`;
   const zapResult = await zapRecipientKind1Note({
     kind1EventId: existing.kind1EventId,
+    kind1AuthorPubkey: appSession.pubkey,
     amountSats: existing.bountySats,
     recipientLud16: lud16Check.lud16,
     comment: zapComment,

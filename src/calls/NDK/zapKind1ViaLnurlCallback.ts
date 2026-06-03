@@ -30,6 +30,18 @@ function hostSecretKeyBytesFromEnv(): Uint8Array {
   return hexToBytes(hex);
 }
 
+function kind1EventStub(eventId: string, authorPubkey: string): Event {
+  return {
+    id: eventId,
+    kind: 1,
+    pubkey: authorPubkey.toLowerCase(),
+    content: '',
+    tags: [],
+    created_at: 0,
+    sig: '',
+  };
+}
+
 /**
  * NIP-57: signed 9734 is sent to the recipient LNURL callback via GET (not published).
  * The recipient's LNURL server returns a bolt11; we pay it from LNBits. It then publishes 9735.
@@ -37,6 +49,8 @@ function hostSecretKeyBytesFromEnv(): Uint8Array {
  */
 export async function requestZapInvoiceAndPayForKind1(params: {
   kind1EventId: string;
+  /** Hex pubkey of the kind-1 author (host note for online rooms). */
+  kind1AuthorPubkey: string;
   buyinSats: number;
   zapSecretKeyBytes: Uint8Array;
   /** Recipient LUD-16 (Kind1 host / same nostr key as Kind1 author). */
@@ -44,9 +58,8 @@ export async function requestZapInvoiceAndPayForKind1(params: {
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   dotenv.config();
 
-  let recipientPubkeyHex: string;
   try {
-    recipientPubkeyHex = getPublicKey(hostSecretKeyBytesFromEnv());
+    getPublicKey(hostSecretKeyBytesFromEnv());
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`${dateNow()} [ZAP_LNURL] host key: ${msg}`);
@@ -72,14 +85,12 @@ export async function requestZapInvoiceAndPayForKind1(params: {
 
   const millisats = params.buyinSats * 1000;
   const zapRequestTpl = nip57.makeZapRequest({
-    profile: recipientPubkeyHex,
-    event: params.kind1EventId,
+    event: kind1EventStub(params.kind1EventId, params.kind1AuthorPubkey),
     amount: millisats,
-    relays: NOSTR_RELAYS,
+    relays: [...NOSTR_RELAYS],
     comment: '',
   });
   zapRequestTpl.tags.push(['lnurl', lnurlBech32]);
-  zapRequestTpl.tags.push(['k', '1']);
 
   let signedZapRequest: Event;
   try {

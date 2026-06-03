@@ -28,6 +28,7 @@ import { LNURLP } from '../types/lnurlp';
 import deleteLNURLP from '../calls/LNBits/deleteLNURLP';
 import { requestZapInvoiceAndPayForKind1 } from '../calls/NDK/zapKind1ViaLnurlCallback';
 import { hexToBytes } from '@noble/hashes/utils';
+import { getPublicKey, nip19 } from 'nostr-tools';
 import { getKind1FromID } from '../state/nostrState';
 import {
   consumeOnlineSeatLightningAfterSuccess,
@@ -119,8 +120,22 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       res.status(500).send('invalid_zap_key');
       return;
     }
+    let kind1AuthorPubkey: string;
+    try {
+      const hostPk = process.env.NOSTR_PK;
+      if (!hostPk) throw new Error('NOSTR_PK missing');
+      if (hostPk.startsWith('nsec')) {
+        kind1AuthorPubkey = getPublicKey(nip19.decode(hostPk).data as Uint8Array);
+      } else {
+        kind1AuthorPubkey = getPublicKey(hexToBytes(hostPk.replace(/^0x/i, '')));
+      }
+    } catch {
+      res.status(500).send('host_nostr_key_invalid');
+      return;
+    }
     const zapResult = await requestZapInvoiceAndPayForKind1({
       kind1EventId: room.kind1EventId,
+      kind1AuthorPubkey,
       buyinSats: onlineRec.buyin,
       zapSecretKeyBytes: skBytes,
       hostLud16,
