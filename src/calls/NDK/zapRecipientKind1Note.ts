@@ -1,13 +1,14 @@
 import { hexToBytes } from '@noble/hashes/utils';
-import { nip19, nip57, finalizeEvent, getPublicKey, type Event } from 'nostr-tools';
-import { SimplePool } from 'nostr-tools/pool';
+import { nip19, finalizeEvent, getPublicKey, type Event } from 'nostr-tools';
 import dotenv from 'dotenv';
 import payInvoice from '../LNBits/payInvoice';
 import {
+  buildKind1ZapRequestTemplate,
   encodeLnurlBech32,
   fetchLnurlPayMetadata,
   fetchZapInvoiceFromCallback,
   lud16ToLnurlPayUrl,
+  waitForKind1OnRelays,
 } from '../nostr/lnurlZapShared';
 import { NOSTR_RELAYS } from '../../consts/nostrRelays';
 import { dateNow } from '../../utils/time';
@@ -23,34 +24,6 @@ function payerSecretKeyBytesFromEnv(): Uint8Array {
   const hex = pk.replace(/^0x/i, '');
   if (!/^[a-f0-9]{64}$/i.test(hex)) throw new Error('NOSTR_PK must be nsec or 64 hex chars');
   return hexToBytes(hex);
-}
-
-function kind1EventStub(eventId: string, authorPubkey: string): Event {
-  return {
-    id: eventId,
-    kind: 1,
-    pubkey: authorPubkey.toLowerCase(),
-    content: '',
-    tags: [],
-    created_at: 0,
-    sig: '',
-  };
-}
-
-/** Give relays a moment to see the kind-1 before LNURL verifies the event id. */
-async function waitForKind1OnRelays(eventId: string, timeoutMs = 12_000): Promise<boolean> {
-  const pool = new SimplePool();
-  const deadline = Date.now() + timeoutMs;
-  try {
-    while (Date.now() < deadline) {
-      const events = await pool.querySync([...NOSTR_RELAYS], { ids: [eventId], kinds: [1] });
-      if (events.length > 0) return true;
-      await new Promise((r) => setTimeout(r, 600));
-    }
-    return false;
-  } finally {
-    pool.close([...NOSTR_RELAYS]);
-  }
 }
 
 /** Pay a NIP-57 zap to the author's kind-1 note (bounty payout). */
@@ -72,12 +45,7 @@ export async function zapRecipientKind1Note(params: {
     return { ok: false, reason: 'nostr_pk_invalid' };
   }
 
-  const seenOnRelay = await waitForKind1OnRelays(params.kind1EventId);
-  if (!seenOnRelay) {
-    console.warn(
-      `${dateNow()} [BOUNTY_ZAP] kind1=${params.kind1EventId} not seen on relays yet; zapping anyway`
-    );
-  }
+  await waitForKind1OnRelays(params.kind1EventId);
 
   let meta: Awaited<ReturnType<typeof fetchLnurlPayMetadata>>;
   try {
@@ -96,20 +64,14 @@ export async function zapRecipientKind1Note(params: {
   const lnurlBech32 = encodeLnurlBech32(lnurlpHttpsUrl);
   const millisats = params.amountSats * 1000;
 
-  const zapRequestTpl = nip57.makeZapRequest({
-    event: kind1EventStub(params.kind1EventId, params.kind1AuthorPubkey),
-    amount: millisats,
-    relays: [...NOSTR_RELAYS],
+  const zapRequestTpl = buildKind1ZapRequestTemplate({
+    kind1EventId: params.kind1EventId,
+    kind1AuthorPubkey: params.kind1AuthorPubkey,
+    amountMsats: millisats,
+    relays: NOSTR_RELAYS,
     comment: params.comment.slice(0, 1000),
+    lnurlBech32,
   });
-  zapRequestTpl.tags.push(['lnurl', lnurlBech32]);
-
-  const eTag = zapRequestTpl.tags.find((t) => t[0] === 'e');
-  const pTag = zapRequestTpl.tags.find((t) => t[0] === 'p');
-  if (!eTag?.[1] || !pTag?.[1]) {
-    console.error(`${dateNow()} [BOUNTY_ZAP] invalid 9734 tags e=${eTag?.[1] ?? 'missing'} p=${pTag?.[1] ?? 'missing'}`);
-    return { ok: false, reason: 'zap_request_tags_invalid' };
-  }
 
   let signedZapRequest: Event;
   try {

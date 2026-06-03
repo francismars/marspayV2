@@ -1,8 +1,9 @@
 import { hexToBytes } from '@noble/hashes/utils';
-import { nip19, nip57, finalizeEvent, getPublicKey, type Event } from 'nostr-tools';
+import { nip19, finalizeEvent, getPublicKey, type Event } from 'nostr-tools';
 import dotenv from 'dotenv';
 import payInvoice from '../LNBits/payInvoice';
 import {
+  buildKind1ZapRequestTemplate,
   encodeLnurlBech32,
   fetchLnurlPayMetadata,
   fetchZapInvoiceFromCallback,
@@ -28,18 +29,6 @@ function hostSecretKeyBytesFromEnv(): Uint8Array {
     throw new Error('NOSTR_PK must be nsec or 64 hex chars');
   }
   return hexToBytes(hex);
-}
-
-function kind1EventStub(eventId: string, authorPubkey: string): Event {
-  return {
-    id: eventId,
-    kind: 1,
-    pubkey: authorPubkey.toLowerCase(),
-    content: '',
-    tags: [],
-    created_at: 0,
-    sig: '',
-  };
 }
 
 /**
@@ -82,15 +71,16 @@ export async function requestZapInvoiceAndPayForKind1(params: {
 
   const lnurlpHttpsUrl = lud16ToLnurlPayUrl(params.hostLud16);
   const lnurlBech32 = encodeLnurlBech32(lnurlpHttpsUrl);
-
   const millisats = params.buyinSats * 1000;
-  const zapRequestTpl = nip57.makeZapRequest({
-    event: kind1EventStub(params.kind1EventId, params.kind1AuthorPubkey),
-    amount: millisats,
-    relays: [...NOSTR_RELAYS],
+
+  const zapRequestTpl = buildKind1ZapRequestTemplate({
+    kind1EventId: params.kind1EventId,
+    kind1AuthorPubkey: params.kind1AuthorPubkey,
+    amountMsats: millisats,
+    relays: NOSTR_RELAYS,
     comment: '',
+    lnurlBech32,
   });
-  zapRequestTpl.tags.push(['lnurl', lnurlBech32]);
 
   let signedZapRequest: Event;
   try {

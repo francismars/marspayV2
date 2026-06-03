@@ -4,7 +4,6 @@ import {
   generateSecretKey,
   getPublicKey,
   nip19,
-  nip57,
   verifyEvent,
   type Event,
   type EventTemplate,
@@ -15,6 +14,7 @@ import { publishOnlineRematchKind1 } from '../calls/NDK/publishOnlineRematchKind
 import { fetchKind1NoteEvent } from '../calls/nostr/fetchKind1NoteEvent';
 import { fetchNostrProfileMetadata } from '../calls/nostr/fetchNostrProfileMetadata';
 import {
+  buildKind1ZapRequestTemplate,
   encodeLnurlBech32,
   fetchLnurlPayMetadata,
   fetchZapInvoiceFromCallback,
@@ -931,15 +931,14 @@ export function requestOnlineSeatZapPayPrepareHandler(socket: Socket, payload: {
       const lnurlpHttpsUrl = lud16ToLnurlPayUrl(hostLud16);
       const lnurlBech32 = encodeLnurlBech32(lnurlpHttpsUrl);
       const millisats = room.buyin * 1000;
-      const zapRequestTpl = nip57.makeZapRequest({
-        profile: meta.nostrPubkey,
-        event: room.kind1EventId!,
-        amount: millisats,
+      const zapRequestTpl = buildKind1ZapRequestTemplate({
+        kind1EventId: room.kind1EventId!,
+        kind1AuthorPubkey: meta.nostrPubkey,
+        amountMsats: millisats,
         relays: NOSTR_RELAYS,
         comment: '',
-      }) as EventTemplate;
-      zapRequestTpl.tags.push(['lnurl', lnurlBech32]);
-      zapRequestTpl.tags.push(['k', '1']);
+        lnurlBech32,
+      });
       socket.emit('resOnlineSeatZapPayPrepare', {
         roomId,
         unsignedZap: {

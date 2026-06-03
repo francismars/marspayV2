@@ -1,5 +1,51 @@
 import { bech32 } from '@scure/base';
-import type { Event } from 'nostr-tools';
+import { SimplePool, type Event, type EventTemplate } from 'nostr-tools';
+import { NOSTR_RELAYS } from '../../consts/nostrRelays';
+
+/** NIP-57 kind-9734 zap request targeting a kind-1 note (works across nostr-tools versions). */
+export function buildKind1ZapRequestTemplate(params: {
+  kind1EventId: string;
+  kind1AuthorPubkey: string;
+  amountMsats: number;
+  relays: readonly string[];
+  comment: string;
+  lnurlBech32: string;
+}): EventTemplate {
+  const author = params.kind1AuthorPubkey.toLowerCase();
+  return {
+    kind: 9734,
+    created_at: Math.floor(Date.now() / 1000),
+    content: params.comment,
+    tags: [
+      ['p', author],
+      ['e', params.kind1EventId],
+      ['amount', params.amountMsats.toString()],
+      ['relays', ...params.relays],
+      ['k', '1'],
+      ['lnurl', params.lnurlBech32],
+    ],
+  };
+}
+
+/** Wait until the kind-1 is visible on relays (or timeout). */
+export async function waitForKind1OnRelays(
+  eventId: string,
+  relays: readonly string[] = NOSTR_RELAYS,
+  timeoutMs = 12_000,
+): Promise<boolean> {
+  const pool = new SimplePool();
+  const deadline = Date.now() + timeoutMs;
+  try {
+    while (Date.now() < deadline) {
+      const events = await pool.querySync([...relays], { ids: [eventId], kinds: [1] });
+      if (events.length > 0) return true;
+      await new Promise((r) => setTimeout(r, 600));
+    }
+    return false;
+  } finally {
+    pool.close([...relays]);
+  }
+}
 
 /** LUD-16 `user@domain` → `https://domain/.well-known/lnurlp/user` */
 export function lud16ToLnurlPayUrl(lud16: string): string {
