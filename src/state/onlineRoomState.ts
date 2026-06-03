@@ -839,6 +839,41 @@ export function consumePin(pinRaw: string, roomId: string) {
   return { ok: true as const, record };
 }
 
+/** First non-empty trimmed string, or undefined. */
+export function firstNonEmptyLabel(...candidates: (string | null | undefined)[]): string | undefined {
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+/** Anonymous lobby label, e.g. `Anon9180bc` (first 6 hex chars of pubkey or zap id). */
+export function formatAnonSeatLabel(hexSource: string): string {
+  const hex = hexSource.replace(/[^a-f0-9]/gi, '').slice(0, 6).toLowerCase();
+  return hex ? `Anon${hex}` : 'Anonymous';
+}
+
+/** Seat label for online lobby — never returns blank (anonymous zaps often have empty comment). */
+export function resolveOnlineSeatDisplayName(params: {
+  name?: string | null;
+  pubkey?: string;
+  zapEventIdSuffix?: string;
+}): string {
+  const trimmed = firstNonEmptyLabel(params.name);
+  if (trimmed) {
+    return trimmed;
+  }
+  if (params.pubkey) {
+    return formatAnonSeatLabel(params.pubkey);
+  }
+  if (params.zapEventIdSuffix) {
+    return formatAnonSeatLabel(params.zapEventIdSuffix);
+  }
+  return 'Anonymous';
+}
+
 export function seatPaidPlayer(params: {
   roomId: string;
   sessionID: string;
@@ -849,6 +884,10 @@ export function seatPaidPlayer(params: {
   pubkey?: string;
   lnAddress?: string;
 }) {
+  const displayName = resolveOnlineSeatDisplayName({
+    name: params.name,
+    pubkey: params.pubkey,
+  });
   const room = roomById.get(params.roomId);
   if (!room) {
     return { ok: false as const, reason: 'room_not_found' };
@@ -889,7 +928,7 @@ export function seatPaidPlayer(params: {
     paidAt: now,
     ready: false,
     disconnectedAt: undefined,
-    name: params.name,
+    name: displayName,
     picture: params.picture,
     pubkey: params.pubkey,
     lnAddress: params.lnAddress,

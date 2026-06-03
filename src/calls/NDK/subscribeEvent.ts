@@ -21,9 +21,12 @@ import { ndkInstance } from '../../calls/NDK/setNDKInstance';
 import {
   consumeNostrLinkForZap,
   consumePin,
+  firstNonEmptyLabel,
+  formatAnonSeatLabel,
   getRoomByKind1EventId,
   getRoomBySession,
   listOnlineRooms,
+  resolveOnlineSeatDisplayName,
   seatPaidPlayer,
   settleOnlineRematchPayment,
   serializeRoom,
@@ -106,12 +109,17 @@ async function listenToSubscriptions(event: NDKEvent) {
   const isAnon = !payerPubKey;
   const anonSuffix = event.id.slice(0, 6);
   const npubLike = payerPubKey ? `${payerPubKey.slice(0, 8)}...${payerPubKey.slice(-4)}` : '';
-  const fallbackLabel = isAnon ? `Anon #${anonSuffix}` : `npub:${npubLike}`;
-  const zapperName =
-    userZap?.profile?.displayName ??
-    userZap?.profile?.name ??
-    descriptionParsed.content ??
-    fallbackLabel;
+  const fallbackLabel = isAnon ? formatAnonSeatLabel(anonSuffix) : `npub:${npubLike}`;
+  const zapperName = resolveOnlineSeatDisplayName({
+    name: firstNonEmptyLabel(
+      userZap?.profile?.displayName,
+      userZap?.profile?.name,
+      descriptionParsed.content,
+      finalContent,
+    ),
+    pubkey: payerPubKey,
+    zapEventIdSuffix: anonSuffix,
+  }) || fallbackLabel;
   const avatar =
     userZap?.profile?.image ??
     userZap?.profile?.picture ??
@@ -128,6 +136,19 @@ async function listenToSubscriptions(event: NDKEvent) {
     console.log(
       `${dateNow()} [${sessionID}] [ONLINE] zap received roomId=${room.roomId} amount=${zapAmount} sender=${zapperName}`
     );
+    if (payerPubKey) {
+      const alreadySeated = [...room.seats.values()].find(
+        (seat) =>
+          seat.status === 'paid' &&
+          seat.pubkey?.toLowerCase() === payerPubKey.toLowerCase(),
+      );
+      if (alreadySeated) {
+        console.log(
+          `${dateNow()} [${sessionID}] [ONLINE] zap ignored (seat already assigned) roomId=${room.roomId} pubkey=${payerPubKey.slice(0, 8)}…`
+        );
+        return;
+      }
+    }
     const isRematchPaymentEvent = room.postGame.rematchEventId === eventID[1];
     if (isRematchPaymentEvent) {
       const rematch = settleOnlineRematchPayment({
