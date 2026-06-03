@@ -6,7 +6,6 @@ export type OnlineRoomPhase = 'lobby' | 'playing' | 'postgame' | 'finished' | 'c
 
 export interface OnlineRoomNostrMeta {
   note1: string;
-  emojis: string;
   min: number;
   mode: string;
 }

@@ -130,11 +130,10 @@ function publishOnlineMatchStarted(roomId: string, sessionID: string) {
   if (!room) {
     return;
   }
-  const roomEmojis = room.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
   void publishOnlineKind1Reply({
     sessionID,
     rootEventId: room.kind1EventId,
-    content: `ONLINE MATCH STARTED ${roomEmojis}\n${room.snapshot.state.p1Name} vs ${room.snapshot.state.p2Name}.\nSpectators can now watch live in room ${room.roomCode}.`,
+    content: `ONLINE MATCH STARTED · room ${room.roomCode}\n${room.snapshot.state.p1Name} vs ${room.snapshot.state.p2Name}.\nSpectators can now watch live in room ${room.roomCode}.`,
     mentions: getSeatMentions(room.roomId),
   });
 }
@@ -194,7 +193,6 @@ export async function createOnlineRoomHandler(
           room.roomId,
           {
             note1: kind1.note1,
-            emojis: kind1.emojis,
             min: kind1.min,
             mode: kind1.mode,
           },
@@ -206,7 +204,7 @@ export async function createOnlineRoomHandler(
         }
         logOnline(
           sessionID,
-          `kind1 published roomId=${room.roomId} note=${kind1.note1} emojis=${kind1.emojis}`
+          `kind1 published roomId=${room.roomId} note=${kind1.note1}`
         );
       } else {
         logOnline(sessionID, `kind1 publish returned no local kind1 record roomId=${room.roomId}`);
@@ -577,11 +575,10 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
   const liveRoom = getRoomById(payload.roomId);
   if (liveRoom) {
     io.to(liveRoom.roomId).emit('onlineRoomUpdated', serializeRoom(liveRoom));
-    const roomEmojis = liveRoom.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
     void publishOnlineKind1Reply({
       sessionID,
       rootEventId: liveRoom.kind1EventId,
-      content: `ONLINE ROUND CLOSED ${roomEmojis}\nWinner selected payout.\nRound closed.`,
+      content: `ONLINE ROUND CLOSED · room ${liveRoom.roomCode}\nWinner selected payout.\nRound closed.`,
       mentions: getSeatMentions(liveRoom.roomId),
     });
   }
@@ -644,11 +641,10 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
   const liveRoom = getRoomById(payload.roomId);
   if (liveRoom) {
     io.to(liveRoom.roomId).emit('onlineRoomUpdated', serializeRoom(liveRoom));
-    const roomEmojis = liveRoom.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
     void publishOnlineKind1Reply({
       sessionID,
       rootEventId: liveRoom.kind1EventId,
-      content: `ONLINE ROUND CLOSED ${roomEmojis}\nWinner selected payout.\nRound closed.`,
+      content: `ONLINE ROUND CLOSED · room ${liveRoom.roomCode}\nWinner selected payout.\nRound closed.`,
       mentions: getSeatMentions(liveRoom.roomId),
     });
   }
@@ -687,13 +683,12 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
         winnerRole === PlayerRole.Player1 ? PlayerRole.Player2 : PlayerRole.Player1;
       const loserSeat = loserRole ? room.seats.get(loserRole) : undefined;
       const requiredAmount = Math.max(1, Math.floor(room.postGame.winnerPoints * ONLINE_PAYOUT_MULTIPLIER));
-      const roomEmojis = room.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
       void (async () => {
         try {
           const published = await publishOnlineRematchKind1({
             sessionID,
             rootEventId: room.kind1EventId,
-            emojis: roomEmojis,
+            roomCode: room.roomCode,
             amount: requiredAmount,
             loserPubkey: loserSeat?.pubkey,
             loserName: loserSeat?.name,
@@ -1182,7 +1177,6 @@ export function startOnlineLoop() {
           snapshot: pruneOnlineSnapshotForWire(live.snapshot),
         });
         if (live.phase !== room.phase) {
-          const roomEmojis = live.nostrMeta?.emojis ?? '🎮🎮🎮🎮';
           if (room.phase === 'playing' && live.phase === 'postgame') {
             const winnerName = live.postGame.winnerName || live.snapshot.state.winnerName || 'Unknown winner';
             const winnerSeat = [...live.seats.values()].find(
@@ -1195,7 +1189,7 @@ export function startOnlineLoop() {
             void publishOnlineKind1Reply({
               sessionID: live.hostSessionID,
               rootEventId: live.kind1EventId,
-              content: `ONLINE MATCH RESULT ${roomEmojis}\nWinner: ${winnerName}.\nFinal score: ${live.snapshot.state.p1Name} ${live.snapshot.state.score[0]} - ${live.snapshot.state.p2Name} ${live.snapshot.state.score[1]}.\nNet prize after fee: ${netPrize} sats.`,
+              content: `ONLINE MATCH RESULT · room ${live.roomCode}\nWinner: ${winnerName}.\nFinal score: ${live.snapshot.state.p1Name} ${live.snapshot.state.score[0]} - ${live.snapshot.state.p2Name} ${live.snapshot.state.score[1]}.\nNet prize after fee: ${netPrize} sats.`,
               mentions: [
                 { pubkey: winnerSeat?.pubkey, name: winnerName },
                 ...getSeatMentions(live.roomId),

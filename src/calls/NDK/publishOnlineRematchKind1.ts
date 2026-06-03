@@ -9,7 +9,7 @@ import { subscribeEvent } from './subscribeEvent';
 interface PublishOnlineRematchKind1Opts {
   sessionID: string;
   rootEventId?: string;
-  emojis: string;
+  roomCode: string;
   amount: number;
   loserPubkey?: string;
   loserName?: string;
@@ -41,7 +41,8 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
   const loserLabel = pinNostrIdentity
     ? `nostr:${nip19.npubEncode(opts.loserPubkey!)}`
     : opts.loserName?.trim() || 'the losing player';
-  ndkEvent.content = `ONLINE REMATCH ${opts.emojis}\nDouble or Nothing accepted.\nWaiting for ${loserLabel} to zap exactly ${opts.amount} sats to continue.`;
+  const roomCode = opts.roomCode.trim().toUpperCase() || 'N/A';
+  ndkEvent.content = `ONLINE REMATCH · room ${roomCode}\nDouble or Nothing accepted.\nWaiting for ${loserLabel} to zap exactly ${opts.amount} sats to continue.`;
   await ndkEvent.publish();
   setKind1IDtoSessionID(ndkEvent.id, opts.sessionID);
   const note1 = nip19.noteEncode(ndkEvent.id);
@@ -49,7 +50,7 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
   appendKind1toSessionID(opts.sessionID, {
     id: ndkEvent.id,
     note1,
-    emojis: opts.emojis,
+    emojis: '',
     min: opts.amount,
     mode: GameMode.ONLINE,
     zapSubscription: subscription,

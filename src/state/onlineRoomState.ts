@@ -578,7 +578,7 @@ export function setRoomNostrMeta(roomId: string, nostrMeta: OnlineRoomNostrMeta,
   room.kind1EventId = kind1EventId;
   roomIdByKind1EventId.set(kind1EventId, roomId);
   room.updatedAt = Date.now();
-  logOnlineState(`set nostr meta roomId=${roomId} note=${nostrMeta.note1} emojis=${nostrMeta.emojis}`);
+  logOnlineState(`set nostr meta roomId=${roomId} note=${nostrMeta.note1}`);
 }
 
 export function issueJoinPin(roomId: string, sessionID: string, socketID: string) {
