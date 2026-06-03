@@ -65,6 +65,8 @@ export type OnlineNostrLinkRecord = {
   socketID: string;
   pubkey: string;
   expiresAt: number;
+  /** `lightning` = ephemeral key from anonymous LN seat flow. */
+  linkPayMethod?: 'lightning' | 'nostr_web';
 };
 
 const nostrLinkByRoomPubkey = new Map<string, OnlineNostrLinkRecord>();
@@ -698,7 +700,8 @@ export function registerNostrLink(
   roomId: string,
   sessionID: string,
   socketID: string,
-  pubkeyHex: string
+  pubkeyHex: string,
+  opts?: { linkPayMethod?: 'lightning' | 'nostr_web' }
 ): { ok: true; expiresAt: number } | { ok: false; reason: string } {
   const room = roomById.get(roomId);
   if (!room) {
@@ -730,6 +733,7 @@ export function registerNostrLink(
     socketID,
     pubkey: pk,
     expiresAt,
+    linkPayMethod: opts?.linkPayMethod ?? 'nostr_web',
   });
   logOnlineState(`registered nostr link roomId=${roomId} session=${sessionID} pubkey=${pk.slice(0, 8)}…`);
   return { ok: true, expiresAt };
@@ -753,7 +757,7 @@ export function removeNostrLinkRegistrationForPubkey(
 export function consumeNostrLinkForZap(
   roomId: string,
   pubkeyHex: string
-): { ok: true; record: { sessionID: string; socketID: string } } | { ok: false; reason: string } {
+): { ok: true; record: { sessionID: string; socketID: string; linkPayMethod: 'lightning' | 'nostr_web' } } | { ok: false; reason: string } {
   const pk = pubkeyHex.toLowerCase();
   const key = nostrLinkKey(roomId, pk);
   const rec = nostrLinkByRoomPubkey.get(key);
@@ -768,7 +772,14 @@ export function consumeNostrLinkForZap(
   const sid = rec.socketID;
   nostrLinkByRoomPubkey.delete(key);
   logOnlineState(`consumed nostr link roomId=${roomId} session=${sessionID}`);
-  return { ok: true, record: { sessionID, socketID: sid } };
+  return {
+    ok: true,
+    record: {
+      sessionID,
+      socketID: sid,
+      linkPayMethod: rec.linkPayMethod ?? 'nostr_web',
+    },
+  };
 }
 
 export function refreshNostrLinkSocket(roomId: string, sessionID: string, socketID: string) {
@@ -883,6 +894,7 @@ export function seatPaidPlayer(params: {
   picture?: string;
   pubkey?: string;
   lnAddress?: string;
+  payMethod?: 'lightning' | 'nostr_web' | 'nostr_app';
 }) {
   const displayName = resolveOnlineSeatDisplayName({
     name: params.name,
@@ -932,6 +944,7 @@ export function seatPaidPlayer(params: {
     picture: params.picture,
     pubkey: params.pubkey,
     lnAddress: params.lnAddress,
+    payMethod: params.payMethod,
   });
   room.spectators.delete(params.sessionID);
   syncAuthoritativePlayers(room.roomId);
@@ -1333,6 +1346,14 @@ export function setOnlineRematchRequested(params: {
   room.updatedAt = Date.now();
   logOnlineState(
     `rematch requested roomId=${params.roomId} amount=${params.requiredAmount} event=${params.rematchEventId}`
+  );
+}
+
+export function isRematchLoserSession(room: { phase: string; postGame: { rematchRequested?: boolean; rematchWaitingForSessionID?: string } }, sessionID: string): boolean {
+  return (
+    room.phase === 'postgame' &&
+    Boolean(room.postGame.rematchRequested) &&
+    room.postGame.rematchWaitingForSessionID === sessionID
   );
 }
 

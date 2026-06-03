@@ -136,19 +136,6 @@ async function listenToSubscriptions(event: NDKEvent) {
     console.log(
       `${dateNow()} [${sessionID}] [ONLINE] zap received roomId=${room.roomId} amount=${zapAmount} sender=${zapperName}`
     );
-    if (payerPubKey) {
-      const alreadySeated = [...room.seats.values()].find(
-        (seat) =>
-          seat.status === 'paid' &&
-          seat.pubkey?.toLowerCase() === payerPubKey.toLowerCase(),
-      );
-      if (alreadySeated) {
-        console.log(
-          `${dateNow()} [${sessionID}] [ONLINE] zap ignored (seat already assigned) roomId=${room.roomId} pubkey=${payerPubKey.slice(0, 8)}…`
-        );
-        return;
-      }
-    }
     const isRematchPaymentEvent = room.postGame.rematchEventId === eventID[1];
     if (isRematchPaymentEvent) {
       const rematch = settleOnlineRematchPayment({
@@ -171,6 +158,19 @@ async function listenToSubscriptions(event: NDKEvent) {
         rooms: listOnlineRooms(),
       });
       return;
+    }
+    if (payerPubKey) {
+      const alreadySeated = [...room.seats.values()].find(
+        (seat) =>
+          seat.status === 'paid' &&
+          seat.pubkey?.toLowerCase() === payerPubKey.toLowerCase(),
+      );
+      if (alreadySeated) {
+        console.log(
+          `${dateNow()} [${sessionID}] [ONLINE] zap ignored (seat already assigned) roomId=${room.roomId} pubkey=${payerPubKey.slice(0, 8)}…`
+        );
+        return;
+      }
     }
     if (zapAmount < minBuyIn) {
       console.log(
@@ -199,6 +199,7 @@ async function listenToSubscriptions(event: NDKEvent) {
         picture: avatar,
         pubkey: payerPubKey,
         lnAddress,
+        payMethod: 'nostr_app',
       });
       if (!seatResult.ok) {
         console.log(
@@ -241,6 +242,8 @@ async function listenToSubscriptions(event: NDKEvent) {
         picture: avatar,
         pubkey: payerPubKey,
         lnAddress,
+        payMethod:
+          nostrConsumed.record.linkPayMethod === 'lightning' ? 'lightning' : 'nostr_web',
       });
       if (!seatResult.ok) {
         console.log(

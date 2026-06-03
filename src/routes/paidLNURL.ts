@@ -34,7 +34,7 @@ import {
   consumeOnlineSeatLightningAfterSuccess,
   getOnlineSeatLightningByLnurlpId,
 } from '../state/onlineSeatLightningState';
-import { getRoomById } from '../state/onlineRoomState';
+import { getRoomById, isRematchLoserSession } from '../state/onlineRoomState';
 
 const router = Router();
 dotenv.config();
@@ -97,16 +97,52 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       res.status(404).send('room_not_found');
       return;
     }
-    if (room.phase !== 'lobby' || room.postGame.rematchRequested) {
-      res.status(400).send('room_not_accepting');
-      return;
+    const isRematchPay =
+      onlineRec.purpose === 'rematch' ||
+      isRematchLoserSession(room, onlineRec.sessionID);
+    let kind1EventId: string;
+    let zapBuyinSats: number;
+    if (isRematchPay) {
+      if (room.phase !== 'postgame' || !room.postGame.rematchRequested) {
+        res.status(400).send('room_not_accepting');
+        return;
+      }
+      const requiredAmount = room.postGame.rematchRequiredAmount ?? 0;
+      if (amountSats < requiredAmount) {
+        console.error(
+          `${dateNow()} [ONLINE_SEAT_LN] rematch amount too low lnurlp=${reqLNURLP} got=${amountSats} min=${requiredAmount}`
+        );
+        res.status(400).send('amount_too_low');
+        return;
+      }
+      if (amountSats !== requiredAmount) {
+        console.error(
+          `${dateNow()} [ONLINE_SEAT_LN] rematch amount mismatch lnurlp=${reqLNURLP} got=${amountSats} expected=${requiredAmount}`
+        );
+        res.status(400).send('amount_mismatch');
+        return;
+      }
+      if (!room.postGame.rematchEventId) {
+        console.error(`${dateNow()} [ONLINE_SEAT_LN] rematch kind1 missing roomId=${room.roomId}`);
+        res.status(400).send('kind1_not_ready');
+        return;
+      }
+      kind1EventId = room.postGame.rematchEventId;
+      zapBuyinSats = requiredAmount;
+    } else {
+      if (room.phase !== 'lobby' || room.postGame.rematchRequested) {
+        res.status(400).send('room_not_accepting');
+        return;
+      }
+      if (!room.kind1EventId) {
+        console.error(`${dateNow()} [ONLINE_SEAT_LN] kind1 missing roomId=${room.roomId}`);
+        res.status(400).send('kind1_not_ready');
+        return;
+      }
+      kind1EventId = room.kind1EventId;
+      zapBuyinSats = onlineRec.buyin;
     }
-    if (!room.kind1EventId) {
-      console.error(`${dateNow()} [ONLINE_SEAT_LN] kind1 missing roomId=${room.roomId}`);
-      res.status(400).send('kind1_not_ready');
-      return;
-    }
-    const kind1Meta = getKind1FromID(room.kind1EventId);
+    const kind1Meta = getKind1FromID(kind1EventId);
     const hostLud16 = kind1Meta?.hostLNAddress ?? process.env.HOST_LNADDRESS;
     if (!hostLud16 || !hostLud16.includes('@')) {
       console.error(`${dateNow()} [ONLINE_SEAT_LN] missing host LUD-16 for zap LNURL roomId=${room.roomId}`);
@@ -134,9 +170,9 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       return;
     }
     const zapResult = await requestZapInvoiceAndPayForKind1({
-      kind1EventId: room.kind1EventId,
+      kind1EventId,
       kind1AuthorPubkey,
-      buyinSats: onlineRec.buyin,
+      buyinSats: zapBuyinSats,
       zapSecretKeyBytes: skBytes,
       hostLud16,
     });
@@ -150,7 +186,7 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       return;
     }
     console.log(
-      `${dateNow()} [ONLINE_SEAT_LN] LN settled; zap receipt published for kind1=${room.kind1EventId} session=${onlineRec.sessionID.slice(0, 8)}… (seat on zap event)`
+      `${dateNow()} [ONLINE_SEAT_LN] LN settled; zap receipt published for kind1=${kind1EventId} session=${onlineRec.sessionID.slice(0, 8)}… (${isRematchPay ? 'rematch' : 'seat on zap event'})`
     );
     res.status(200).send('OK');
     return;

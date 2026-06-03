@@ -12,6 +12,8 @@ export type OnlineSeatLightningRecord = {
   /** Ephemeral secp256k1 secret (hex) — signs NIP-57 zap request; matches `registerNostrLink` pubkey. */
   zapSecretKeyHex: string;
   zapPubkeyHex: string;
+  /** `rematch` = double-or-nothing loser payment (zaps rematch kind1, not seat claim). */
+  purpose?: 'seat' | 'rematch';
 };
 
 const byLnurlpId = new Map<string, OnlineSeatLightningRecord>();

@@ -24,6 +24,8 @@ export interface OnlineSeatState {
   picture?: string;
   pubkey?: string;
   lnAddress?: string;
+  /** How this seat was paid: lightning invoice, web sign-in zap, or external app + PIN. */
+  payMethod?: 'lightning' | 'nostr_web' | 'nostr_app';
   /** Last RTT (ms) reported by that seat's client; broadcast via `onlineRoomUpdated`. */
   pingMs?: number;
 }
