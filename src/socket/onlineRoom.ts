@@ -75,6 +75,7 @@ import {
   leaveRoom,
   listOnlineHistoryMerged,
   listOnlineRooms,
+  redactSerializedRoomForViewer,
   serializeRoom,
   setSeatReady,
   setRoomNostrMeta,
@@ -306,10 +307,11 @@ export function getOnlineRoomStateHandler(
   payload: { roomId: string; matchRound?: number }
 ) {
   const sessionID = socket.data.sessionID as string | undefined;
+  const viewer = { sessionID, socketID: socket.id };
   const room = getRoomById(payload.roomId);
   if (room) {
     logOnline(sessionID, `getOnlineRoomState roomId=${room.roomId} phase=${room.phase}`);
-    socket.emit('onlineRoomUpdated', serializeRoom(room));
+    socket.emit('onlineRoomUpdated', serializeRoom(room, viewer));
     return;
   }
   const archived = loadSerializedRoomFromArchiveSync(payload.roomId, payload.matchRound);
@@ -318,7 +320,7 @@ export function getOnlineRoomStateHandler(
       sessionID,
       `getOnlineRoomState from archive roomId=${payload.roomId} matchRound=${payload.matchRound ?? 'n/a'}`
     );
-    socket.emit('onlineRoomUpdated', archived);
+    socket.emit('onlineRoomUpdated', redactSerializedRoomForViewer(archived, viewer));
     return;
   }
   logOnline(sessionID, `getOnlineRoomState failed roomId=${payload.roomId} reason=room_not_found`);
@@ -496,7 +498,8 @@ export function getOnlinePostGameHandler(socket: Socket, payload: { roomId: stri
     socket.join(payload.roomId);
     socket.data.currentOnlineRoomId = payload.roomId;
   }
-  const info = getOnlinePostGame(payload.roomId);
+  const viewer = { sessionID, socketID: socket.id };
+  const info = getOnlinePostGame(payload.roomId, viewer);
   if (!info) {
     logOnline(sessionID, `getOnlinePostGame failed roomId=${payload.roomId}`);
     socket.emit('onlinePinInvalid', { reason: 'postgame_unavailable' });
@@ -533,7 +536,8 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
   if (!sessionID) {
     return;
   }
-  const info = getOnlinePostGame(payload.roomId);
+  const viewer = { sessionID, socketID: socket.id };
+  const info = getOnlinePostGame(payload.roomId, viewer);
   const room = getRoomById(payload.roomId);
   const winnerSeat =
     room && info?.winnerRole ? room.seats.get(info.winnerRole) : undefined;
@@ -591,7 +595,8 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
   if (!sessionID) {
     return;
   }
-  const info = getOnlinePostGame(payload.roomId);
+  const viewer = { sessionID, socketID: socket.id };
+  const info = getOnlinePostGame(payload.roomId, viewer);
   const room = getRoomById(payload.roomId);
   const winnerSeat =
     room && info?.winnerRole ? room.seats.get(info.winnerRole) : undefined;

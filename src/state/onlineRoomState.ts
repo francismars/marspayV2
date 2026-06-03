@@ -1159,7 +1159,95 @@ export function getOnlineReplay(
   return loadCompactReplayFromArchiveSync(roomId, matchRound);
 }
 
-export function serializeRoom(room: OnlineRoom) {
+export type OnlineRoomViewer = {
+  sessionID?: string;
+  socketID?: string;
+};
+
+/** True when the viewer is the match winner (session id or live winner seat socket). */
+export function isOnlineRoomWinnerViewer(
+  room: Pick<OnlineRoom, 'postGame' | 'seats'>,
+  viewer?: OnlineRoomViewer
+): boolean {
+  if (!viewer?.sessionID) {
+    return false;
+  }
+  if (room.postGame.winnerSessionID && room.postGame.winnerSessionID === viewer.sessionID) {
+    return true;
+  }
+  const winnerRole = room.postGame.winnerRole;
+  if (!winnerRole || !viewer.socketID) {
+    return false;
+  }
+  const winnerSeat = room.seats.get(winnerRole);
+  return Boolean(
+    winnerSeat?.sessionID === viewer.sessionID && winnerSeat.socketID === viewer.socketID
+  );
+}
+
+function postGameIncludesWithdrawLink(
+  room: OnlineRoom,
+  viewer?: OnlineRoomViewer
+): boolean {
+  return Boolean(room.postGame.lnurlw && isOnlineRoomWinnerViewer(room, viewer));
+}
+
+function buildPostGameWire(room: OnlineRoom, viewer?: OnlineRoomViewer) {
+  return {
+    p1Picture: room.postGame.p1Picture,
+    p2Picture: room.postGame.p2Picture,
+    winnerRole: room.postGame.winnerRole,
+    winnerSessionID: room.postGame.winnerSessionID,
+    winnerName: room.postGame.winnerName,
+    winnerPicture: room.postGame.winnerPicture,
+    winnerPoints: room.postGame.winnerPoints,
+    totalPrize: room.postGame.totalPrize,
+    ...(postGameIncludesWithdrawLink(room, viewer)
+      ? { lnurlw: room.postGame.lnurlw }
+      : {}),
+    payoutMethod: room.postGame.payoutMethod,
+    payoutTarget: room.postGame.payoutTarget,
+    rematchRequested: room.postGame.rematchRequested,
+    rematchRequiredAmount: room.postGame.rematchRequiredAmount,
+    rematchEventId: room.postGame.rematchEventId,
+    rematchNote1: room.postGame.rematchNote1,
+    rematchWaitingForSessionID: room.postGame.rematchWaitingForSessionID,
+    doubleOrNothingVotes: room.postGame.doubleOrNothingVotes.size,
+  };
+}
+
+/** Strip LNURL-w from archived wire payloads unless the viewer is the recorded winner. */
+export function redactSerializedRoomForViewer(
+  serialized: Record<string, unknown>,
+  viewer?: OnlineRoomViewer
+): Record<string, unknown> {
+  const postGame = serialized.postGame as
+    | { lnurlw?: string; winnerSessionID?: string; winnerRole?: PlayerRole.Player1 | PlayerRole.Player2 }
+    | undefined;
+  if (!postGame?.lnurlw) {
+    return serialized;
+  }
+  if (viewer?.sessionID && postGame.winnerSessionID === viewer.sessionID) {
+    return serialized;
+  }
+  const seats = serialized.seats as
+    | Record<string, { sessionID?: string; socketID?: string }>
+    | undefined;
+  const winnerRole = postGame.winnerRole;
+  const winnerSeat = winnerRole && seats ? seats[winnerRole] : undefined;
+  if (
+    viewer?.sessionID &&
+    viewer.socketID &&
+    winnerSeat?.sessionID === viewer.sessionID &&
+    winnerSeat.socketID === viewer.socketID
+  ) {
+    return serialized;
+  }
+  const { lnurlw: _removed, ...safePostGame } = postGame;
+  return { ...serialized, postGame: safePostGame };
+}
+
+export function serializeRoom(room: OnlineRoom, viewer?: OnlineRoomViewer) {
   return {
     roomId: room.roomId,
     roomCode: room.roomCode,
@@ -1187,29 +1275,13 @@ export function serializeRoom(room: OnlineRoom) {
       tickMs: room.replay.tickMs,
       durationMs: room.replay.frames.length * room.replay.tickMs,
     },
-    postGame: {
-      p1Picture: room.postGame.p1Picture,
-      p2Picture: room.postGame.p2Picture,
-      winnerRole: room.postGame.winnerRole,
-      winnerSessionID: room.postGame.winnerSessionID,
-      winnerName: room.postGame.winnerName,
-      winnerPicture: room.postGame.winnerPicture,
-      winnerPoints: room.postGame.winnerPoints,
-      totalPrize: room.postGame.totalPrize,
-      lnurlw: room.postGame.lnurlw,
-      payoutMethod: room.postGame.payoutMethod,
-      payoutTarget: room.postGame.payoutTarget,
-      rematchRequested: room.postGame.rematchRequested,
-      rematchRequiredAmount: room.postGame.rematchRequiredAmount,
-      rematchEventId: room.postGame.rematchEventId,
-      rematchNote1: room.postGame.rematchNote1,
-      rematchWaitingForSessionID: room.postGame.rematchWaitingForSessionID,
-      doubleOrNothingVotes: room.postGame.doubleOrNothingVotes.size,
-    },
+    postGame: buildPostGameWire(room, viewer),
   };
 }
 
-export function getOnlinePostGame(roomId: string) {
+type OnlinePostGameInfo = NonNullable<ReturnType<typeof getOnlinePostGameInternal>>;
+
+function getOnlinePostGameInternal(roomId: string) {
   const room = roomById.get(roomId);
   if (room && (room.phase === 'postgame' || room.phase === 'finished')) {
     ensurePostGameState(room);
@@ -1241,9 +1313,33 @@ export function getOnlinePostGame(roomId: string) {
           ? room.seats.get(room.postGame.winnerRole)?.lnAddress
           : undefined,
       doubleOrNothingVotes: room.postGame.doubleOrNothingVotes.size,
+      _room: room,
     };
   }
-  return getOnlinePostGameFromArchive(roomId);
+  const archived = getOnlinePostGameFromArchive(roomId);
+  if (!archived) {
+    return undefined;
+  }
+  return { ...archived, _room: undefined as OnlineRoom | undefined };
+}
+
+function redactPostGameInfoForViewer(
+  info: OnlinePostGameInfo,
+  viewer?: OnlineRoomViewer
+): Omit<OnlinePostGameInfo, '_room' | 'lnurlw'> & { lnurlw?: string } {
+  const includeWithdrawLink = info._room
+    ? postGameIncludesWithdrawLink(info._room, viewer)
+    : Boolean(viewer?.sessionID && info.winnerSessionID === viewer.sessionID && info.lnurlw);
+  const { _room, lnurlw, ...rest } = info;
+  return includeWithdrawLink && lnurlw ? { ...rest, lnurlw } : rest;
+}
+
+export function getOnlinePostGame(roomId: string, viewer?: OnlineRoomViewer) {
+  const info = getOnlinePostGameInternal(roomId);
+  if (!info) {
+    return undefined;
+  }
+  return redactPostGameInfoForViewer(info, viewer);
 }
 
 /**
