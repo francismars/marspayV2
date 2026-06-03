@@ -1,5 +1,6 @@
 node_modules
 dist
 .env
+logs.log
 public/games.json
 data/online_archive/
