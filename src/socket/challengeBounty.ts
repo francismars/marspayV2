@@ -21,6 +21,7 @@ import {
   getDailyZapBudgetRemaining,
   recordDailyZapSpend,
   getChallengeById,
+  isAnonymousRunPubkey,
   type ChallengeInputEntry,
 } from '../state/challengeState';
 
@@ -87,20 +88,10 @@ export async function requestChallengeRunHandler(
     return;
   }
   const appSession = getAppNostrSession(sessionID);
-  if (!appSession) {
-    socket.emit('resChallengeRun', { ok: false, reason: 'no_app_session' });
-    return;
-  }
-
-  const eligibility = await evaluateChallengeEligibility(appSession.pubkey, true);
-  if (!eligibility.eligible) {
-    socket.emit('resChallengeRun', { ok: false, reason: 'not_eligible', eligibility });
-    return;
-  }
 
   const challengeId = typeof payload?.challengeId === 'string' ? payload.challengeId.trim() : '';
   const created = createChallengeRun({
-    pubkey: appSession.pubkey,
+    pubkey: appSession?.pubkey,
     sessionID,
     challengeId,
   });
@@ -134,10 +125,6 @@ export async function submitChallengeWinHandler(
     return;
   }
   const appSession = getAppNostrSession(sessionID);
-  if (!appSession) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'no_app_session' });
-    return;
-  }
 
   const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : '';
   const run = getChallengeRun(runId);
@@ -145,16 +132,25 @@ export async function submitChallengeWinHandler(
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_not_found' });
     return;
   }
-  if (run.pubkey !== appSession.pubkey.toLowerCase()) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'pubkey_mismatch' });
+  if (run.sessionID !== sessionID) {
+    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'session_mismatch' });
+    return;
+  }
+  if (!isAnonymousRunPubkey(run.pubkey)) {
+    if (!appSession || run.pubkey !== appSession.pubkey.toLowerCase()) {
+      socket.emit('resSubmitChallengeWin', { ok: false, reason: 'pubkey_mismatch' });
+      return;
+    }
+    if (hasClaimedChallenge(run.pubkey, run.challengeId)) {
+      socket.emit('resSubmitChallengeWin', { ok: false, reason: 'already_claimed' });
+      return;
+    }
+  } else if (appSession && hasClaimedChallenge(appSession.pubkey, run.challengeId)) {
+    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'already_claimed' });
     return;
   }
   if (run.status === 'expired') {
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_expired' });
-    return;
-  }
-  if (hasClaimedChallenge(run.pubkey, run.challengeId)) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'already_claimed' });
     return;
   }
 
@@ -246,9 +242,17 @@ export async function claimChallengeBountyHandler(
     socket.emit('resChallengeClaim', { ok: false, reason: 'invalid_or_expired_claim_token' });
     return;
   }
-  if (claimRec.pubkey !== appSession.pubkey.toLowerCase()) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'pubkey_mismatch' });
-    return;
+  const claimPubkey = appSession.pubkey.toLowerCase();
+  if (claimRec.pubkey !== claimPubkey) {
+    if (!isAnonymousRunPubkey(claimRec.pubkey)) {
+      socket.emit('resChallengeClaim', { ok: false, reason: 'pubkey_mismatch' });
+      return;
+    }
+    const run = getChallengeRun(claimRec.runId);
+    if (!run || run.sessionID !== sessionID) {
+      socket.emit('resChallengeClaim', { ok: false, reason: 'session_mismatch' });
+      return;
+    }
   }
 
   const eligibility = await evaluateChallengeEligibility(appSession.pubkey, true);
@@ -257,7 +261,7 @@ export async function claimChallengeBountyHandler(
     return;
   }
 
-  if (hasClaimedChallenge(claimRec.pubkey, claimRec.challengeId)) {
+  if (hasClaimedChallenge(claimPubkey, claimRec.challengeId)) {
     socket.emit('resChallengeClaim', { ok: false, reason: 'already_claimed' });
     return;
   }
@@ -308,7 +312,7 @@ export async function claimChallengeBountyHandler(
   }
 
   upsertChallengeClaim({
-    pubkey: claimRec.pubkey,
+    pubkey: claimPubkey,
     challengeId: claimRec.challengeId,
     runId: claimRec.runId,
     kind1EventId: published.eventId,
@@ -330,7 +334,7 @@ export async function claimChallengeBountyHandler(
   if (zapResult.ok) {
     recordDailyZapSpend(claimRec.bountySats);
     upsertChallengeClaim({
-      pubkey: claimRec.pubkey,
+      pubkey: claimPubkey,
       challengeId: claimRec.challengeId,
       runId: claimRec.runId,
       kind1EventId: published.eventId,

@@ -24,11 +24,11 @@ Server checks (24h cache):
 
 ## Run flow
 
-1. `requestChallengeRun` `{ challengeId }` → `{ runId, seed, bountySats, expiresAt }`
+1. `requestChallengeRun` `{ challengeId }` → `{ runId, seed, bountySats, expiresAt }` — **no Nostr sign-in required** (anonymous runs keyed by socket session)
 2. Client plays with `initRunRng(seed)` — no mempool spawns during challenge runs
 3. Client logs P1 inputs `{ tick, dir }` where `tick` = sim step index (one per `stepGame`)
-4. `submitChallengeWin` `{ runId, inputLog }` → server replays → `{ claimToken, noteContent, noteTags }`
-5. Client signs exact note → `claimChallengeBounty` `{ claimToken, event }`
+4. `submitChallengeWin` `{ runId, inputLog }` → server replays → `{ claimToken, noteContent, noteTags }` — **no sign-in required** (claim token bound to socket session)
+5. Client signs in with Nostr (if not already), then signs exact note → `claimChallengeBounty` `{ claimToken, event }`
 6. Server publishes kind-1, zaps note via LNURL-pay, records claim (one per pubkey + challengeId)
 
 ## Retry

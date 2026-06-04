@@ -25,6 +25,14 @@ export function getChallengeById(id: string): ChallengeCatalogEntry | undefined 
   return CHALLENGE_CATALOG.find((c) => c.id === id);
 }
 
+export function isAnonymousRunPubkey(pubkey: string): boolean {
+  return !pubkey || pubkey.startsWith('anon:');
+}
+
+export function anonymousRunPubkey(sessionID: string): string {
+  return `anon:${sessionID}`;
+}
+
 export type ChallengeInputEntry = { tick: number; dir: string };
 
 export type ChallengeRunRecord = {
@@ -77,21 +85,28 @@ function claimKey(pubkey: string, challengeId: string): string {
 }
 
 export function createChallengeRun(params: {
-  pubkey: string;
+  pubkey?: string | null;
   sessionID: string;
   challengeId: string;
 }): ChallengeRunRecord | { error: string } {
   const challenge = getChallengeById(params.challengeId);
   if (!challenge) return { error: 'unknown_challenge' };
 
-  const existing = claimsByKey.get(claimKey(params.pubkey, params.challengeId));
-  if (existing?.zapPaidAt) return { error: 'already_claimed' };
+  const pubkey =
+    typeof params.pubkey === 'string' && params.pubkey.trim()
+      ? params.pubkey.trim().toLowerCase()
+      : anonymousRunPubkey(params.sessionID);
+
+  if (!isAnonymousRunPubkey(pubkey)) {
+    const existing = claimsByKey.get(claimKey(pubkey, params.challengeId));
+    if (existing?.zapPaidAt) return { error: 'already_claimed' };
+  }
 
   const seed = randomBytes(32).toString('hex');
   const now = Date.now();
   const run: ChallengeRunRecord = {
     runId: nanoid(21),
-    pubkey: params.pubkey.toLowerCase(),
+    pubkey,
     sessionID: params.sessionID,
     challengeId: params.challengeId,
     seed,
