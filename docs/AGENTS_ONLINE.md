@@ -73,7 +73,8 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | Join PIN format | **4 decimal digits** | `issueJoinPin` |
 | Payout fee factor | **0.95** of winner points (floor) | `ONLINE_PAYOUT_MULTIPLIER` |
 | Replay max frames | **3600** | `ONLINE_REPLAY_MAX_FRAMES` |
-| Default minimum buy-in | **300** sats | `BUYINMIN` (`consts/values.ts`) |
+| Minimum buy-in | **100** sats | `BUYINMIN` (`consts/values.ts`) |
+| Default buy-in (host omits amount) | **1000** sats | `ONLINE_BUYIN_DEFAULT` |
 
 ---
 

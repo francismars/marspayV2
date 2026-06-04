@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { BUYINMIN } from '../consts/values';
+import { BUYINMIN, ONLINE_BUYIN_DEFAULT } from '../consts/values';
 import { PlayerRole } from '../types/game';
 import { dateNow } from '../utils/time';
 import {
@@ -160,9 +160,11 @@ export function createOnlineRoom(params: {
 }): OnlineRoom {
   const roomId = uniqueRoomId();
   const roomCode = uniqueCode();
-  const parsedBuyin = Math.floor(params.buyin ?? BUYINMIN);
+  const parsedBuyin = Math.floor(params.buyin ?? ONLINE_BUYIN_DEFAULT);
   const buyin =
-    Number.isFinite(parsedBuyin) && parsedBuyin > 0 ? parsedBuyin : BUYINMIN;
+    Number.isFinite(parsedBuyin) && parsedBuyin > 0
+      ? Math.max(BUYINMIN, parsedBuyin)
+      : ONLINE_BUYIN_DEFAULT;
 
   const p1: OnlineSeatState = { role: PlayerRole.Player1, status: 'open' };
   const p2: OnlineSeatState = { role: PlayerRole.Player2, status: 'open' };
