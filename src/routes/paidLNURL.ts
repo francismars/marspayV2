@@ -27,9 +27,9 @@ import { normalizeIP } from '../utils/ip';
 import { LNURLP } from '../types/lnurlp';
 import deleteLNURLP from '../calls/LNBits/deleteLNURLP';
 import { requestZapInvoiceAndPayForKind1 } from '../calls/NDK/zapKind1ViaLnurlCallback';
+import { fetchKind1NoteEvent } from '../calls/nostr/fetchKind1NoteEvent';
+import { resolveHostLud16ForOnlineSeat } from '../calls/nostr/resolveHostLud16ForOnlineSeat';
 import { hexToBytes } from '@noble/hashes/utils';
-import { getPublicKey, nip19 } from 'nostr-tools';
-import { getKind1FromID } from '../state/nostrState';
 import {
   consumeOnlineSeatLightningAfterSuccess,
   getOnlineSeatLightningByLnurlpId,
@@ -142,11 +142,23 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       kind1EventId = room.kind1EventId;
       zapBuyinSats = onlineRec.buyin;
     }
-    const kind1Meta = getKind1FromID(kind1EventId);
-    const hostLud16 = kind1Meta?.hostLNAddress ?? process.env.HOST_LNADDRESS;
+    const hostLud16 = await resolveHostLud16ForOnlineSeat(kind1EventId);
     if (!hostLud16 || !hostLud16.includes('@')) {
-      console.error(`${dateNow()} [ONLINE_SEAT_LN] missing host LUD-16 for zap LNURL roomId=${room.roomId}`);
+      console.error(
+        `${dateNow()} [ONLINE_SEAT_LN] missing Kind1 author lud16 for zap LNURL roomId=${room.roomId} kind1=${kind1EventId}`
+      );
       res.status(400).send('host_lnaddress_missing');
+      return;
+    }
+    let kind1AuthorPubkey: string;
+    try {
+      const kind1Ev = await fetchKind1NoteEvent(kind1EventId);
+      kind1AuthorPubkey = kind1Ev.pubkey;
+    } catch {
+      console.error(
+        `${dateNow()} [ONLINE_SEAT_LN] kind1 not found on relays roomId=${room.roomId} kind1=${kind1EventId}`
+      );
+      res.status(400).send('kind1_not_found');
       return;
     }
     let skBytes: Uint8Array;
@@ -154,19 +166,6 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       skBytes = hexToBytes(onlineRec.zapSecretKeyHex);
     } catch {
       res.status(500).send('invalid_zap_key');
-      return;
-    }
-    let kind1AuthorPubkey: string;
-    try {
-      const hostPk = process.env.NOSTR_PK;
-      if (!hostPk) throw new Error('NOSTR_PK missing');
-      if (hostPk.startsWith('nsec')) {
-        kind1AuthorPubkey = getPublicKey(nip19.decode(hostPk).data as Uint8Array);
-      } else {
-        kind1AuthorPubkey = getPublicKey(hexToBytes(hostPk.replace(/^0x/i, '')));
-      }
-    } catch {
-      res.status(500).send('host_nostr_key_invalid');
       return;
     }
     const zapResult = await requestZapInvoiceAndPayForKind1({
