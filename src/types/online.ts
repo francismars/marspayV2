@@ -63,6 +63,8 @@ export interface OnlineRoom {
   /** Incremented each time lobby → playing (match 1, 2, … for DoN rematches). */
   matchRound: number;
   kind1EventId?: string;
+  /** Latest Kind1 in the room Nostr thread; next reply parents this (linear chain). */
+  nostrThreadTipEventId?: string;
   phase: OnlineRoomPhase;
   nostrMeta?: OnlineRoomNostrMeta;
   members: Map<string, OnlineRoomMember>;

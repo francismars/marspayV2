@@ -583,9 +583,21 @@ export function setRoomNostrMeta(roomId: string, nostrMeta: OnlineRoomNostrMeta,
   }
   room.nostrMeta = nostrMeta;
   room.kind1EventId = kind1EventId;
+  room.nostrThreadTipEventId = kind1EventId;
   roomIdByKind1EventId.set(kind1EventId, roomId);
   room.updatedAt = Date.now();
   logOnlineState(`set nostr meta roomId=${roomId} note=${nostrMeta.note1}`);
+}
+
+/** After a Kind1 is published in the room thread, parent the next reply on this event. */
+export function advanceNostrThreadTip(roomId: string, eventId: string) {
+  const room = roomById.get(roomId);
+  if (!room || !eventId) {
+    return;
+  }
+  room.nostrThreadTipEventId = eventId;
+  room.updatedAt = Date.now();
+  logOnlineState(`nostr thread tip roomId=${roomId} event=${eventId.slice(0, 12)}…`);
 }
 
 export function issueJoinPin(roomId: string, sessionID: string, socketID: string) {

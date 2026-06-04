@@ -8,7 +8,10 @@ import { subscribeEvent } from './subscribeEvent';
 
 interface PublishOnlineRematchKind1Opts {
   sessionID: string;
+  /** Thread root (original room Kind1). */
   rootEventId?: string;
+  /** Parent note in the linear thread (e.g. match result). */
+  parentEventId?: string;
   roomCode: string;
   amount: number;
   loserPubkey?: string;
@@ -28,6 +31,7 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
     opts.loserPayMethod !== 'lightning' && Boolean(opts.loserPubkey?.trim());
   const ndkEvent = new NDKEvent(ndkInstance);
   ndkEvent.kind = 1;
+  const parentId = opts.parentEventId?.trim() || opts.rootEventId;
   ndkEvent.tags = [
     ['t', 'pubpay'],
     ['zap-min', String(opts.amount * 1000)],
@@ -35,6 +39,9 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
     ['zap-uses', '1'],
     ['e', opts.rootEventId, '', 'root'],
   ];
+  if (parentId && parentId !== opts.rootEventId) {
+    ndkEvent.tags.push(['e', parentId, '', 'reply']);
+  }
   if (pinNostrIdentity && opts.loserPubkey) {
     ndkEvent.tags.push(['p', opts.loserPubkey, '', 'mention']);
   }

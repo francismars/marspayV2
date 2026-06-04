@@ -10,9 +10,14 @@ interface OnlineReplyMention {
 
 interface PublishOnlineKind1ReplyOpts {
   sessionID: string;
+  /** Thread root (original room Kind1). */
   rootEventId?: string;
+  /** Immediate parent for a linear chain (defaults to root when omitted). */
+  parentEventId?: string;
   content: string;
   mentions?: OnlineReplyMention[];
+  /** When false, do not append a second "Players: …" line (content already lists players). */
+  appendMentionLine?: boolean;
 }
 
 function mentionKey(mention: OnlineReplyMention) {
@@ -26,9 +31,11 @@ function formatMention(mention: OnlineReplyMention) {
   return mention.name ?? 'Unknown player';
 }
 
-export async function publishOnlineKind1Reply(opts: PublishOnlineKind1ReplyOpts) {
+export async function publishOnlineKind1Reply(
+  opts: PublishOnlineKind1ReplyOpts
+): Promise<string | undefined> {
   if (!opts.rootEventId) {
-    return;
+    return undefined;
   }
   if (!ndkInstance) {
     try {
@@ -39,12 +46,16 @@ export async function publishOnlineKind1Reply(opts: PublishOnlineKind1ReplyOpts)
           error instanceof Error ? error.message : String(error)
         }`
       );
-      return;
+      return undefined;
     }
   }
+  const parentId = opts.parentEventId?.trim() || opts.rootEventId;
   const ndkEvent = new NDKEvent(ndkInstance);
   ndkEvent.kind = 1;
   ndkEvent.tags = [['e', opts.rootEventId, '', 'root']];
+  if (parentId !== opts.rootEventId) {
+    ndkEvent.tags.push(['e', parentId, '', 'reply']);
+  }
   const validMentions = (opts.mentions ?? []).filter((mention) => !!mention.pubkey || !!mention.name);
   const dedupedMentions: OnlineReplyMention[] = [];
   const seen = new Set<string>();
@@ -61,8 +72,9 @@ export async function publishOnlineKind1Reply(opts: PublishOnlineKind1ReplyOpts)
       ndkEvent.tags.push(['p', mention.pubkey, '', 'mention']);
     }
   }
+  const appendMentionLine = opts.appendMentionLine !== false;
   const mentionLine =
-    dedupedMentions.length > 0
+    appendMentionLine && dedupedMentions.length > 0
       ? `\nPlayers: ${dedupedMentions.map((mention) => formatMention(mention)).join(' vs ')}`
       : '';
   ndkEvent.content = `${opts.content}${mentionLine}`;
@@ -70,11 +82,13 @@ export async function publishOnlineKind1Reply(opts: PublishOnlineKind1ReplyOpts)
     await ndkEvent.publish();
     const note1 = nip19.noteEncode(ndkEvent.id);
     console.log(`${dateNow()} [${opts.sessionID}] [ONLINE] Published room reply ${note1}.`);
+    return ndkEvent.id;
   } catch (error) {
     console.log(
       `${dateNow()} [${opts.sessionID}] [ONLINE] Unable to publish room reply: ${
         error instanceof Error ? error.message : String(error)
       }`
     );
+    return undefined;
   }
 }

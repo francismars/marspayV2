@@ -52,6 +52,7 @@ import {
 } from '../state/nostrAppSessionState';
 import { dateNow } from '../utils/time';
 import {
+  advanceNostrThreadTip,
   areSeatsFilled,
   createOnlineRoom,
   deleteRoom,
@@ -126,17 +127,76 @@ function getSeatMentions(roomId: string) {
   ];
 }
 
+function formatOnlinePlayerNostrLabel(pubkey?: string, name?: string) {
+  if (pubkey) {
+    return `nostr:${nip19.npubEncode(pubkey)}`;
+  }
+  return name ?? 'Unknown player';
+}
+
+function nostrThreadParent(room: { kind1EventId?: string; nostrThreadTipEventId?: string }) {
+  const root = room.kind1EventId;
+  if (!root) {
+    return undefined;
+  }
+  return room.nostrThreadTipEventId ?? root;
+}
+
+/** Publish a Kind1 reply on the room thread and advance the linear parent tip. */
+async function publishOnlineThreadReply(
+  room: NonNullable<ReturnType<typeof getRoomById>>,
+  sessionID: string,
+  content: string,
+  mentions?: Array<{ pubkey?: string; name?: string }>
+) {
+  const root = room.kind1EventId;
+  const parent = nostrThreadParent(room);
+  if (!root || !parent) {
+    return;
+  }
+  const eventId = await publishOnlineKind1Reply({
+    sessionID,
+    rootEventId: root,
+    parentEventId: parent,
+    content,
+    mentions,
+    appendMentionLine: false,
+  });
+  if (eventId) {
+    advanceNostrThreadTip(room.roomId, eventId);
+  }
+}
+
 function publishOnlineMatchStarted(roomId: string, sessionID: string) {
   const room = getRoomById(roomId);
   if (!room) {
     return;
   }
-  void publishOnlineKind1Reply({
+  const mentions = getSeatMentions(room.roomId);
+  const vsLine = `${formatOnlinePlayerNostrLabel(mentions[0]?.pubkey, mentions[0]?.name)} vs ${formatOnlinePlayerNostrLabel(mentions[1]?.pubkey, mentions[1]?.name)}`;
+  void publishOnlineThreadReply(
+    room,
     sessionID,
-    rootEventId: room.kind1EventId,
-    content: `ONLINE MATCH STARTED · room ${room.roomCode}\n${room.snapshot.state.p1Name} vs ${room.snapshot.state.p2Name}.\nSpectators can now watch live in room ${room.roomCode}.`,
-    mentions: getSeatMentions(room.roomId),
-  });
+    `ONLINE MATCH STARTED · room ${room.roomCode}\n${vsLine}\nSpectators can now watch live.`,
+    mentions
+  );
+}
+
+function publishOnlineMatchResult(room: NonNullable<ReturnType<typeof getRoomById>>) {
+  const winnerName = room.postGame.winnerName || room.snapshot.state.winnerName || 'Unknown winner';
+  const winnerSeat = [...room.seats.values()].find(
+    (seat) => seat.status === 'paid' && seat.sessionID === room.postGame.winnerSessionID
+  );
+  const netPrize = Math.max(0, Math.floor((room.postGame.totalPrize ?? 0) * ONLINE_PAYOUT_MULTIPLIER));
+  const mentions = getSeatMentions(room.roomId);
+  const [p1, p2] = mentions;
+  const scoreLine = `${formatOnlinePlayerNostrLabel(p1?.pubkey, p1?.name)} ${room.snapshot.state.score[0]} - ${formatOnlinePlayerNostrLabel(p2?.pubkey, p2?.name)} ${room.snapshot.state.score[1]}.`;
+  void publishOnlineThreadReply(
+    room,
+    room.hostSessionID,
+    `ONLINE MATCH RESULT · room ${room.roomCode}\nWinner: ${winnerName}.\nFinal score: ${scoreLine}\nNet prize after fee: ${netPrize} sats.`,
+    [{ pubkey: winnerSeat?.pubkey, name: winnerName }, ...mentions]
+  );
 }
 
 export async function createOnlineRoomHandler(
@@ -582,12 +642,12 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
   const liveRoom = getRoomById(payload.roomId);
   if (liveRoom) {
     io.to(liveRoom.roomId).emit('onlineRoomUpdated', serializeRoom(liveRoom));
-    void publishOnlineKind1Reply({
+    void publishOnlineThreadReply(
+      liveRoom,
       sessionID,
-      rootEventId: liveRoom.kind1EventId,
-      content: `ONLINE ROUND CLOSED · room ${liveRoom.roomCode}\nWinner selected payout.\nRound closed.`,
-      mentions: getSeatMentions(liveRoom.roomId),
-    });
+      `ONLINE ROUND CLOSED · room ${liveRoom.roomCode}\nWinner selected payout.\nRound closed.`,
+      getSeatMentions(liveRoom.roomId)
+    );
   }
   broadcastOnlineRoomLists();
   socket.emit('resCreateOnlineWithdrawal', { roomId: payload.roomId, lnurlw: lnurlw.lnurl });
@@ -649,12 +709,12 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
   const liveRoom = getRoomById(payload.roomId);
   if (liveRoom) {
     io.to(liveRoom.roomId).emit('onlineRoomUpdated', serializeRoom(liveRoom));
-    void publishOnlineKind1Reply({
+    void publishOnlineThreadReply(
+      liveRoom,
       sessionID,
-      rootEventId: liveRoom.kind1EventId,
-      content: `ONLINE ROUND CLOSED · room ${liveRoom.roomCode}\nWinner selected payout.\nRound closed.`,
-      mentions: getSeatMentions(liveRoom.roomId),
-    });
+      `ONLINE ROUND CLOSED · room ${liveRoom.roomCode}\nWinner selected payout.\nRound closed.`,
+      getSeatMentions(liveRoom.roomId)
+    );
   }
   deleteRoom(payload.roomId);
   broadcastOnlineRoomLists();
@@ -696,6 +756,7 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
           const published = await publishOnlineRematchKind1({
             sessionID,
             rootEventId: room.kind1EventId,
+            parentEventId: nostrThreadParent(room),
             roomCode: room.roomCode,
             amount: requiredAmount,
             loserPubkey: loserSeat?.pubkey,
@@ -705,6 +766,7 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
           if (!published) {
             return;
           }
+          advanceNostrThreadTip(room.roomId, published.eventId);
           setOnlineRematchRequested({
             roomId: room.roomId,
             requiredAmount,
@@ -1186,23 +1248,7 @@ export function startOnlineLoop() {
         });
         if (live.phase !== room.phase) {
           if (room.phase === 'playing' && live.phase === 'postgame') {
-            const winnerName = live.postGame.winnerName || live.snapshot.state.winnerName || 'Unknown winner';
-            const winnerSeat = [...live.seats.values()].find(
-              (seat) => seat.status === 'paid' && seat.sessionID === live.postGame.winnerSessionID
-            );
-            const netPrize = Math.max(
-              0,
-              Math.floor((live.postGame.totalPrize ?? 0) * ONLINE_PAYOUT_MULTIPLIER)
-            );
-            void publishOnlineKind1Reply({
-              sessionID: live.hostSessionID,
-              rootEventId: live.kind1EventId,
-              content: `ONLINE MATCH RESULT · room ${live.roomCode}\nWinner: ${winnerName}.\nFinal score: ${live.snapshot.state.p1Name} ${live.snapshot.state.score[0]} - ${live.snapshot.state.p2Name} ${live.snapshot.state.score[1]}.\nNet prize after fee: ${netPrize} sats.`,
-              mentions: [
-                { pubkey: winnerSeat?.pubkey, name: winnerName },
-                ...getSeatMentions(live.roomId),
-              ],
-            });
+            publishOnlineMatchResult(live);
           }
           broadcastOnlineRoomLists();
         }

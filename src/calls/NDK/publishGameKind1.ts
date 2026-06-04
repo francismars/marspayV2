@@ -116,7 +116,7 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
       ndkEvent.content = `TOURNAMENT UPDATE ${emojis}.\nGame ${winnerLength} result: ${winnerMention} defeated ${loserMention}.\n${winnerMention} advances to the next round.\nFollow this thread for the next matchup and final champion.`;
     }
   } else if (mode === GameMode.ONLINE) {
-    ndkEvent.content = `CHAIN DUEL ONLINE ROOM\nRoom code: ${opts.roomCode ?? 'N/A'}.\nZap exactly ${value} sats and paste your room PIN in zap comment to claim a seat.\nFirst 2 valid PIN zaps get Player 1 and Player 2.`;
+    ndkEvent.content = `CHAIN DUEL ONLINE ROOM\nRoom code: ${opts.roomCode ?? 'N/A'}.\nBuy-In: ${value} sats.\nFirst 2 valid zaps get Player 1 and Player 2.`;
   } else if (!winnerLength) {
     ndkEvent.content = `CHAIN DUEL P2P NOSTR MODE.\nGAMEID: ${emojis}.\nZap a minimum of ${value} sats to register.`;
   } else {
