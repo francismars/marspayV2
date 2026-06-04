@@ -1,5 +1,6 @@
 import { PlayerRole } from './game';
 import { OnlineAuthoritativeState, OnlineHudState } from '../game/onlineEngine';
+import type { OnlineSessionInput } from '../game/onlineInput';
 
 /** `postgame` = match sim ended (DoN / rematch / payout). `finished` = winner closed round (payout chosen). */
 export type OnlineRoomPhase = 'lobby' | 'playing' | 'postgame' | 'finished' | 'cancelled';
@@ -67,7 +68,7 @@ export interface OnlineRoom {
   members: Map<string, OnlineRoomMember>;
   spectators: Set<string>;
   seats: Map<PlayerRole.Player1 | PlayerRole.Player2, OnlineSeatState>;
-  inputBySession: Map<string, { up?: boolean; down?: boolean; left?: boolean; right?: boolean }>;
+  inputBySession: Map<string, OnlineSessionInput>;
   snapshot: OnlineRoomSnapshot;
   replay: {
     tickMs: number;

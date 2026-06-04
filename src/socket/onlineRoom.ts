@@ -403,7 +403,10 @@ export function reportOnlineRoomPingHandler(
 
 export function roomInputHandler(
   socket: Socket,
-  payload: { roomId: string; input: { up?: boolean; down?: boolean; left?: boolean; right?: boolean } }
+  payload: {
+    roomId: string;
+    input: import('../game/onlineInput').OnlineRoomInputPayload;
+  }
 ) {
   const sessionID = socket.data.sessionID as string | undefined;
   if (!sessionID) {

@@ -162,6 +162,17 @@ export function setOnlineWantedDirection(
   if (dir === 'Down' && (snake.dir === 'Left' || snake.dir === 'Right')) snake.dirWanted = 'Down';
 }
 
+/** Returns true when `dir` was accepted into `dirWanted` (turn rules + pre-start gates). */
+export function tryApplyOnlineWantedDirection(
+  state: OnlineAuthoritativeState,
+  player: PlayerId,
+  dir: Exclude<Direction, ''>
+): boolean {
+  const snake = player === 'P1' ? state.p1 : state.p2;
+  setOnlineWantedDirection(state, player, dir);
+  return snake.dirWanted === dir;
+}
+
 export function stepOnlineGame(state: OnlineAuthoritativeState): void {
   if (state.gameStarted && !state.gameEnded) {
     movePlayers(state);

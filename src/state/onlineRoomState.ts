@@ -14,10 +14,17 @@ import {
 import {
   createOnlineGameState,
   getOnlineHudState,
-  setOnlineWantedDirection,
   startOnlineCountdown,
   stepOnlineGame,
 } from '../game/onlineEngine';
+import type { PlayerId } from '../game/onlineEngine';
+import {
+  applyInputIntent,
+  applySessionSteering,
+  consumePendingTurn,
+  mergeSessionInput,
+  type OnlineRoomInputPayload,
+} from '../game/onlineInput';
 import {
   appendOnlineMatchArchive,
   appendOnlineRoomArchive,
@@ -1066,28 +1073,39 @@ export function markOnlineRoomSettledBySession(sessionID: string) {
   deleteRoom(roomId);
 }
 
-export function updateRoomInput(
-  roomId: string,
-  sessionID: string,
-  input: { up?: boolean; down?: boolean; left?: boolean; right?: boolean }
-) {
+function playerIdForSession(room: OnlineRoom, sessionID: string): PlayerId | null {
+  const p1 = room.seats.get(PlayerRole.Player1);
+  const p2 = room.seats.get(PlayerRole.Player2);
+  if (p1?.sessionID === sessionID) return 'P1';
+  if (p2?.sessionID === sessionID) return 'P2';
+  return null;
+}
+
+export function updateRoomInput(roomId: string, sessionID: string, payload: OnlineRoomInputPayload) {
   const room = roomById.get(roomId);
   if (!room) {
     return;
   }
-  room.inputBySession.set(sessionID, {
-    up: !!input.up,
-    down: !!input.down,
-    left: !!input.left,
-    right: !!input.right,
-  });
+  const player = playerIdForSession(room, sessionID);
+  if (!player) {
+    return;
+  }
+
+  const prev = room.inputBySession.get(sessionID);
+  const input = mergeSessionInput(prev, payload);
+  room.inputBySession.set(sessionID, input);
   room.updatedAt = Date.now();
+
+  const state = room.snapshot.state;
+  if (payload.intent) {
+    applyInputIntent(state, player, input, payload.intent);
+  }
   applyOnlineInputsToState(room);
 }
 
 /**
- * Apply latest held keys to dirWanted immediately (called on every roomInput and each sim tick).
- * Physics still advances at ONLINE_TICK_MS; this avoids missed taps between 100ms steps.
+ * Held keys + latched direction + pending tap (see `onlineInput.ts`).
+ * Called on every `roomInput` and each sim tick.
  */
 export function applyOnlineInputsToState(room: OnlineRoom): void {
   if (room.phase !== 'playing') {
@@ -1099,20 +1117,29 @@ export function applyOnlineInputsToState(room: OnlineRoom): void {
     return;
   }
 
-  const p1Input = room.inputBySession.get(p1.sessionID) ?? {};
-  const p2Input = room.inputBySession.get(p2.sessionID) ?? {};
   const state = room.snapshot.state;
   if (!state.gameStarted && !state.countdownStart) {
     startOnlineCountdown(state);
   }
-  if (p1Input.up) setOnlineWantedDirection(state, 'P1', 'Up');
-  if (p1Input.down) setOnlineWantedDirection(state, 'P1', 'Down');
-  if (p1Input.left) setOnlineWantedDirection(state, 'P1', 'Left');
-  if (p1Input.right) setOnlineWantedDirection(state, 'P1', 'Right');
-  if (p2Input.up) setOnlineWantedDirection(state, 'P2', 'Up');
-  if (p2Input.down) setOnlineWantedDirection(state, 'P2', 'Down');
-  if (p2Input.left) setOnlineWantedDirection(state, 'P2', 'Left');
-  if (p2Input.right) setOnlineWantedDirection(state, 'P2', 'Right');
+
+  const p1Input = room.inputBySession.get(p1.sessionID);
+  const p2Input = room.inputBySession.get(p2.sessionID);
+  if (p1Input) applySessionSteering(state, 'P1', p1Input);
+  if (p2Input) applySessionSteering(state, 'P2', p2Input);
+}
+
+function consumePendingTurnsForRoom(room: OnlineRoom): void {
+  const state = room.snapshot.state;
+  const p1 = room.seats.get(PlayerRole.Player1);
+  const p2 = room.seats.get(PlayerRole.Player2);
+  if (p1?.sessionID) {
+    const input = room.inputBySession.get(p1.sessionID);
+    if (input) consumePendingTurn(state, 'P1', input);
+  }
+  if (p2?.sessionID) {
+    const input = room.inputBySession.get(p2.sessionID);
+    if (input) consumePendingTurn(state, 'P2', input);
+  }
 }
 
 export function stepRoomSnapshot(roomId: string) {
@@ -1127,6 +1154,7 @@ export function stepRoomSnapshot(roomId: string) {
   }
 
   const state = room.snapshot.state;
+  consumePendingTurnsForRoom(room);
   applyOnlineInputsToState(room);
 
   stepOnlineGame(state);
