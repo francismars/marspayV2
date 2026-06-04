@@ -114,24 +114,47 @@ export function broadcastOnlineRoomLists() {
   });
 }
 
-function getSeatMentions(roomId: string) {
+type OnlineSeatMention = {
+  pubkey?: string;
+  name?: string;
+  payMethod?: 'lightning' | 'nostr_web' | 'nostr_app';
+};
+
+function getSeatMentions(roomId: string): OnlineSeatMention[] {
   const room = getRoomById(roomId);
   if (!room) {
-    return [] as Array<{ pubkey?: string; name?: string }>;
+    return [];
   }
   const p1 = room.seats.get(PlayerRole.Player1);
   const p2 = room.seats.get(PlayerRole.Player2);
-  return [
-    { pubkey: p1?.pubkey, name: p1?.name ?? 'Player 1' },
-    { pubkey: p2?.pubkey, name: p2?.name ?? 'Player 2' },
-  ];
+  const toMention = (seat: typeof p1, fallback: string): OnlineSeatMention => ({
+    pubkey: seat?.payMethod === 'lightning' ? undefined : seat?.pubkey,
+    name: seat?.name ?? fallback,
+    payMethod: seat?.payMethod,
+  });
+  return [toMention(p1, 'Player 1'), toMention(p2, 'Player 2')];
 }
 
-function formatOnlinePlayerNostrLabel(pubkey?: string, name?: string) {
-  if (pubkey) {
-    return `nostr:${nip19.npubEncode(pubkey)}`;
+/** Lightning seat uses ephemeral keys — show lobby name in prose, not npub. */
+function formatOnlinePlayerNostrLabel(mention: OnlineSeatMention) {
+  if (mention.payMethod === 'lightning') {
+    return mention.name?.trim() || 'Anonymous';
   }
-  return name ?? 'Unknown player';
+  if (mention.pubkey) {
+    return `nostr:${nip19.npubEncode(mention.pubkey)}`;
+  }
+  return mention.name?.trim() || 'Unknown player';
+}
+
+function winnerSeatMention(
+  winnerSeat: { pubkey?: string; name?: string; payMethod?: OnlineSeatMention['payMethod'] } | undefined,
+  winnerName: string
+): OnlineSeatMention {
+  return {
+    pubkey: winnerSeat?.payMethod === 'lightning' ? undefined : winnerSeat?.pubkey,
+    name: winnerName,
+    payMethod: winnerSeat?.payMethod,
+  };
 }
 
 function nostrThreadParent(room: { kind1EventId?: string; nostrThreadTipEventId?: string }) {
@@ -147,7 +170,7 @@ async function publishOnlineThreadReply(
   room: NonNullable<ReturnType<typeof getRoomById>>,
   sessionID: string,
   content: string,
-  mentions?: Array<{ pubkey?: string; name?: string }>
+  mentions?: OnlineSeatMention[]
 ) {
   const root = room.kind1EventId;
   const parent = nostrThreadParent(room);
@@ -173,7 +196,7 @@ function publishOnlineMatchStarted(roomId: string, sessionID: string) {
     return;
   }
   const mentions = getSeatMentions(room.roomId);
-  const vsLine = `${formatOnlinePlayerNostrLabel(mentions[0]?.pubkey, mentions[0]?.name)} vs ${formatOnlinePlayerNostrLabel(mentions[1]?.pubkey, mentions[1]?.name)}`;
+  const vsLine = `${formatOnlinePlayerNostrLabel(mentions[0] ?? { name: 'Player 1' })} vs ${formatOnlinePlayerNostrLabel(mentions[1] ?? { name: 'Player 2' })}`;
   void publishOnlineThreadReply(
     room,
     sessionID,
@@ -190,12 +213,12 @@ function publishOnlineMatchResult(room: NonNullable<ReturnType<typeof getRoomByI
   const netPrize = Math.max(0, Math.floor((room.postGame.totalPrize ?? 0) * ONLINE_PAYOUT_MULTIPLIER));
   const mentions = getSeatMentions(room.roomId);
   const [p1, p2] = mentions;
-  const scoreLine = `${formatOnlinePlayerNostrLabel(p1?.pubkey, p1?.name)} ${room.snapshot.state.score[0]} - ${formatOnlinePlayerNostrLabel(p2?.pubkey, p2?.name)} ${room.snapshot.state.score[1]}.`;
+  const scoreLine = `${formatOnlinePlayerNostrLabel(p1 ?? { name: 'Player 1' })} ${room.snapshot.state.score[0]} - ${formatOnlinePlayerNostrLabel(p2 ?? { name: 'Player 2' })} ${room.snapshot.state.score[1]}.`;
   void publishOnlineThreadReply(
     room,
     room.hostSessionID,
     `ONLINE MATCH RESULT · room ${room.roomCode}\nWinner: ${winnerName}.\nFinal score: ${scoreLine}\nNet prize after fee: ${netPrize} sats.`,
-    [{ pubkey: winnerSeat?.pubkey, name: winnerName }, ...mentions]
+    [winnerSeatMention(winnerSeat, winnerName), ...mentions]
   );
 }
 
