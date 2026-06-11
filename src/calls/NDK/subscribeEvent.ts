@@ -331,17 +331,17 @@ async function listenToSubscriptions(event: NDKEvent) {
     fallbackLabel,
   };
   const playersMap = new Map<PlayerRole, PlayerInfo>();
-  const playerRole = zapperPrevRole ?? getNextAvailableRole(sessionID, maxPlayers);
+  const modeToPersist = gameInfo?.mode ?? gameMode;
+  const playerRole =
+    zapperPrevRole ?? getNextAvailableRole(sessionID, maxPlayers, modeToPersist);
   if (!playerRole) {
     console.log(`${dateNow()} [${sessionID}] No available role for incoming zap.`);
     return;
   }
   playersMap.set(playerRole, playerInfo);
-  const previousInfo = getGameInfoFromID(sessionID);
-  const previousPlayersCount = previousInfo?.players.size ?? 0;
-  const modeToPersist = previousInfo?.mode ?? gameMode;
+  const previousPlayersCount = gameInfo?.players.size ?? 0;
   const numberOfPlayers =
-    previousInfo?.numberOfPlayers ??
+    gameInfo?.numberOfPlayers ??
     (modeToPersist === GameMode.TOURNAMENTNOSTR ? maxPlayers : undefined);
   const newGameInfo: GameInfo = {
     mode: modeToPersist,
@@ -394,7 +394,11 @@ function extractPinFromComment(content: string | undefined) {
   return matched?.[1];
 }
 
-function getNextAvailableRole(sessionID: string, maxPlayers: number): PlayerRole | undefined {
+function getNextAvailableRole(
+  sessionID: string,
+  maxPlayers: number,
+  mode: GameMode
+): PlayerRole | undefined {
   const gameInfo = getGameInfoFromID(sessionID);
   const assignedRoles = gameInfo ? [...gameInfo.players.keys()] : [];
   const allRoles = Object.values(PlayerRole).slice(0, maxPlayers);
@@ -404,6 +408,9 @@ function getNextAvailableRole(sessionID: string, maxPlayers: number): PlayerRole
   if (availableRoles.length === 0) {
     return;
   }
-  const randomIdx = Math.floor(Math.random() * availableRoles.length);
-  return availableRoles[randomIdx] as PlayerRole | undefined;
+  if (mode === GameMode.TOURNAMENTNOSTR) {
+    const randomIdx = Math.floor(Math.random() * availableRoles.length);
+    return availableRoles[randomIdx] as PlayerRole | undefined;
+  }
+  return availableRoles[0] as PlayerRole | undefined;
 }
