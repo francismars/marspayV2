@@ -1,4 +1,4 @@
-export const BUYINMIN = 100;
+export const BUYINMIN = 3000;
 /** Default online room buy-in when the host does not specify an amount */
 export const ONLINE_BUYIN_DEFAULT = 1000;
 export const BUYINMINWINNER = 100;
