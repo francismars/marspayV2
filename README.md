@@ -122,7 +122,38 @@ npm run dev
 ```
 
 - **Dev:** `npm run dev` — **http://localhost:3001** (override with `PORT` in `.env`)
-- **Production:** `npm run build` then `npm start` (runs `dist/server.js`)
+- **Production:** see Deployment section below.
+
+## Deployment (production)
+
+The server runs under **PM2** using the `ecosystem.config.js` at the project root. PM2 handles auto-restart on crash and restart on system reboot.
+
+### First-time setup
+
+```bash
+npm install
+npm run build
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup   # run the command it prints to enable reboot persistence
+```
+
+### Deploy after a code change
+
+```bash
+git pull && npm install && npm run build && pm2 restart marspay
+```
+
+> `npm install` (not `--omit=dev`) is required before build because `@types/*` packages live in devDependencies and are needed by the TypeScript compiler.
+
+### Logs
+
+```bash
+pm2 logs marspay             # live tail
+pm2 logs marspay --lines 100 # last 100 lines
+```
+
+Log files are written to `logs/` in the project root (gitignored).
 
 ## Environment
 
