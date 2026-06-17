@@ -12,13 +12,17 @@ export function buildKind1ZapRequestTemplate(params: {
   lnurlBech32: string;
 }): EventTemplate {
   const author = params.kind1AuthorPubkey.toLowerCase();
+  const eventRelay = params.relays[0];
+  const eTag: string[] = eventRelay
+    ? ['e', params.kind1EventId, eventRelay]
+    : ['e', params.kind1EventId];
   return {
     kind: 9734,
     created_at: Math.floor(Date.now() / 1000),
     content: params.comment,
     tags: [
       ['p', author],
-      ['e', params.kind1EventId],
+      eTag,
       ['amount', params.amountMsats.toString()],
       ['relays', ...params.relays],
       ['k', '1'],

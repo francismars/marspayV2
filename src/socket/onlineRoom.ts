@@ -22,7 +22,7 @@ import {
 } from '../calls/nostr/lnurlZapShared';
 import { parsePubpayZapTags } from '../calls/nostr/parsePubpayZapTags';
 import { resolveHostLud16ForOnlineSeat } from '../calls/nostr/resolveHostLud16ForOnlineSeat';
-import { NOSTR_RELAYS } from '../consts/nostrRelays';
+import { ZAP_RECEIPT_RELAYS } from '../consts/nostrRelays';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import createLNURLW from '../calls/LNBits/createLNURLW';
 import createLNURLP from '../calls/LNBits/createLNURLP';
@@ -1048,11 +1048,13 @@ export function requestOnlineSeatZapPayPrepareHandler(socket: Socket, payload: {
       const lnurlpHttpsUrl = lud16ToLnurlPayUrl(hostLud16);
       const lnurlBech32 = encodeLnurlBech32(lnurlpHttpsUrl);
       const millisats = buyinSats * 1000;
+      const kind1Ev = await fetchKind1NoteEvent(kind1EventId!);
       const zapRequestTpl = buildKind1ZapRequestTemplate({
         kind1EventId: kind1EventId!,
-        kind1AuthorPubkey: meta.nostrPubkey,
+        // NIP-57: `p` is the note author (recipient), not the LNURL wallet's nostrPubkey.
+        kind1AuthorPubkey: kind1Ev.pubkey,
         amountMsats: millisats,
-        relays: NOSTR_RELAYS,
+        relays: ZAP_RECEIPT_RELAYS,
         comment: '',
         lnurlBech32,
       });

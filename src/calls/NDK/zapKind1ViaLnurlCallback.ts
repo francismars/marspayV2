@@ -9,7 +9,7 @@ import {
   fetchZapInvoiceFromCallback,
   lud16ToLnurlPayUrl,
 } from '../nostr/lnurlZapShared';
-import { NOSTR_RELAYS } from '../../consts/nostrRelays';
+import { ZAP_RECEIPT_RELAYS } from '../../consts/nostrRelays';
 import { dateNow } from '../../utils/time';
 
 function hostSecretKeyBytesFromEnv(): Uint8Array {
@@ -77,7 +77,7 @@ export async function requestZapInvoiceAndPayForKind1(params: {
     kind1EventId: params.kind1EventId,
     kind1AuthorPubkey: params.kind1AuthorPubkey,
     amountMsats: millisats,
-    relays: NOSTR_RELAYS,
+    relays: ZAP_RECEIPT_RELAYS,
     comment: '',
     lnurlBech32,
   });

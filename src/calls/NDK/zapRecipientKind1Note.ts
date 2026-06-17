@@ -10,7 +10,7 @@ import {
   lud16ToLnurlPayUrl,
   waitForKind1OnRelays,
 } from '../nostr/lnurlZapShared';
-import { NOSTR_RELAYS } from '../../consts/nostrRelays';
+import { NOSTR_RELAYS, ZAP_RECEIPT_RELAYS } from '../../consts/nostrRelays';
 import { dateNow } from '../../utils/time';
 
 function payerSecretKeyBytesFromEnv(): Uint8Array {
@@ -68,7 +68,7 @@ export async function zapRecipientKind1Note(params: {
     kind1EventId: params.kind1EventId,
     kind1AuthorPubkey: params.kind1AuthorPubkey,
     amountMsats: millisats,
-    relays: NOSTR_RELAYS,
+    relays: ZAP_RECEIPT_RELAYS,
     comment: params.comment.slice(0, 1000),
     lnurlBech32,
   });
