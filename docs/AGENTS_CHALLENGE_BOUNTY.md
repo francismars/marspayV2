@@ -8,6 +8,8 @@ Practice challenge bounties: server-enforced Nostr eligibility, seeded game repl
 |----------|---------|
 | `CHAINDUEL_NOSTR_PUBKEY` | Hex pubkey users must follow (kind-3 `#p`) |
 | `CHALLENGE_BOUNTY_DAILY_CAP_SATS` | Daily global zap budget (default `100000`) |
+| `CHALLENGE_RUN_RATE_LIMIT_PER_MIN` | Max `requestChallengeRun` per socket session per minute (default `12`) |
+| `CHALLENGE_SUBMIT_RATE_LIMIT_PER_MIN` | Max `submitChallengeWin` per socket session per minute (default `30`) |
 | `NOSTR_PK` | Server key for NDK publish + zap 9734 |
 | `LNBITS_URL`, `LNBITS_KEY` | Pay bounty zaps |
 
@@ -24,18 +26,20 @@ Server checks (24h cache):
 
 ## Run flow
 
-1. `requestChallengeRun` `{ challengeId }` → `{ runId, seed, bountySats, expiresAt }` — **no Nostr sign-in required** (anonymous runs keyed by socket session)
-2. Client plays with `initRunRng(seed)` — no mempool spawns during challenge runs
+1. **Nostr sign-in required** — sign in before selecting a challenge; `requestChallengeRun` `{ challengeId }` → `{ runId, seed, bountySats, expiresAt }` (run bound to app session pubkey)
+2. Client plays with `initRunRng(seed)` — standard arena (no convergence shrink); no mempool spawns during challenge runs
 3. Client logs P1 inputs `{ tick, dir }` where `tick` = sim step index (one per `stepGame`)
-4. `submitChallengeWin` `{ runId, inputLog }` → server replays → `{ claimToken, noteContent, noteTags }` — **no sign-in required** (claim token bound to socket session)
-5. Client signs in with Nostr (if not already), then signs exact note → `claimChallengeBounty` `{ claimToken, event }`
-6. Server publishes kind-1, zaps note via LNURL-pay, records claim (one per pubkey + challengeId)
+4. `submitChallengeWin` `{ runId, inputLog }` → server replays active run only → `{ claimToken, noteContent, noteTags }` (one win per `runId`)
+5. Client signs exact note → `claimChallengeBounty` `{ claimToken, event }`
+6. Server publishes kind-1, zaps note via LNURL-pay, records claim (one per `pubkey + challengeId` and one per `runId`)
+
+Rate limits (per socket `sessionID`, rolling 1-minute window): `requestChallengeRun`, `submitChallengeWin`.
 
 ## Persistence
 
 Paid claims and daily zap spend survive server restarts:
 
-- `data/challenge_claims/claims.jsonl` — append-only log; one line per successful zap (`pubkey` + `challengeId` unique)
+- `data/challenge_claims/claims.jsonl` — append-only log; one line per successful zap (`pubkey + challengeId` and `runId` each unique)
 - `data/challenge_claims/daily_spend.json` — UTC day key → total sats zapped that day (for `CHALLENGE_BOUNTY_DAILY_CAP_SATS`)
 
 Runs and claim tokens remain in-memory only (short TTL). Pending claims (note published, zap failed) are RAM-only until `retryChallengeZap` succeeds.
@@ -60,6 +64,7 @@ Runs and claim tokens remain in-memory only (short TTL). Pending claims (note pu
 - `marspay/src/socket/challengeBounty.ts`
 - `marspay/src/state/challengeState.ts`
 - `marspay/src/state/challengeClaimStore.ts`
+- `marspay/src/state/challengeRateLimit.ts`
 - `marspay/src/game/challengeEngine/` (copy of practice engine + `replayRunner.ts`)
 - `marspay/src/calls/nostr/challengeEligibility.ts`
 - `chain-duel-react/src/lib/challengeBounty.ts`

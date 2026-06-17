@@ -9,6 +9,10 @@ import { ndkInstance, setNDKInstance } from '../calls/NDK/setNDKInstance';
 import { zapRecipientKind1Note } from '../calls/NDK/zapRecipientKind1Note';
 import { replayChallengeWin } from '../game/challengeEngine/replayRunner';
 import {
+  checkChallengeRunRateLimit,
+  checkChallengeSubmitRateLimit,
+} from '../state/challengeRateLimit';
+import {
   CHALLENGE_CATALOG,
   createChallengeRun,
   createClaimToken,
@@ -16,6 +20,7 @@ import {
   getChallengeRun,
   markRunWon,
   hasClaimedChallenge,
+  hasClaimedRun,
   getChallengeClaim,
   upsertChallengeClaim,
   getDailyZapBudgetRemaining,
@@ -87,11 +92,19 @@ export async function requestChallengeRunHandler(
     socket.emit('resChallengeRun', { ok: false, reason: 'no_session' });
     return;
   }
+  if (!checkChallengeRunRateLimit(sessionID)) {
+    socket.emit('resChallengeRun', { ok: false, reason: 'rate_limited' });
+    return;
+  }
   const appSession = getAppNostrSession(sessionID);
+  if (!appSession?.pubkey) {
+    socket.emit('resChallengeRun', { ok: false, reason: 'nostr_sign_in_required' });
+    return;
+  }
 
   const challengeId = typeof payload?.challengeId === 'string' ? payload.challengeId.trim() : '';
   const created = createChallengeRun({
-    pubkey: appSession?.pubkey,
+    pubkey: appSession.pubkey,
     sessionID,
     challengeId,
   });
@@ -124,6 +137,10 @@ export async function submitChallengeWinHandler(
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'no_session' });
     return;
   }
+  if (!checkChallengeSubmitRateLimit(sessionID)) {
+    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'rate_limited' });
+    return;
+  }
   const appSession = getAppNostrSession(sessionID);
 
   const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : '';
@@ -134,6 +151,21 @@ export async function submitChallengeWinHandler(
   }
   if (run.sessionID !== sessionID) {
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'session_mismatch' });
+    return;
+  }
+  if (run.status === 'expired') {
+    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_expired' });
+    return;
+  }
+  if (run.status !== 'active') {
+    socket.emit('resSubmitChallengeWin', {
+      ok: false,
+      reason: run.status === 'won' ? 'run_already_won' : 'run_not_active',
+    });
+    return;
+  }
+  if (hasClaimedRun(runId)) {
+    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_already_claimed' });
     return;
   }
   if (!isAnonymousRunPubkey(run.pubkey)) {
@@ -147,10 +179,6 @@ export async function submitChallengeWinHandler(
     }
   } else if (appSession && hasClaimedChallenge(appSession.pubkey, run.challengeId)) {
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'already_claimed' });
-    return;
-  }
-  if (run.status === 'expired') {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_expired' });
     return;
   }
 
@@ -263,6 +291,10 @@ export async function claimChallengeBountyHandler(
 
   if (hasClaimedChallenge(claimPubkey, claimRec.challengeId)) {
     socket.emit('resChallengeClaim', { ok: false, reason: 'already_claimed' });
+    return;
+  }
+  if (hasClaimedRun(claimRec.runId)) {
+    socket.emit('resChallengeClaim', { ok: false, reason: 'run_already_claimed' });
     return;
   }
 

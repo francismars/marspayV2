@@ -1,8 +1,5 @@
 import {
-  CONVERGENCE_MIN_COLS,
-  CONVERGENCE_MIN_ROWS,
   COUNTDOWN_END_TICK,
-  PRACTICE_HUB_CONVERGENCE_SHRINK_INTERVAL_TICKS,
 } from './constants';
 import {
   createGameState,
@@ -47,13 +44,9 @@ function buildChallengeState(challenge: ChallengeCatalogEntry) {
     p2Points: isFfa ? 1000 : 1000,
     aiTier: challenge.aiTier,
     ffaAiTier: isFfa ? challenge.aiTier : undefined,
-    convergenceMode: true,
+    convergenceMode: false,
     powerupMode: challenge.powerup,
     teamMode: isFfa ? 'ffa' : 'solo',
-    convergenceShrinkInterval: PRACTICE_HUB_CONVERGENCE_SHRINK_INTERVAL_TICKS,
-    convergenceMinCols: CONVERGENCE_MIN_COLS,
-    convergenceMinRows: CONVERGENCE_MIN_ROWS,
-    convergenceStepMs: 100,
   });
 }
 

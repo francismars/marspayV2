@@ -82,6 +82,7 @@ export type ChallengeClaimRecord = {
 const runsById = new Map<string, ChallengeRunRecord>();
 const claimTokensByToken = new Map<string, ClaimTokenRecord>();
 const claimsByKey = new Map<string, ChallengeClaimRecord>();
+const paidRunIds = new Set<string>();
 
 const RUN_TTL_MS = 30 * 60 * 1000;
 const CLAIM_TOKEN_TTL_MS = 10 * 60 * 1000;
@@ -109,6 +110,7 @@ function hydrateChallengeClaimsFromDisk(): void {
       zapPaidAt: row.zapPaidAt,
       zapComment: row.zapComment,
     });
+    if (row.runId) paidRunIds.add(row.runId);
   }
   dailyZapDayKey = todayKey();
   dailyZapTotalSats = loadDailySpendForDaySync(dailyZapDayKey);
@@ -207,6 +209,10 @@ export function hasClaimedChallenge(pubkey: string, challengeId: string): boolea
   return Boolean(c?.zapPaidAt);
 }
 
+export function hasClaimedRun(runId: string): boolean {
+  return paidRunIds.has(runId);
+}
+
 export function getChallengeClaim(pubkey: string, challengeId: string): ChallengeClaimRecord | undefined {
   return claimsByKey.get(claimKey(pubkey, challengeId));
 }
@@ -232,6 +238,7 @@ export function upsertChallengeClaim(
   const newlyPaid = Boolean(next.zapPaidAt && !prev?.zapPaidAt);
   claimsByKey.set(key, next);
   if (newlyPaid) {
+    paidRunIds.add(next.runId);
     void appendPaidClaim({ version: 1, ...next });
   }
   return next;
