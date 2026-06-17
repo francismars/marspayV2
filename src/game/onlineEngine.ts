@@ -371,7 +371,7 @@ function createNewCoinbase(state: OnlineAuthoritativeState): void {
 }
 
 /**
- * Extra coinbase when a new Bitcoin block is found (server polls mempool.space).
+ * Extra coinbase when a new Bitcoin block is found (server polls mempool mirrors).
  * Fee tiers match legacy P2P `createNewCoinbase(state, feeValue)` in chain-duel-react.
  * Use `medianFeeSatPerVb < 0` for a plain apple (no multiplier) when fee is missing.
  */
