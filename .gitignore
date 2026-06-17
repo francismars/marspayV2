@@ -2,6 +2,7 @@ node_modules
 dist
 .env
 logs.log
+logs/
 public/games.json
 data/online_archive/
 data/challenge_claims/
