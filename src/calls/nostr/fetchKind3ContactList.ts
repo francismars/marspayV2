@@ -18,7 +18,7 @@ export async function fetchKind3ContactList(pubkey: string): Promise<Event | nul
     const events = await pool.querySync(NOSTR_RELAYS, {
       kinds: [3],
       authors: [pubkey],
-      limit: 5,
+      limit: 25,
     });
     return pickLatestKind3(events, pubkey);
   } finally {

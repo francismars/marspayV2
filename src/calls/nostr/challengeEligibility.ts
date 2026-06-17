@@ -33,7 +33,8 @@ export type ChallengeEligibilityResult = {
 
 type CacheEntry = { result: ChallengeEligibilityResult; expiresAt: number };
 const cacheByPubkey = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const ELIGIBLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const INELIGIBLE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function chainduelPubkey(): string | null {
   const raw = process.env.CHAINDUEL_NOSTR_PUBKEY?.trim().toLowerCase() ?? '';
@@ -42,7 +43,8 @@ function chainduelPubkey(): string | null {
 
 export async function evaluateChallengeEligibility(
   pubkey: string | null | undefined,
-  hasAppSession: boolean
+  hasAppSession: boolean,
+  options?: { forceRefresh?: boolean }
 ): Promise<ChallengeEligibilityResult> {
   const hex = typeof pubkey === 'string' ? pubkey.trim().toLowerCase() : '';
   if (!/^[0-9a-f]{64}$/.test(hex)) {
@@ -59,6 +61,10 @@ export async function evaluateChallengeEligibility(
         appSession: { pass: hasAppSession, detail: hasAppSession ? undefined : 'no_app_session' },
       },
     };
+  }
+
+  if (options?.forceRefresh) {
+    invalidateEligibilityCache(hex);
   }
 
   const cached = cacheByPubkey.get(hex);
@@ -146,7 +152,8 @@ export async function evaluateChallengeEligibility(
     eligible,
   };
 
-  cacheByPubkey.set(hex, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+  const cacheTtl = eligible ? ELIGIBLE_CACHE_TTL_MS : INELIGIBLE_CACHE_TTL_MS;
+  cacheByPubkey.set(hex, { result, expiresAt: Date.now() + cacheTtl });
   return result;
 }
 

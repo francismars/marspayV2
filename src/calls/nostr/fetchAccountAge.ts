@@ -2,6 +2,8 @@ import { SimplePool } from 'nostr-tools';
 import { NOSTR_RELAYS } from '../../consts/nostrRelays';
 
 const THIRTY_DAYS_SEC = 30 * 24 * 60 * 60;
+const PAGE_SIZE = 100;
+const MAX_PAGES = 40;
 
 export type AccountAgeResult = {
   ok: boolean;
@@ -10,25 +12,43 @@ export type AccountAgeResult = {
   meetsMinimum: boolean;
 };
 
-/** Earliest relay-visible event for pubkey (kind-0 preferred, any kind fallback). */
+/**
+ * Earliest relay-visible event for pubkey.
+ * Paginates backward with `until` — a single limited query only sees recent events
+ * and understates account age.
+ */
 export async function fetchAccountAge(pubkey: string): Promise<AccountAgeResult> {
   const pool = new SimplePool();
   const now = Math.floor(Date.now() / 1000);
+  const hex = pubkey.toLowerCase();
   try {
-    const [kind0Events, anyEvents] = await Promise.all([
-      pool.querySync(NOSTR_RELAYS, { kinds: [0], authors: [pubkey], limit: 20 }),
-      pool.querySync(NOSTR_RELAYS, { authors: [pubkey], limit: 50 }),
-    ]);
-    const candidates = [...kind0Events, ...anyEvents].filter(
-      (ev) => ev.pubkey?.toLowerCase() === pubkey.toLowerCase()
-    );
-    if (candidates.length === 0) {
+    let until = now;
+    let earliest: number | null = null;
+
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const events = await pool.querySync(NOSTR_RELAYS, {
+        authors: [hex],
+        until,
+        limit: PAGE_SIZE,
+      });
+      const owned = events.filter((ev) => ev.pubkey?.toLowerCase() === hex);
+      if (owned.length === 0) break;
+
+      for (const ev of owned) {
+        if (earliest === null || ev.created_at < earliest) {
+          earliest = ev.created_at;
+        }
+      }
+
+      const pageMin = Math.min(...owned.map((ev) => ev.created_at));
+      if (owned.length < PAGE_SIZE || pageMin <= 1) break;
+      until = pageMin - 1;
+    }
+
+    if (earliest === null) {
       return { ok: false, earliestCreatedAt: null, ageDays: null, meetsMinimum: false };
     }
-    let earliest = candidates[0]!.created_at;
-    for (const ev of candidates) {
-      if (ev.created_at < earliest) earliest = ev.created_at;
-    }
+
     const ageSec = now - earliest;
     const ageDays = Math.floor(ageSec / (24 * 60 * 60));
     return {

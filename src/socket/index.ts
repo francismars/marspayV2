@@ -117,8 +117,8 @@ export default function registerSocketHandlers(io: Server) {
 
     socket.on(
       'getChallengeEligibility',
-      guardSocketAsync(socket, 'getChallengeEligibility', async () => {
-        await getChallengeEligibilityHandler(socket);
+      guardSocketAsync(socket, 'getChallengeEligibility', async (payload?: { refresh?: boolean }) => {
+        await getChallengeEligibilityHandler(socket, payload);
       })
     );
     socket.on('getChallengeCatalog', () => {

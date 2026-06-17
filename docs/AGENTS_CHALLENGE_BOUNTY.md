@@ -15,7 +15,7 @@ Practice challenge bounties: server-enforced Nostr eligibility, seeded game repl
 
 ## Eligibility (`getChallengeEligibility`)
 
-Server checks (24h cache):
+Server checks (cached up to 24h when eligible, 5 min when not; pass `{ refresh: true }` to bypass):
 
 - Verified NIP-05
 - Kind-3 following count ≥ 100
@@ -52,7 +52,7 @@ Runs and claim tokens remain in-memory only (short TTL). Pending claims (note pu
 
 | Client → server | Server → client |
 |-----------------|-----------------|
-| `getChallengeEligibility` | `resChallengeEligibility` |
+| `getChallengeEligibility` | `resChallengeEligibility` | Optional `{ refresh: true }` bypasses cache |
 | `getChallengeCatalog` | `resChallengeCatalog` |
 | `requestChallengeRun` | `resChallengeRun` |
 | `submitChallengeWin` | `resSubmitChallengeWin` |

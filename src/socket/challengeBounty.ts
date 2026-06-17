@@ -76,10 +76,15 @@ async function publishKind1Event(event: Event): Promise<{ ok: true; eventId: str
   }
 }
 
-export async function getChallengeEligibilityHandler(socket: Socket) {
+export async function getChallengeEligibilityHandler(
+  socket: Socket,
+  payload?: { refresh?: boolean }
+) {
   const sessionID = socket.data.sessionID as string | undefined;
   const appSession = sessionID ? getAppNostrSession(sessionID) : undefined;
-  const result = await evaluateChallengeEligibility(appSession?.pubkey, Boolean(appSession));
+  const result = await evaluateChallengeEligibility(appSession?.pubkey, Boolean(appSession), {
+    forceRefresh: payload?.refresh === true,
+  });
   socket.emit('resChallengeEligibility', result);
 }
 
