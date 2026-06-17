@@ -31,6 +31,15 @@ Server checks (24h cache):
 5. Client signs in with Nostr (if not already), then signs exact note → `claimChallengeBounty` `{ claimToken, event }`
 6. Server publishes kind-1, zaps note via LNURL-pay, records claim (one per pubkey + challengeId)
 
+## Persistence
+
+Paid claims and daily zap spend survive server restarts:
+
+- `data/challenge_claims/claims.jsonl` — append-only log; one line per successful zap (`pubkey` + `challengeId` unique)
+- `data/challenge_claims/daily_spend.json` — UTC day key → total sats zapped that day (for `CHALLENGE_BOUNTY_DAILY_CAP_SATS`)
+
+Runs and claim tokens remain in-memory only (short TTL). Pending claims (note published, zap failed) are RAM-only until `retryChallengeZap` succeeds.
+
 ## Retry
 
 `retryChallengeZap` `{ challengeId }` — if note published but zap failed.
@@ -50,6 +59,7 @@ Server checks (24h cache):
 
 - `marspay/src/socket/challengeBounty.ts`
 - `marspay/src/state/challengeState.ts`
+- `marspay/src/state/challengeClaimStore.ts`
 - `marspay/src/game/challengeEngine/` (copy of practice engine + `replayRunner.ts`)
 - `marspay/src/calls/nostr/challengeEligibility.ts`
 - `chain-duel-react/src/lib/challengeBounty.ts`

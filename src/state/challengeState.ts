@@ -1,5 +1,11 @@
 import { randomBytes } from 'crypto';
 import { nanoid } from 'nanoid';
+import {
+  appendPaidClaim,
+  loadDailySpendForDaySync,
+  loadPaidClaimsSync,
+  recordDailySpendPersisted,
+} from './challengeClaimStore';
 
 export type ChallengeCatalogEntry = {
   id: string;
@@ -80,9 +86,35 @@ const claimsByKey = new Map<string, ChallengeClaimRecord>();
 const RUN_TTL_MS = 30 * 60 * 1000;
 const CLAIM_TOKEN_TTL_MS = 10 * 60 * 1000;
 
+let dailyZapTotalSats = 0;
+let dailyZapDayKey = '';
+
 function claimKey(pubkey: string, challengeId: string): string {
   return `${pubkey.toLowerCase()}:${challengeId}`;
 }
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function hydrateChallengeClaimsFromDisk(): void {
+  for (const [, row] of loadPaidClaimsSync()) {
+    claimsByKey.set(claimKey(row.pubkey, row.challengeId), {
+      pubkey: row.pubkey,
+      challengeId: row.challengeId,
+      runId: row.runId,
+      kind1EventId: row.kind1EventId,
+      bountySats: row.bountySats,
+      publishedAt: row.publishedAt,
+      zapPaidAt: row.zapPaidAt,
+      zapComment: row.zapComment,
+    });
+  }
+  dailyZapDayKey = todayKey();
+  dailyZapTotalSats = loadDailySpendForDaySync(dailyZapDayKey);
+}
+
+hydrateChallengeClaimsFromDisk();
 
 export function createChallengeRun(params: {
   pubkey?: string | null;
@@ -197,15 +229,12 @@ export function upsertChallengeClaim(
     zapPaidAt: partial.zapPaidAt ?? prev?.zapPaidAt ?? null,
     zapComment: partial.zapComment ?? prev?.zapComment ?? null,
   };
+  const newlyPaid = Boolean(next.zapPaidAt && !prev?.zapPaidAt);
   claimsByKey.set(key, next);
+  if (newlyPaid) {
+    void appendPaidClaim({ version: 1, ...next });
+  }
   return next;
-}
-
-let dailyZapTotalSats = 0;
-let dailyZapDayKey = '';
-
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 export function getDailyZapBudgetRemaining(): number {
@@ -213,7 +242,7 @@ export function getDailyZapBudgetRemaining(): number {
   const key = todayKey();
   if (key !== dailyZapDayKey) {
     dailyZapDayKey = key;
-    dailyZapTotalSats = 0;
+    dailyZapTotalSats = loadDailySpendForDaySync(key);
   }
   return Math.max(0, cap - dailyZapTotalSats);
 }
@@ -222,9 +251,10 @@ export function recordDailyZapSpend(sats: number): void {
   const key = todayKey();
   if (key !== dailyZapDayKey) {
     dailyZapDayKey = key;
-    dailyZapTotalSats = 0;
+    dailyZapTotalSats = loadDailySpendForDaySync(key);
   }
   dailyZapTotalSats += sats;
+  void recordDailySpendPersisted(key, sats);
 }
 
 export function listPendingZapClaims(): ChallengeClaimRecord[] {
