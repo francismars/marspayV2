@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto';
 import { nanoid } from 'nanoid';
+import { CHALLENGE_START_SATS_PER_PLAYER } from '../game/challengeEngine/constants';
 import {
   appendPaidClaim,
   loadDailySpendForDaySync,
@@ -29,6 +30,11 @@ export const CHALLENGE_CATALOG: ChallengeCatalogEntry[] = [
 
 export function getChallengeById(id: string): ChallengeCatalogEntry | undefined {
   return CHALLENGE_CATALOG.find((c) => c.id === id);
+}
+
+/** Starting sats per player in replay — must match chain-duel-react `challengeStartSatsPerPlayer`. */
+export function challengeStartSatsPerPlayer(_challenge: ChallengeCatalogEntry): number {
+  return CHALLENGE_START_SATS_PER_PLAYER;
 }
 
 export function isAnonymousRunPubkey(pubkey: string): boolean {

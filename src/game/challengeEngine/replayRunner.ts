@@ -8,6 +8,7 @@ import {
   stepGame,
 } from './index';
 import type { ChallengeCatalogEntry } from '../../state/challengeState';
+import { challengeStartSatsPerPlayer } from '../../state/challengeState';
 import type { ChallengeInputEntry } from '../../state/challengeState';
 import { initRunRng, clearRunRng } from './runRng';
 import type { Direction } from './types';
@@ -31,6 +32,7 @@ export type ReplayResult =
 
 function buildChallengeState(challenge: ChallengeCatalogEntry) {
   const isFfa = challenge.format === '4P FFA';
+  const stake = challengeStartSatsPerPlayer(challenge);
   return createGameState({
     modeLabel: 'CHALLENGE',
     practiceMode: true,
@@ -40,8 +42,8 @@ function buildChallengeState(challenge: ChallengeCatalogEntry) {
     p4Human: false,
     p1Name: 'Player',
     p2Name: 'BigToshi 🌊',
-    p1Points: isFfa ? 1000 : 1000,
-    p2Points: isFfa ? 1000 : 1000,
+    p1Points: stake,
+    p2Points: stake,
     aiTier: challenge.aiTier,
     ffaAiTier: isFfa ? challenge.aiTier : undefined,
     convergenceMode: false,

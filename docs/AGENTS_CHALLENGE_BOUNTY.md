@@ -28,7 +28,7 @@ Server checks (cached up to 24h when eligible, 5 min when not; pass `{ refresh: 
 
 1. **Nostr sign-in required** — sign in before selecting a challenge; all eligibility checks must pass before `requestChallengeRun`
 2. `requestChallengeRun` `{ challengeId }` → `{ runId, seed, bountySats, expiresAt }` (requires full eligibility; run bound to app session pubkey)
-3. Client plays with `initRunRng(seed)` — standard arena (no convergence shrink); no mempool spawns during challenge runs
+3. Client plays with `initRunRng(seed)` — standard arena (no convergence shrink); no mempool spawns during challenge runs. In-game pot is **1000 sats per player** (FFA: 1000 × 4); zap bounty is separate from the match pot.
 4. Client logs P1 inputs `{ tick, dir }` where `tick` = sim step index (one per `stepGame`)
 5. `submitChallengeWin` `{ runId, inputLog }` → server replays active run only → `{ claimToken, noteContent, noteTags }` (one win per `runId`)
 6. Client signs exact note → `claimChallengeBounty` `{ claimToken, event }`
