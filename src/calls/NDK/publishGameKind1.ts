@@ -1,7 +1,7 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools';
 import { ALLOWEDEMOJIS } from '../../consts/emojis';
-import { BUYINMAX, BUYINMIN } from '../../consts/values';
+import { BUYINMAX, BUYINMIN, ONLINE_BUYIN_DEFAULT } from '../../consts/values';
 import { getGameInfoFromID } from '../../state/gameState';
 import { appendKind1toSessionID, getKind1sfromSessionID, setKind1IDtoSessionID } from '../../state/nostrState';
 import { getOpponent } from '../../socket/game';
@@ -49,7 +49,13 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
         : [...Array(4)]
             .map(() => ALLOWEDEMOJIS[(Math.random() * ALLOWEDEMOJIS.length) | 0])
             .join('');
-  const value = opts.buyin ?? (lastWinnerInfo ? lastWinnerInfo.value : BUYINMIN);
+  const value =
+    opts.buyin ??
+    (lastWinnerInfo
+      ? lastWinnerInfo.value
+      : mode === GameMode.ONLINE
+        ? ONLINE_BUYIN_DEFAULT
+        : BUYINMIN);
   const tournamentFixedZap =
     mode === GameMode.TOURNAMENTNOSTR || mode === GameMode.ONLINE
       ? value

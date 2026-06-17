@@ -1,4 +1,6 @@
 export const BUYINMIN = 3000;
+/** Minimum online room buy-in (P2P uses BUYINMIN) */
+export const ONLINE_BUYIN_MIN = 1000;
 /** Default online room buy-in when the host does not specify an amount */
 export const ONLINE_BUYIN_DEFAULT = 1000;
 export const BUYINMINWINNER = 100;

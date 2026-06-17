@@ -8,7 +8,7 @@ import {
   serializeGameInfoFromID,
   setGameInfoByID,
 } from '../../state/gameState';
-import { BUYINMIN } from '../../consts/values';
+import { BUYINMIN, ONLINE_BUYIN_MIN } from '../../consts/values';
 import { io } from '../../server';
 import {
   GameInfo,
@@ -103,7 +103,9 @@ async function listenToSubscriptions(event: NDKEvent) {
   const kind1 = getKind1FromID(eventID[1]);
   const kind1Mode = kind1?.mode as GameMode | undefined;
   const gameMode = kind1Mode ?? GameMode.P2PNOSTR;
-  const minBuyIn = kind1?.min ?? BUYINMIN;
+  const minBuyIn =
+    kind1?.min ??
+    (gameMode === GameMode.ONLINE ? ONLINE_BUYIN_MIN : BUYINMIN);
   const maxPlayers =
     gameMode === GameMode.TOURNAMENTNOSTR ? kind1?.numberOfPlayers ?? 4 : 2;
   const isAnon = !payerPubKey;
