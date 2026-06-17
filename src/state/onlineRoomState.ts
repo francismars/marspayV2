@@ -423,7 +423,11 @@ export function listOnlineRooms(): OnlineRoomListItem[] {
   }));
 }
 
-export function joinRoom(roomId: string, sessionID: string, socketID: string) {
+export function joinRoom(
+  roomId: string,
+  sessionID: string,
+  socketID: string
+): { room: OnlineRoom; matchStarted: boolean } | undefined {
   const room = roomById.get(roomId);
   if (!room) {
     return;
@@ -447,7 +451,8 @@ export function joinRoom(roomId: string, sessionID: string, socketID: string) {
   refreshNostrLinkSocket(roomId, sessionID, socketID);
   refreshOnlineSeatLightningSocket(sessionID, socketID);
   logOnlineState(`join roomId=${roomId} session=${sessionID} socket=${socketID}`);
-  return room;
+  const matchStarted = maybeStartReadyMatch(room);
+  return { room, matchStarted };
 }
 
 export function touchMember(roomId: string, sessionID: string) {
@@ -1819,6 +1824,25 @@ function maybeStartReadyMatch(room: OnlineRoom) {
     room.members.has(p1.sessionID) &&
     room.members.has(p2.sessionID);
   if (!bothReady) {
+    const blockers: string[] = [];
+    if (p1?.status !== 'paid' || p2?.status !== 'paid') {
+      blockers.push('seats_not_paid');
+    }
+    if (p1?.ready !== true || p2?.ready !== true) {
+      blockers.push('not_both_ready');
+    }
+    if (!p1?.sessionID || !p2?.sessionID) {
+      blockers.push('missing_session');
+    }
+    if (p1?.sessionID && !room.members.has(p1.sessionID)) {
+      blockers.push('p1_not_in_room');
+    }
+    if (p2?.sessionID && !room.members.has(p2.sessionID)) {
+      blockers.push('p2_not_in_room');
+    }
+    logOnlineState(
+      `maybeStartReadyMatch blocked roomId=${room.roomId} reasons=${blockers.join(',') || 'unknown'}`
+    );
     return false;
   }
   setRoomPhase(room.roomId, 'playing');

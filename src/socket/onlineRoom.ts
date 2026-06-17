@@ -328,19 +328,23 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
     return;
   }
   logOnline(sessionID, `joinOnlineRoom requested roomId=${payload.roomId}`);
-  const room = joinRoom(payload.roomId, sessionID, socket.id);
-  if (!room) {
+  const joined = joinRoom(payload.roomId, sessionID, socket.id);
+  if (!joined) {
     logOnline(sessionID, `joinOnlineRoom failed roomId=${payload.roomId} reason=room_not_found`);
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
+  const { room, matchStarted } = joined;
   socket.join(room.roomId);
   socket.data.currentOnlineRoomId = room.roomId;
   const pin = issueJoinPin(room.roomId, sessionID, socket.id);
   logOnline(
     sessionID,
-    `joined roomId=${room.roomId} code=${room.roomCode} pinIssued=${pin?.pin ?? 'none'}`
+    `joined roomId=${room.roomId} code=${room.roomCode} pinIssued=${pin?.pin ?? 'none'} matchStarted=${matchStarted}`
   );
+  if (matchStarted) {
+    publishOnlineMatchStarted(room.roomId, sessionID);
+  }
   const roomState = serializeRoom(room);
   io.to(room.roomId).emit('onlineRoomUpdated', roomState);
   broadcastOnlineRoomLists();
@@ -372,15 +376,19 @@ export function spectateOnlineRoomHandler(socket: Socket, payload: { roomId: str
     return;
   }
   logOnline(sessionID, `spectateOnlineRoom requested roomId=${payload.roomId}`);
-  const room = joinRoom(payload.roomId, sessionID, socket.id);
-  if (!room) {
+  const joined = joinRoom(payload.roomId, sessionID, socket.id);
+  if (!joined) {
     logOnline(sessionID, `spectateOnlineRoom failed roomId=${payload.roomId} reason=room_not_found`);
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
-  logOnline(sessionID, `spectating roomId=${room.roomId} code=${room.roomCode}`);
+  const { room, matchStarted } = joined;
+  logOnline(sessionID, `spectating roomId=${room.roomId} code=${room.roomCode} matchStarted=${matchStarted}`);
   socket.join(room.roomId);
   socket.data.currentOnlineRoomId = room.roomId;
+  if (matchStarted) {
+    publishOnlineMatchStarted(room.roomId, sessionID);
+  }
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
   broadcastOnlineRoomLists();
 }
@@ -580,9 +588,14 @@ export function getOnlinePostGameHandler(socket: Socket, payload: { roomId: stri
   if (room) {
     // Refresh room membership/socket mapping on postgame entry so seat ownership
     // stays associated through reconnects and route transitions.
-    joinRoom(payload.roomId, sessionID, socket.id);
+    const joined = joinRoom(payload.roomId, sessionID, socket.id);
     socket.join(payload.roomId);
     socket.data.currentOnlineRoomId = payload.roomId;
+    if (joined?.matchStarted) {
+      publishOnlineMatchStarted(payload.roomId, sessionID);
+      io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
+      broadcastOnlineRoomLists();
+    }
   }
   const viewer = { sessionID, socketID: socket.id };
   const info = getOnlinePostGame(payload.roomId, viewer);
