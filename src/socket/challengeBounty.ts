@@ -107,6 +107,12 @@ export async function requestChallengeRunHandler(
     return;
   }
 
+  const eligibility = await evaluateChallengeEligibility(appSession.pubkey, true);
+  if (!eligibility.eligible) {
+    socket.emit('resChallengeRun', { ok: false, reason: 'not_eligible' });
+    return;
+  }
+
   const challengeId = typeof payload?.challengeId === 'string' ? payload.challengeId.trim() : '';
   const created = createChallengeRun({
     pubkey: appSession.pubkey,

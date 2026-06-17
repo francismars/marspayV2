@@ -26,12 +26,13 @@ Server checks (cached up to 24h when eligible, 5 min when not; pass `{ refresh: 
 
 ## Run flow
 
-1. **Nostr sign-in required** — sign in before selecting a challenge; `requestChallengeRun` `{ challengeId }` → `{ runId, seed, bountySats, expiresAt }` (run bound to app session pubkey)
-2. Client plays with `initRunRng(seed)` — standard arena (no convergence shrink); no mempool spawns during challenge runs
-3. Client logs P1 inputs `{ tick, dir }` where `tick` = sim step index (one per `stepGame`)
-4. `submitChallengeWin` `{ runId, inputLog }` → server replays active run only → `{ claimToken, noteContent, noteTags }` (one win per `runId`)
-5. Client signs exact note → `claimChallengeBounty` `{ claimToken, event }`
-6. Server publishes kind-1, zaps note via LNURL-pay, records claim (one per `pubkey + challengeId` and one per `runId`)
+1. **Nostr sign-in required** — sign in before selecting a challenge; all eligibility checks must pass before `requestChallengeRun`
+2. `requestChallengeRun` `{ challengeId }` → `{ runId, seed, bountySats, expiresAt }` (requires full eligibility; run bound to app session pubkey)
+3. Client plays with `initRunRng(seed)` — standard arena (no convergence shrink); no mempool spawns during challenge runs
+4. Client logs P1 inputs `{ tick, dir }` where `tick` = sim step index (one per `stepGame`)
+5. `submitChallengeWin` `{ runId, inputLog }` → server replays active run only → `{ claimToken, noteContent, noteTags }` (one win per `runId`)
+6. Client signs exact note → `claimChallengeBounty` `{ claimToken, event }`
+7. Server publishes kind-1, zaps note via LNURL-pay, records claim (one per `pubkey + challengeId` and one per `runId`)
 
 Rate limits (per socket `sessionID`, rolling 1-minute window): `requestChallengeRun`, `submitChallengeWin`.
 
