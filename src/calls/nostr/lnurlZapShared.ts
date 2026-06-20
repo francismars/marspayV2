@@ -73,6 +73,20 @@ export interface LnurlPayMetadata {
   nostrPubkey?: string;
 }
 
+const LNURL_META_TTL_MS = 5 * 60 * 1000;
+const lnurlMetaByLud16 = new Map<string, { meta: LnurlPayMetadata; at: number }>();
+
+export async function fetchLnurlPayMetadataCached(lud16: string): Promise<LnurlPayMetadata> {
+  const key = lud16.trim().toLowerCase();
+  const hit = lnurlMetaByLud16.get(key);
+  if (hit && Date.now() - hit.at < LNURL_META_TTL_MS) {
+    return hit.meta;
+  }
+  const meta = await fetchLnurlPayMetadata(lud16);
+  lnurlMetaByLud16.set(key, { meta, at: Date.now() });
+  return meta;
+}
+
 export async function fetchLnurlPayMetadata(lud16: string): Promise<LnurlPayMetadata> {
   const url = lud16ToLnurlPayUrl(lud16);
   const res = await fetch(url);

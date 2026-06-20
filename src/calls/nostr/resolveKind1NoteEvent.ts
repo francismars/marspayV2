@@ -53,3 +53,8 @@ export async function resolveKind1NoteEvent(noteRef: string): Promise<Event> {
   }
   return fetchKind1NoteEvent(noteRef);
 }
+
+/** Resolve by hex event id (online seat zaps, lud16 lookup). */
+export async function resolveKind1NoteEventById(eventId: string): Promise<Event> {
+  return resolveKind1NoteEvent(eventId);
+}

@@ -27,8 +27,7 @@ import { normalizeIP } from '../utils/ip';
 import { LNURLP } from '../types/lnurlp';
 import deleteLNURLP from '../calls/LNBits/deleteLNURLP';
 import { requestZapInvoiceAndPayForKind1 } from '../calls/NDK/zapKind1ViaLnurlCallback';
-import { fetchKind1NoteEvent } from '../calls/nostr/fetchKind1NoteEvent';
-import { resolveHostLud16ForOnlineSeat } from '../calls/nostr/resolveHostLud16ForOnlineSeat';
+import { resolveOnlineSeatZapContext } from '../calls/nostr/resolveOnlineSeatZapContext';
 import { hexToBytes } from '@noble/hashes/utils';
 import {
   consumeOnlineSeatLightningAfterSuccess,
@@ -142,25 +141,30 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       kind1EventId = room.kind1EventId;
       zapBuyinSats = onlineRec.buyin;
     }
-    const hostLud16 = await resolveHostLud16ForOnlineSeat(kind1EventId);
-    if (!hostLud16 || !hostLud16.includes('@')) {
-      console.error(
-        `${dateNow()} [ONLINE_SEAT_LN] missing Kind1 author lud16 for zap LNURL roomId=${room.roomId} kind1=${kind1EventId}`
-      );
-      res.status(400).send('host_lnaddress_missing');
-      return;
-    }
-    let kind1AuthorPubkey: string;
+    let zapContext: Awaited<ReturnType<typeof resolveOnlineSeatZapContext>>;
     try {
-      const kind1Ev = await fetchKind1NoteEvent(kind1EventId);
-      kind1AuthorPubkey = kind1Ev.pubkey;
-    } catch {
+      zapContext = await resolveOnlineSeatZapContext(kind1EventId, zapBuyinSats);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'zap_context_failed';
+      if (msg === 'host_ln_unknown') {
+        console.error(
+          `${dateNow()} [ONLINE_SEAT_LN] missing Kind1 author lud16 for zap LNURL roomId=${room.roomId} kind1=${kind1EventId}`
+        );
+        res.status(400).send('host_lnaddress_missing');
+        return;
+      }
+      if (msg === 'recipient_lnurl_no_zap') {
+        res.status(400).send('recipient_lnurl_no_zap');
+        return;
+      }
       console.error(
-        `${dateNow()} [ONLINE_SEAT_LN] kind1 not found on relays roomId=${room.roomId} kind1=${kind1EventId}`
+        `${dateNow()} [ONLINE_SEAT_LN] kind1 not found roomId=${room.roomId} kind1=${kind1EventId} err=${msg}`
       );
       res.status(400).send('kind1_not_found');
       return;
     }
+    const hostLud16 = zapContext.hostLud16;
+    const kind1AuthorPubkey = zapContext.kind1AuthorPubkey;
     let skBytes: Uint8Array;
     try {
       skBytes = hexToBytes(onlineRec.zapSecretKeyHex);

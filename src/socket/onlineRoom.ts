@@ -12,17 +12,18 @@ import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 import { publishOnlineKind1Reply } from '../calls/NDK/publishOnlineKind1Reply';
 import { publishOnlineRematchKind1 } from '../calls/NDK/publishOnlineRematchKind1';
 import { buildOnlineKind1PostPayload } from '../calls/nostr/buildOnlineKind1PostPayload';
-import { fetchKind1NoteEvent } from '../calls/nostr/fetchKind1NoteEvent';
-import { fetchNostrProfileMetadata } from '../calls/nostr/fetchNostrProfileMetadata';
+import {
+  rememberOnlineSeatZapContext,
+  recallOnlineSeatZapContext,
+  forgetOnlineSeatZapContext,
+} from '../calls/nostr/onlineSeatZapContextCache';
+import { resolveOnlineSeatZapContext } from '../calls/nostr/resolveOnlineSeatZapContext';
 import { resolveKind1NoteEvent } from '../calls/nostr/resolveKind1NoteEvent';
+import { fetchNostrAppProfile } from '../calls/nostr/fetchNostrAppProfile';
 import {
   buildKind1ZapRequestTemplate,
-  encodeLnurlBech32,
-  fetchLnurlPayMetadata,
   fetchZapInvoiceFromCallback,
-  lud16ToLnurlPayUrl,
 } from '../calls/nostr/lnurlZapShared';
-import { resolveHostLud16ForOnlineSeat } from '../calls/nostr/resolveHostLud16ForOnlineSeat';
 import { ZAP_RECEIPT_RELAYS } from '../consts/nostrRelays';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
 import createLNURLW from '../calls/LNBits/createLNURLW';
@@ -915,7 +916,12 @@ export async function confirmOnlineNostrLinkHandler(
   }
   let profile: { pubkey: string; name: string; picture: string | null };
   try {
-    profile = await fetchNostrProfileMetadata(event.pubkey);
+    const appProfile = await fetchNostrAppProfile(event.pubkey);
+    profile = {
+      pubkey: appProfile.pubkey,
+      name: appProfile.name,
+      picture: appProfile.picture,
+    };
   } catch {
     const pk = event.pubkey;
     profile = {
@@ -1020,28 +1026,15 @@ export function requestOnlineSeatZapPayPrepareHandler(socket: Socket, payload: {
   }
   void (async () => {
     try {
-      const hostLud16 = await resolveHostLud16ForOnlineSeat(kind1EventId!);
-      if (!hostLud16) {
-        socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
-        return;
-      }
-      const meta = await fetchLnurlPayMetadata(hostLud16);
-      if (!meta.allowsNostr || !meta.nostrPubkey) {
-        socket.emit('resOnlineSeatZapPayError', { reason: 'recipient_lnurl_no_zap' });
-        return;
-      }
-      const lnurlpHttpsUrl = lud16ToLnurlPayUrl(hostLud16);
-      const lnurlBech32 = encodeLnurlBech32(lnurlpHttpsUrl);
-      const millisats = buyinSats * 1000;
-      const kind1Ev = await fetchKind1NoteEvent(kind1EventId!);
+      const ctx = await resolveOnlineSeatZapContext(kind1EventId!, buyinSats);
+      rememberOnlineSeatZapContext(sessionID, roomId, ctx);
       const zapRequestTpl = buildKind1ZapRequestTemplate({
         kind1EventId: kind1EventId!,
-        // NIP-57: `p` is the note author (recipient), not the LNURL wallet's nostrPubkey.
-        kind1AuthorPubkey: kind1Ev.pubkey,
-        amountMsats: millisats,
+        kind1AuthorPubkey: ctx.kind1AuthorPubkey,
+        amountMsats: buyinSats * 1000,
         relays: ZAP_RECEIPT_RELAYS,
         comment: '',
-        lnurlBech32,
+        lnurlBech32: ctx.lnurlBech32,
       });
       socket.emit('resOnlineSeatZapPayPrepare', {
         roomId,
@@ -1051,10 +1044,10 @@ export function requestOnlineSeatZapPayPrepareHandler(socket: Socket, payload: {
           tags: zapRequestTpl.tags,
           content: zapRequestTpl.content,
         },
-        millisats,
-        lnurlBech32,
+        millisats: buyinSats * 1000,
+        lnurlBech32: ctx.lnurlBech32,
         buyinSats,
-        hostLud16,
+        hostLud16: ctx.hostLud16,
       });
     } catch (e) {
       socket.emit('resOnlineSeatZapPayError', {
@@ -1115,20 +1108,20 @@ export function confirmOnlineSeatZapPayHandler(
   }
   void (async () => {
     try {
-      const hostLud16 = await resolveHostLud16ForOnlineSeat(kind1EventId);
-      if (!hostLud16) {
-        socket.emit('resOnlineSeatZapPayError', { reason: 'host_ln_unknown' });
-        return;
-      }
-      const meta = await fetchLnurlPayMetadata(hostLud16);
-      if (!meta.allowsNostr || !meta.callback) {
+      const ctx =
+        recallOnlineSeatZapContext(sessionID, roomId, kind1EventId, buyinSats) ??
+        (await resolveOnlineSeatZapContext(kind1EventId, buyinSats));
+      if (!ctx.meta.callback) {
         socket.emit('resOnlineSeatZapPayError', { reason: 'recipient_lnurl_no_zap' });
         return;
       }
-      const lnurlpHttpsUrl = lud16ToLnurlPayUrl(hostLud16);
-      const lnurlBech32 = encodeLnurlBech32(lnurlpHttpsUrl);
-      const millisats = buyinSats * 1000;
-      const pr = await fetchZapInvoiceFromCallback(meta.callback, signed, lnurlBech32, millisats);
+      const pr = await fetchZapInvoiceFromCallback(
+        ctx.meta.callback,
+        signed,
+        ctx.lnurlBech32,
+        buyinSats * 1000
+      );
+      forgetOnlineSeatZapContext(sessionID, roomId);
       const lightningUri = pr.startsWith('lightning:') ? pr : `lightning:${pr}`;
       socket.emit('resOnlineSeatZapPayInvoice', {
         roomId,
