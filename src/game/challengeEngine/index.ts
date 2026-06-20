@@ -542,10 +542,20 @@ export function stepGame(state: GameState): TickResult {
     const playerCount = activePlayerCount(state);
     const doubleStepIndices: PowerUpPlayerIndex[] = [];
 
-    for (let i = 0; i < playerCount; i += 1) {
-      const index = i as PowerUpPlayerIndex;
-      if (!isPlayerActive(state, index)) continue;
-      if (!isPlayerHuman(state, index)) decideAiForPlayer(state, index);
+    if (is2v1Mode(state)) {
+      const plan = getTeamSovereign2v1Plan(state);
+      const aiOrder: PowerUpPlayerIndex[] =
+        plan.capturer === 1 ? [1, 2] : [2, 1];
+      for (const index of aiOrder) {
+        if (!isPlayerActive(state, index)) continue;
+        if (!isPlayerHuman(state, index)) decideAiForPlayer(state, index);
+      }
+    } else {
+      for (let i = 0; i < playerCount; i += 1) {
+        const index = i as PowerUpPlayerIndex;
+        if (!isPlayerActive(state, index)) continue;
+        if (!isPlayerHuman(state, index)) decideAiForPlayer(state, index);
+      }
     }
 
     for (let i = 0; i < playerCount; i += 1) {
@@ -1550,6 +1560,52 @@ const teamSovereign2v1Cache = new WeakMap<
   { tick: number; plan: TeamSovereign2v1Plan }
 >();
 
+const team2v1CapturerLock = new WeakMap<
+  GameState,
+  { coinKey: string; capturer: Ai2v1BotIndex }
+>();
+
+function predictedNextHead(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex
+): GridPos {
+  const snake = getSnakeByIndex(state, playerIndex);
+  const dir = snake.dirWanted || snake.dir;
+  const [x, y] = snake.head;
+  if (dir === 'Up') return [x, y - 1];
+  if (dir === 'Down') return [x, y + 1];
+  if (dir === 'Left') return [x - 1, y];
+  if (dir === 'Right') return [x + 1, y];
+  return [x, y];
+}
+
+function wouldCollideWithTeammateAt(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex,
+  cell: GridPos,
+  teammateIndex: PowerUpPlayerIndex
+): boolean {
+  if (!isPlayerActive(state, teammateIndex)) return false;
+  const teammate = getSnakeByIndex(state, teammateIndex);
+  if (samePos(teammate.head, cell)) return true;
+  if (teammate.body.some((p) => samePos(p, cell))) return true;
+  if (samePos(predictedNextHead(state, teammateIndex), cell)) return true;
+  return false;
+}
+
+function getLocked2v1Capturer(
+  state: GameState,
+  coinTarget: GridPos,
+  humanContesting: boolean
+): Ai2v1BotIndex {
+  const coinKey = posKey(coinTarget);
+  const lock = team2v1CapturerLock.get(state);
+  if (lock?.coinKey === coinKey) return lock.capturer;
+  const capturer = pick2v1Capturer(state, coinTarget, humanContesting);
+  team2v1CapturerLock.set(state, { coinKey, capturer });
+  return capturer;
+}
+
 function pathStepsToCoin(
   state: GameState,
   playerIndex: PowerUpPlayerIndex,
@@ -1629,6 +1685,19 @@ function pickSupportPosition(
   coinTarget: GridPos | null,
   capturerIndex: Ai2v1BotIndex
 ): GridPos {
+  const capturerPathKeys = new Set<string>();
+  if (coinTarget) {
+    const capturerHead = getPlayerHead(state, capturerIndex);
+    for (const p of findPathForPlayer(
+      state,
+      capturerIndex,
+      capturerHead,
+      coinTarget
+    )) {
+      capturerPathKeys.add(posKey(p));
+    }
+  }
+
   if (coinTarget && isPlayerActive(state, 0)) {
     const p1Path = findPlayerFoodPath(state, coinTarget);
     const capturerHead = getPlayerHead(state, capturerIndex);
@@ -1637,6 +1706,8 @@ function pickSupportPosition(
     const scanMax = Math.min(p1Path.length - 1, SOVEREIGN_PREDICT_STEPS + 4);
     for (let i = 3; i <= scanMax; i += 1) {
       const cell = p1Path[i]!;
+      if (samePos(cell, coinTarget)) continue;
+      if (capturerPathKeys.has(posKey(cell))) continue;
       const score = i * 2 + gridDist(capturerHead, cell);
       if (score > bestScore) {
         bestScore = score;
@@ -1651,6 +1722,7 @@ function pickSupportPosition(
 function computeTeamSovereign2v1Plan(state: GameState): TeamSovereign2v1Plan {
   const coinTarget = chooseTeamCoinFor2v1(state);
   if (!coinTarget) {
+    team2v1CapturerLock.delete(state);
     return {
       coinTarget: null,
       capturer: 1,
@@ -1660,7 +1732,7 @@ function computeTeamSovereign2v1Plan(state: GameState): TeamSovereign2v1Plan {
   }
 
   const humanContesting = isHumanContestingTeamCoin(state, coinTarget);
-  const capturer = pick2v1Capturer(state, coinTarget, humanContesting);
+  const capturer = getLocked2v1Capturer(state, coinTarget, humanContesting);
   const support: Ai2v1BotIndex = capturer === 1 ? 2 : 1;
   const supportMode: TeamSovereign2v1Plan['supportMode'] = humanContesting
     ? 'block'
@@ -1677,23 +1749,101 @@ function getTeamSovereign2v1Plan(state: GameState): TeamSovereign2v1Plan {
   return plan;
 }
 
+function decide2v1CapturerSafeStep(
+  state: GameState,
+  botIndex: PowerUpPlayerIndex,
+  coinTarget: GridPos,
+  supportIndex: Ai2v1BotIndex
+): void {
+  const snake = getSnakeByIndex(state, botIndex);
+  const head = snake.head;
+  const dirs: Exclude<Direction, ''>[] = ['Up', 'Down', 'Left', 'Right'];
+  let bestDir: Exclude<Direction, ''> | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const d of dirs) {
+    if (wouldHitWall(state, snake, d)) continue;
+    const next: GridPos =
+      d === 'Up'
+        ? [head[0], head[1] - 1]
+        : d === 'Down'
+          ? [head[0], head[1] + 1]
+          : d === 'Left'
+            ? [head[0] - 1, head[1]]
+            : [head[0] + 1, head[1]];
+    if (wouldCollideWithTeammateAt(state, botIndex, next, supportIndex)) {
+      continue;
+    }
+    const score = -gridDist(next, coinTarget);
+    if (score > bestScore) {
+      bestScore = score;
+      bestDir = d;
+    }
+  }
+
+  if (bestDir) applyAiDirToSnake(snake, bestDir);
+}
+
+function decide2v1SupportSafeFallback(
+  state: GameState,
+  botIndex: PowerUpPlayerIndex,
+  coinTarget: GridPos | null,
+  capturerIndex: Ai2v1BotIndex
+): void {
+  clearSovereignInterceptPlan(state, botIndex);
+  const snake = getSnakeByIndex(state, botIndex);
+  const head = snake.head;
+  const teammateHead = getPlayerHead(state, capturerIndex);
+  const dirs: Exclude<Direction, ''>[] = ['Up', 'Down', 'Left', 'Right'];
+  let bestDir: Exclude<Direction, ''> | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const d of dirs) {
+    if (wouldHitWall(state, snake, d)) continue;
+    const next: GridPos =
+      d === 'Up'
+        ? [head[0], head[1] - 1]
+        : d === 'Down'
+          ? [head[0], head[1] + 1]
+          : d === 'Left'
+            ? [head[0] - 1, head[1]]
+            : [head[0] + 1, head[1]];
+    if (coinTarget && samePos(next, coinTarget)) continue;
+    if (wouldCollideWithTeammateAt(state, botIndex, next, capturerIndex)) {
+      continue;
+    }
+    let score = gridDist(next, teammateHead);
+    if (coinTarget) score += gridDist(next, coinTarget) * 1.5;
+    if (score > bestScore) {
+      bestScore = score;
+      bestDir = d;
+    }
+  }
+
+  if (bestDir) applyAiDirToSnake(snake, bestDir);
+}
+
 function decide2v1Capturer(
   state: GameState,
   botIndex: PowerUpPlayerIndex,
-  coinTarget: GridPos | null
+  coinTarget: GridPos | null,
+  supportIndex: Ai2v1BotIndex
 ): void {
   clearSovereignInterceptPlan(state, botIndex);
   if (!coinTarget) {
-    decideEconomyChaseForPlayer(state, botIndex, false, true);
+    decide2v1SupportSafeFallback(state, botIndex, null, supportIndex);
     return;
   }
   const head = getPlayerHead(state, botIndex);
   const path = findPathForPlayer(state, botIndex, head, coinTarget);
   if (path.length > 1) {
-    applyPathToPlayer(state, botIndex, path);
-    return;
+    const next = path[1]!;
+    if (!wouldCollideWithTeammateAt(state, botIndex, next, supportIndex)) {
+      applyPathToPlayer(state, botIndex, path);
+      return;
+    }
   }
-  decideEconomyChaseForPlayer(state, botIndex, false, true);
+  decide2v1CapturerSafeStep(state, botIndex, coinTarget, supportIndex);
 }
 
 function decide2v1SupportPosition(
@@ -1708,10 +1858,13 @@ function decide2v1SupportPosition(
   if (gridDist(head, target) <= 1) return;
   const path = findPathForPlayer(state, botIndex, head, target);
   if (path.length > 1) {
-    applyPathToPlayer(state, botIndex, path);
-    return;
+    const next = path[1]!;
+    if (!wouldCollideWithTeammateAt(state, botIndex, next, capturerIndex)) {
+      applyPathToPlayer(state, botIndex, path);
+      return;
+    }
   }
-  decideEconomyChaseForPlayer(state, botIndex, false, true);
+  decide2v1SupportSafeFallback(state, botIndex, coinTarget, capturerIndex);
 }
 
 function withBotAsP2(
@@ -1817,7 +1970,7 @@ function decideSovereign2v1Coordinated(
   const aiBot = botIndex as Ai2v1BotIndex;
 
   if (aiBot === plan.capturer) {
-    decide2v1Capturer(state, botIndex, plan.coinTarget);
+    decide2v1Capturer(state, botIndex, plan.coinTarget, plan.support);
     return;
   }
 
@@ -1969,6 +2122,12 @@ function blockedSetForPlayer(
     add(s.head);
     s.body.forEach(add);
   }
+  if (is2v1Mode(state) && (playerIndex === 1 || playerIndex === 2)) {
+    const teammate: PowerUpPlayerIndex = playerIndex === 1 ? 2 : 1;
+    if (isPlayerActive(state, teammate)) {
+      add(predictedNextHead(state, teammate));
+    }
+  }
   return blocked;
 }
 
@@ -2003,6 +2162,12 @@ function applyPathToPlayer(
     const s = getSnakeByIndex(state, i as PowerUpPlayerIndex);
     if (s.body.some((p) => samePos(p, next))) return;
     if (samePos(s.head, next)) return;
+  }
+  if (is2v1Mode(state) && (playerIndex === 1 || playerIndex === 2)) {
+    const teammate: PowerUpPlayerIndex = playerIndex === 1 ? 2 : 1;
+    if (isPlayerActive(state, teammate)) {
+      if (samePos(predictedNextHead(state, teammate), next)) return;
+    }
   }
   const snake = getSnakeByIndex(state, playerIndex);
   const [x, y] = snake.head;
@@ -2814,6 +2979,17 @@ function findPath(
         )
       ) {
         continue;
+      }
+      if (is2v1Mode(state)) {
+        let blockedByTeammateNext = false;
+        for (const idx of [1, 2] as PowerUpPlayerIndex[]) {
+          if (!isPlayerActive(state, idx)) continue;
+          if (samePos(neighbor, predictedNextHead(state, idx))) {
+            blockedByTeammateNext = true;
+            break;
+          }
+        }
+        if (blockedByTeammateNext) continue;
       }
       if (
         playerAvoidance !== 'none' &&
