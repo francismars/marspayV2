@@ -3,7 +3,10 @@ import { verifyEvent, type Event } from 'nostr-tools';
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { fetchNostrAppProfile } from '../calls/nostr/fetchNostrAppProfile';
 import { ndkInstance, setNDKInstance } from '../calls/NDK/setNDKInstance';
-import { getAppNostrSession } from '../state/nostrAppSessionState';
+import {
+  getAppNostrSession,
+  touchAppNostrSession,
+} from '../state/nostrAppSessionState';
 
 export async function getNostrProfileHandler(
   socket: Socket,
@@ -16,6 +19,12 @@ export async function getNostrProfileHandler(
   }
   if (!pubkey || !/^[0-9a-f]{64}$/.test(pubkey)) {
     socket.emit('resNostrProfile', { ok: false, reason: 'invalid_pubkey' });
+    return;
+  }
+  const appSession = sessionID ? getAppNostrSession(sessionID) : undefined;
+  if (appSession?.pubkey === pubkey && sessionID) {
+    touchAppNostrSession(sessionID);
+    socket.emit('resNostrProfile', { ok: true, profile: appSession.profile });
     return;
   }
   try {
