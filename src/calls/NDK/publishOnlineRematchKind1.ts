@@ -5,6 +5,7 @@ import { GameMode } from '../../types/game';
 import { dateNow } from '../../utils/time';
 import { ndkInstance, setNDKInstance } from './setNDKInstance';
 import { subscribeEvent } from './subscribeEvent';
+import { snapshotFromNdkEvent } from '../nostr/kind1PublishedSnapshot';
 
 interface PublishOnlineRematchKind1Opts {
   sessionID: string;
@@ -61,6 +62,7 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
     min: opts.amount,
     mode: GameMode.ONLINE,
     zapSubscription: subscription,
+    snapshot: snapshotFromNdkEvent(ndkEvent),
   });
   console.log(
     `${dateNow()} [${opts.sessionID}] [ONLINE] Created rematch payment event ${note1} for ${opts.amount} sats.`

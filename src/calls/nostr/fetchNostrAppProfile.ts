@@ -1,6 +1,7 @@
 import { SimplePool } from 'nostr-tools';
 import { NOSTR_RELAYS } from '../../consts/nostrRelays';
 import type { AppNostrProfile } from '../../state/nostrAppSessionState';
+import { getCachedNostrProfile, setCachedNostrProfile } from './nostrProfileCache';
 
 function shortPubkeyLabel(pubkey: string): string {
   if (pubkey.length <= 16) {
@@ -11,6 +12,10 @@ function shortPubkeyLabel(pubkey: string): string {
 
 /** Kind-0 metadata for app Nostr session (relays read on server only). */
 export async function fetchNostrAppProfile(pubkey: string): Promise<AppNostrProfile> {
+  const cached = getCachedNostrProfile(pubkey);
+  if (cached) {
+    return cached;
+  }
   const pool = new SimplePool();
   try {
     const events = await pool.querySync(NOSTR_RELAYS, {
@@ -49,7 +54,7 @@ export async function fetchNostrAppProfile(pubkey: string): Promise<AppNostrProf
     const lud16 = typeof content.lud16 === 'string' ? content.lud16.trim() || null : null;
     const lud06 = typeof content.lud06 === 'string' ? content.lud06.trim() || null : null;
     const resolvedName = displayName || name || shortPubkeyLabel(pubkey);
-    return {
+    const profile = {
       pubkey,
       name: resolvedName,
       picture,
@@ -57,6 +62,8 @@ export async function fetchNostrAppProfile(pubkey: string): Promise<AppNostrProf
       lud16,
       lud06,
     };
+    setCachedNostrProfile(profile);
+    return profile;
   } finally {
     pool.close(NOSTR_RELAYS);
   }

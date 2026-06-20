@@ -8,6 +8,7 @@ import { getOpponent } from '../../socket/game';
 import { GameInfo, GameMode, PlayerRole } from '../../types/game';
 import { getTournamentEntrantRolesSlice } from '../../utils/winnerNames';
 import { Kind1 } from '../../types/nostr';
+import { snapshotFromNdkEvent } from '../nostr/kind1PublishedSnapshot';
 import { dateNow } from '../../utils/time';
 import { ndkInstance } from './setNDKInstance';
 import { setNDKInstance } from './setNDKInstance';
@@ -170,6 +171,7 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
     zapSubscription: subscription,
     hostLNAddress: opts.hostLNAddress,
     numberOfPlayers: opts.numberOfPlayers,
+    snapshot: snapshotFromNdkEvent(ndkEvent),
   };
   appendKind1toSessionID(sessionID, eventinfo);
 }

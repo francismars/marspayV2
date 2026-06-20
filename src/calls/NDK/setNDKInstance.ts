@@ -2,6 +2,7 @@ import NDK, { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk';
 import dotenv from 'dotenv';
 import { NOSTR_RELAYS } from '../../consts/nostrRelays';
 import { dateNow } from '../../utils/time';
+import { fetchNostrAppProfile } from '../nostr/fetchNostrAppProfile';
 
 export let ndkInstance: NDK;
 const NDK_CONNECT_TIMEOUT_MS = 7000;
@@ -45,4 +46,7 @@ export async function setNDKInstance() {
   console.log(
     `${dateNow()} [NDK] ready (${connectedRelays}/${NOSTR_RELAYS.length} relays connected)`
   );
+  void fetchNostrAppProfile(pksigner.pubkey).catch(() => {
+    /* profile warms on first room load if relay fetch fails here */
+  });
 }

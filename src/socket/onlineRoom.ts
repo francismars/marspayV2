@@ -11,8 +11,10 @@ import {
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 import { publishOnlineKind1Reply } from '../calls/NDK/publishOnlineKind1Reply';
 import { publishOnlineRematchKind1 } from '../calls/NDK/publishOnlineRematchKind1';
+import { buildOnlineKind1PostPayload } from '../calls/nostr/buildOnlineKind1PostPayload';
 import { fetchKind1NoteEvent } from '../calls/nostr/fetchKind1NoteEvent';
 import { fetchNostrProfileMetadata } from '../calls/nostr/fetchNostrProfileMetadata';
+import { resolveKind1NoteEvent } from '../calls/nostr/resolveKind1NoteEvent';
 import {
   buildKind1ZapRequestTemplate,
   encodeLnurlBech32,
@@ -20,7 +22,6 @@ import {
   fetchZapInvoiceFromCallback,
   lud16ToLnurlPayUrl,
 } from '../calls/nostr/lnurlZapShared';
-import { parsePubpayZapTags } from '../calls/nostr/parsePubpayZapTags';
 import { resolveHostLud16ForOnlineSeat } from '../calls/nostr/resolveHostLud16ForOnlineSeat';
 import { ZAP_RECEIPT_RELAYS } from '../consts/nostrRelays';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
@@ -947,24 +948,8 @@ export function requestOnlineKind1PostHandler(socket: Socket, payload: { roomId:
   }
   void (async () => {
     try {
-      const ev = await fetchKind1NoteEvent(noteRef);
-      const npub = nip19.npubEncode(ev.pubkey);
-      const npubDisplay = `${npub.slice(0, 18)}…${npub.slice(-12)}`;
-      const pubpayZap = parsePubpayZapTags(ev.tags);
-      const profile = await fetchNostrProfileMetadata(ev.pubkey);
-      socket.emit('resOnlineKind1Post', {
-        roomId,
-        ok: true,
-        eventId: ev.id,
-        tags: ev.tags,
-        pubpayZap,
-        content: ev.content,
-        created_at: ev.created_at,
-        pubkey: ev.pubkey,
-        npubDisplay,
-        authorName: profile.name,
-        authorPicture: profile.picture,
-      });
+      const ev = await resolveKind1NoteEvent(noteRef);
+      socket.emit('resOnlineKind1Post', await buildOnlineKind1PostPayload(roomId, ev));
     } catch (e) {
       socket.emit('resOnlineKind1Post', {
         roomId,
