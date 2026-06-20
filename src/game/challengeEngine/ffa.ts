@@ -277,7 +277,7 @@ export function get2v1AiTeamInitialScore(state: GameState): number {
 /** Highest capture % among the two AI snakes — shown on the shared P2 HUD side. */
 export function get2v1AiTeamCaptureLabel(state: GameState): string {
   const p2Len = state.p2.body.length;
-  const p3Len = state.extraSnakes[0]?.body?.length ?? 1;
+  const p3Len = state.extraSnakes[0]?.snake.body?.length ?? 1;
   const p2Pct = captureLabelForLength(p2Len).replace('%', '');
   const p3Pct = captureLabelForLength(p3Len).replace('%', '');
   const maxPct = Math.max(Number(p2Pct) || 2, Number(p3Pct) || 2);
