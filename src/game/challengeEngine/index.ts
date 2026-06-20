@@ -37,6 +37,8 @@ import {
   get2v1AiTeamCaptureLabel,
   get2v1AiTeamInitialScore,
   get2v1AiTeamScore,
+  get2v1HudTeamScores,
+  init2v1Economy,
   initFfaEconomy,
   is2v1Mode,
   isEliminationMode,
@@ -340,7 +342,7 @@ export function createGameState(args: CreateStateArgs): GameState {
       ),
     ];
     state.controllerTestExtra = [false];
-    initFfaEconomy(state, p1, p2);
+    init2v1Economy(state, p1);
   }
 
   return state;
@@ -354,10 +356,7 @@ export function getHudState(state: GameState): HudState {
   const total = state.totalPoints || 1;
 
   if (is2v1Mode(state)) {
-    const p1Score = state.score[0];
-    const aiScore = get2v1AiTeamScore(state);
-    const p1Initial = state.ffaInitialScores?.[0] ?? state.initialScore[0];
-    const aiInitial = get2v1AiTeamInitialScore(state);
+    const { p1Score, aiScore, p1Initial, aiInitial } = get2v1HudTeamScores(state);
     const hud: HudState = {
       p1Points: p1Score,
       p2Points: aiScore,

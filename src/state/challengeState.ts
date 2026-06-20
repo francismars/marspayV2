@@ -25,7 +25,7 @@ export const CHALLENGE_CATALOG: ChallengeCatalogEntry[] = [
   { id: 'noderunner', rank: 3, name: 'NODE RUNNER', format: '1v1', aiTier: 'noderunner', powerup: true, bountySats: 210 },
   { id: 'ffa', rank: 4, name: 'FFA RUMBLE', format: '4P FFA', aiTier: 'noderunner', powerup: false, bountySats: 600 },
   { id: 'gauntlet', rank: 5, name: 'SOVEREIGN GAUNTLET', format: '1v1', aiTier: 'sovereign', powerup: false, bountySats: 1337 },
-  { id: 'sovereign-stack', rank: 6, name: 'TWIN GAUNTLET', format: '2v1', aiTier: 'sovereign', powerup: false, bountySats: 6900 },
+  { id: 'sovereign-stack', rank: 6, name: 'TEAM SOVEREIGN', format: '2v1', aiTier: 'sovereign', powerup: false, bountySats: 6900 },
 ];
 
 export function getChallengeById(id: string): ChallengeCatalogEntry | undefined {
