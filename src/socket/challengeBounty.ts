@@ -29,6 +29,10 @@ import {
   isAnonymousRunPubkey,
   type ChallengeInputEntry,
 } from '../state/challengeState';
+import {
+  getChallengeTelemetrySnapshot,
+  recordChallengeOutcome,
+} from '../state/challengeTelemetry';
 
 /** @chainduel — used in victory notes (NIP-27 mention). */
 const CHAINDUEL_NPUB = 'npub1kd3nlw09ufkgmts2kaf0x8m4mq57exn6l8rz50v5ngyr2h3j5cfswdsdth';
@@ -228,15 +232,21 @@ export async function submitChallengeWinHandler(
   });
 
   if (!replay.ok) {
+    recordChallengeOutcome({
+      challengeId: run.challengeId,
+      outcome: 'replay_failed',
+      replayReason: replay.reason,
+    });
     console.log(
-      `${dateNow()} [CHALLENGE_WIN] replay_failed runId=${runId} reason=${replay.reason} debug=${JSON.stringify(replay.debug ?? {})}`
+      `${dateNow()} [CHALLENGE_WIN] replay_failed runId=${runId} challenge=${run.challengeId} reason=${replay.reason} debug=${JSON.stringify(replay.debug ?? {})} telemetry=${JSON.stringify(getChallengeTelemetrySnapshot().byChallenge[run.challengeId] ?? {})}`
     );
     socket.emit('resSubmitChallengeWin', { ok: false, reason: replay.reason, debug: replay.debug });
     return;
   }
 
+  recordChallengeOutcome({ challengeId: run.challengeId, outcome: 'win' });
   console.log(
-    `${dateNow()} [CHALLENGE_WIN] replay_ok runId=${runId} simSteps=${replay.simSteps} tickCount=${replay.tickCount}`
+    `${dateNow()} [CHALLENGE_WIN] replay_ok runId=${runId} challenge=${run.challengeId} simSteps=${replay.simSteps} tickCount=${replay.tickCount} telemetry=${JSON.stringify(getChallengeTelemetrySnapshot().byChallenge[run.challengeId] ?? {})}`
   );
 
   markRunWon(runId, inputLog, payload?.countdownStartTick ?? 0);

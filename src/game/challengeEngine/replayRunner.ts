@@ -31,8 +31,9 @@ export type ReplayResult =
     };
 
 function buildChallengeState(challenge: ChallengeCatalogEntry) {
-  const isFfa = challenge.format === '4P FFA';
   const stake = challengeStartSatsPerPlayer(challenge);
+  const isFfa = challenge.format === '4P FFA';
+  const is2v1 = challenge.format === '2v1';
   return createGameState({
     modeLabel: 'CHALLENGE',
     practiceMode: true,
@@ -45,16 +46,67 @@ function buildChallengeState(challenge: ChallengeCatalogEntry) {
     p1Points: stake,
     p2Points: stake,
     aiTier: challenge.aiTier,
-    ffaAiTier: isFfa ? challenge.aiTier : undefined,
+    ffaAiTier: isFfa || is2v1 ? challenge.aiTier : undefined,
     convergenceMode: false,
     powerupMode: challenge.powerup,
-    teamMode: isFfa ? 'ffa' : 'solo',
+    teamMode: isFfa ? 'ffa' : is2v1 ? '2v1' : 'solo',
   });
 }
 
 function parseDir(raw: string): Exclude<Direction, ''> | null {
   if (raw === 'Up' || raw === 'Down' || raw === 'Left' || raw === 'Right') return raw;
   return null;
+}
+
+export type ReplaySimResult = {
+  gameEnded: boolean;
+  winnerPlayer: string | null;
+  simSteps: number;
+  p1Score: number;
+  p2Score: number;
+};
+
+/**
+ * Deterministic sim replay without win-validation — for engine parity tests.
+ */
+export function replayChallengeSim(params: {
+  seed: string;
+  challenge: ChallengeCatalogEntry;
+  inputLog: ChallengeInputEntry[];
+}): ReplaySimResult {
+  initRunRng(params.seed);
+  try {
+    const state = buildChallengeState(params.challenge);
+    startCountdown(state);
+
+    const inputsByStep = new Map<number, ChallengeInputEntry[]>();
+    for (const entry of params.inputLog) {
+      const list = inputsByStep.get(entry.tick) ?? [];
+      list.push(entry);
+      inputsByStep.set(entry.tick, list);
+    }
+
+    let simStep = 0;
+    while (!state.gameEnded && simStep < MAX_SIM_STEPS) {
+      const batch = inputsByStep.get(simStep) ?? [];
+      for (const inp of batch) {
+        const dir = parseDir(inp.dir);
+        if (dir) setWantedDirection(state, 'P1', dir);
+      }
+      stepGame(state);
+      simStep += 1;
+    }
+
+    return {
+      gameEnded: state.gameEnded,
+      winnerPlayer: state.winnerPlayer,
+      simSteps: simStep,
+      p1Score: state.score[0],
+      p2Score: state.score[1],
+    };
+  } finally {
+    clearRunRng();
+  }
 }
 
 /**

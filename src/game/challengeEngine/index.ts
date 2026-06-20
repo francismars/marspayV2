@@ -32,31 +32,58 @@ import type {
 import {
   buildFfaHud,
   checkFfaGameEnd,
+  checkFfaEliminations,
   ffaApplyCaptureAmount,
   initFfaEconomy,
+  is2v1Mode,
+  isEliminationMode,
   isFfaMode,
+  isFfaPlayerAlive,
   type FfaPlayerIndex,
 } from './ffa';
 import {
   activePlayerCount,
   checkPowerUpPickup,
   clearPowerUpsForPlayer,
+  clearSurgeForPlayer,
   computeCaptureChangeForIndex,
   getPlayerHead,
   getSnakeByIndex,
   hasPowerUp,
   hasSurgeDoubleStep,
+  isPlayerActive,
   shouldPlayerMove,
   wrapSnakeHeadRef,
   type PowerUpPlayerIndex,
 } from './powerups';
+import {
+  clearControllerTests,
+  setControllerTestBySeat,
+  type GameSeatIndex,
+} from './controllerTestStub';
 
+export {
+  clearControllerTests,
+  setControllerTestBySeat,
+  type GameSeatIndex,
+} from './controllerTestStub';
 export { getSnakeEffects } from './powerups';
-export type { PowerUpPlayerIndex, SnakePowerUpEffects } from './powerups';
+export type {
+  PowerUpPlayerIndex,
+  SnakePowerUpEffects,
+} from './powerups';
 
 export type { FfaHudPlayer } from './types';
 export type { FfaPlayerIndex } from './ffa';
-export { buildFfaHud, ffaConicGradient, ffaInitialConicGradient, isFfaMode } from './ffa';
+export {
+  buildFfaHud,
+  ffaConicGradient,
+  ffaInitialConicGradient,
+  is2v1Mode,
+  isEliminationMode,
+  isFfaMode,
+  isFfaPlayerAlive,
+} from './ffa';
 
 // ============================================================================
 // Extra-snake helpers
@@ -64,15 +91,20 @@ export { buildFfaHud, ffaConicGradient, ffaInitialConicGradient, isFfaMode } fro
 /** Body cell opposite movement — tail at the wall, head facing inward. */
 function bodySegmentBehindHead(
   head: GridPos,
-  dirWanted: Exclude<Direction, ''>,
+  dirWanted: Exclude<Direction, ''>
 ): GridPos {
   const [x, y] = head;
   switch (dirWanted) {
-    case 'Right': return [x - 1, y];
-    case 'Left': return [x + 1, y];
-    case 'Down': return [x, y - 1];
-    case 'Up': return [x, y + 1];
-    default: return [x - 1, y];
+    case 'Right':
+      return [x - 1, y];
+    case 'Left':
+      return [x + 1, y];
+    case 'Down':
+      return [x, y - 1];
+    case 'Up':
+      return [x, y + 1];
+    default:
+      return [x - 1, y];
   }
 }
 
@@ -84,7 +116,7 @@ function makeExtraSnake(
   name: string,
   aiTier: AiTier,
   humanControlled: boolean,
-  outline?: number,
+  outline?: number
 ): ExtraSnake {
   const d: Exclude<Direction, ''> = spawnDir === '' ? 'Right' : spawnDir;
   const tail = bodySegmentBehindHead([spawnHead[0], spawnHead[1]], d);
@@ -95,7 +127,15 @@ function makeExtraSnake(
       dir: '',
       dirWanted: spawnDir,
     },
-    teamId, color, outline, name, score: 0, aiTier, humanControlled, spawnHead, spawnDir,
+    teamId,
+    color,
+    outline,
+    name,
+    score: 0,
+    aiTier,
+    humanControlled,
+    spawnHead,
+    spawnDir,
   };
 }
 
@@ -133,11 +173,10 @@ function assignFfaDisplayNames(
   p3Human: boolean,
   p4Human: boolean,
   p1Name: string,
-  p2Name: string,
+  p2Name: string
 ): { p1Name: string; p2Name: string; extra0Name: string; extra1Name: string } {
   let botIdx = 0;
-  const nextBotName = (): string =>
-    FFA_BOT_NAMES[botIdx++] ?? `Bot ${botIdx}`;
+  const nextBotName = (): string => FFA_BOT_NAMES[botIdx++] ?? `Bot ${botIdx}`;
 
   return {
     p1Name: p1Human ? p1Name : nextBotName(),
@@ -157,9 +196,10 @@ export function createGameState(args: CreateStateArgs): GameState {
   const p1 = Math.max(minScore, Math.floor(args.p1Points));
   const p2 = Math.max(minScore, Math.floor(args.p2Points));
 
-  const defaultP2Human = !Boolean(args.practiceMode);
+  const defaultP2Human = !args.practiceMode;
   const p1HumanMeta = args.p1Human !== undefined ? Boolean(args.p1Human) : true;
-  const p2HumanMeta = args.p2Human !== undefined ? Boolean(args.p2Human) : defaultP2Human;
+  const p2HumanMeta =
+    args.p2Human !== undefined ? Boolean(args.p2Human) : defaultP2Human;
 
   const state: GameState = {
     cols: GAME_COLS,
@@ -200,7 +240,8 @@ export function createGameState(args: CreateStateArgs): GameState {
       isTournament: args.isTournament ?? false,
       aiTier: args.aiTier ?? 'stacker',
       convergenceMode: args.convergenceMode ?? false,
-      convergenceShrinkInterval: args.convergenceShrinkInterval ?? CONVERGENCE_SHRINK_INTERVAL_TICKS,
+      convergenceShrinkInterval:
+        args.convergenceShrinkInterval ?? CONVERGENCE_SHRINK_INTERVAL_TICKS,
       convergenceMinCols: args.convergenceMinCols ?? CONVERGENCE_MIN_COLS,
       convergenceMinRows: args.convergenceMinRows ?? CONVERGENCE_MIN_ROWS,
       powerupMode: args.powerupMode ?? false,
@@ -212,25 +253,34 @@ export function createGameState(args: CreateStateArgs): GameState {
     activePowerUps: [],
     obstacleWalls: [],
     shrinkBorder: args.convergenceMode
-      ? { top: 0, bottom: GAME_ROWS - 1, left: 0, right: GAME_COLS - 1, warningActive: false }
+      ? {
+          top: 0,
+          bottom: GAME_ROWS - 1,
+          left: 0,
+          right: GAME_COLS - 1,
+          warningActive: false,
+        }
       : null,
     powerUpRespawnCooldownTick: POWERUP_FIRST_SPAWN_TICKS,
     convergenceWallClosed: false,
     extraSnakes: [],
+    controllerTestP1: false,
+    controllerTestP2: false,
+    controllerTestExtra: [],
   };
 
   const teamMode = args.teamMode ?? 'solo';
   const p3Human = args.p3Human === true;
   const p4Human = args.p4Human === true;
   if (teamMode === 'ffa') {
-    const fTier = args.ffaAiTier ?? (args.aiTier ?? 'stacker');
+    const fTier = args.ffaAiTier ?? args.aiTier ?? 'stacker';
     const names = assignFfaDisplayNames(
       p1HumanMeta,
       p2HumanMeta,
       p3Human,
       p4Human,
       args.p1Name,
-      args.p2Name,
+      args.p2Name
     );
     state.p1Name = names.p1Name;
     state.p2Name = names.p2Name;
@@ -242,9 +292,51 @@ export function createGameState(args: CreateStateArgs): GameState {
     state.p2.body = [bodySegmentBehindHead(h2, 'Left')];
     state.p2.dirWanted = 'Left';
     state.extraSnakes = [
-      makeExtraSnake([46, 20], 'Left', 1, FFA_GHOST_COLOR, names.extra0Name, fTier, p3Human),
-      makeExtraSnake([4, 20], 'Right', 1, FFA_SPECTER_COLOR, names.extra1Name, fTier, p4Human),
+      makeExtraSnake(
+        [46, 20],
+        'Left',
+        1,
+        FFA_GHOST_COLOR,
+        names.extra0Name,
+        fTier,
+        p3Human
+      ),
+      makeExtraSnake(
+        [4, 20],
+        'Right',
+        1,
+        FFA_SPECTER_COLOR,
+        names.extra1Name,
+        fTier,
+        p4Human
+      ),
     ];
+    state.controllerTestExtra = [false, false];
+    initFfaEconomy(state, p1, p2);
+  } else if (teamMode === '2v1') {
+    const fTier = args.ffaAiTier ?? args.aiTier ?? 'sovereign';
+    state.p1Name = p1HumanMeta ? args.p1Name : FFA_BOT_NAMES[0];
+    state.p2Name = FFA_BOT_NAMES[1] ?? 'BigToshi 🌊';
+    const h1: GridPos = [4, 4];
+    const h2: GridPos = [46, 4];
+    const h3: GridPos = [25, 20];
+    state.p1.head = h1;
+    state.p1.body = [bodySegmentBehindHead(h1, 'Right')];
+    state.p2.head = h2;
+    state.p2.body = [bodySegmentBehindHead(h2, 'Left')];
+    state.p2.dirWanted = 'Left';
+    state.extraSnakes = [
+      makeExtraSnake(
+        h3,
+        'Up',
+        1,
+        FFA_GHOST_COLOR,
+        FFA_BOT_NAMES[2] ?? 'Nakamotor ⚡',
+        fTier,
+        false
+      ),
+    ];
+    state.controllerTestExtra = [false];
     initFfaEconomy(state, p1, p2);
   }
 
@@ -263,14 +355,14 @@ export function getHudState(state: GameState): HudState {
   const hud: HudState = {
     p1Points: state.score[0],
     p2Points: state.score[1],
-    captureP1: getCaptureLabel(state.p1.body.length, state),
-    captureP2: getCaptureLabel(state.p2.body.length, state),
+    captureP1: getCaptureLabel(state.p1.body.length),
+    captureP2: getCaptureLabel(state.p2.body.length),
     initialWidthP1,
     initialWidthP2,
     currentWidthP1,
     currentWidthP2,
   };
-  if (isFfaMode(state)) {
+  if (isFfaMode(state) || is2v1Mode(state)) {
     hud.ffa = { players: buildFfaHud(state) };
     const scores = hud.ffa.players.map((p) => p.score);
     hud.p1Points = scores[0] ?? hud.p1Points;
@@ -305,6 +397,24 @@ export function applyTerminalGameOutcome(state: GameState): boolean {
   return true;
 }
 
+/** Legacy pre-start “controller test”: any held direction key bobs the snake visually. */
+export function setControllerTestHeld(
+  state: GameState,
+  player: PlayerId,
+  held: boolean
+): void {
+  setControllerTestBySeat(state, player === 'P1' ? 0 : 1, held);
+}
+
+/** FFA P3/P4 (`extraSnakes[0]` / `[1]`). */
+export function setExtraControllerTestHeld(
+  state: GameState,
+  extraIndex: 0 | 1,
+  held: boolean
+): void {
+  setControllerTestBySeat(state, (extraIndex + 2) as GameSeatIndex, held);
+}
+
 export function setWantedDirection(
   state: GameState,
   player: PlayerId,
@@ -320,16 +430,30 @@ export function setWantedDirection(
     return;
   }
   if (player === 'P1') {
-    if (dir === 'Left' && (snake.dir === 'Up' || snake.dir === 'Down')) snake.dirWanted = 'Left';
-    if (dir === 'Right' && (snake.dir === 'Up' || snake.dir === 'Down' || snake.dir === '')) snake.dirWanted = 'Right';
-    if (dir === 'Up' && (snake.dir === 'Left' || snake.dir === 'Right')) snake.dirWanted = 'Up';
-    if (dir === 'Down' && (snake.dir === 'Left' || snake.dir === 'Right')) snake.dirWanted = 'Down';
+    if (dir === 'Left' && (snake.dir === 'Up' || snake.dir === 'Down'))
+      snake.dirWanted = 'Left';
+    if (
+      dir === 'Right' &&
+      (snake.dir === 'Up' || snake.dir === 'Down' || snake.dir === '')
+    )
+      snake.dirWanted = 'Right';
+    if (dir === 'Up' && (snake.dir === 'Left' || snake.dir === 'Right'))
+      snake.dirWanted = 'Up';
+    if (dir === 'Down' && (snake.dir === 'Left' || snake.dir === 'Right'))
+      snake.dirWanted = 'Down';
     return;
   }
-  if (dir === 'Left' && (snake.dir === 'Up' || snake.dir === 'Down' || snake.dir === '')) snake.dirWanted = 'Left';
-  if (dir === 'Right' && (snake.dir === 'Up' || snake.dir === 'Down')) snake.dirWanted = 'Right';
-  if (dir === 'Up' && (snake.dir === 'Left' || snake.dir === 'Right')) snake.dirWanted = 'Up';
-  if (dir === 'Down' && (snake.dir === 'Left' || snake.dir === 'Right')) snake.dirWanted = 'Down';
+  if (
+    dir === 'Left' &&
+    (snake.dir === 'Up' || snake.dir === 'Down' || snake.dir === '')
+  )
+    snake.dirWanted = 'Left';
+  if (dir === 'Right' && (snake.dir === 'Up' || snake.dir === 'Down'))
+    snake.dirWanted = 'Right';
+  if (dir === 'Up' && (snake.dir === 'Left' || snake.dir === 'Right'))
+    snake.dirWanted = 'Up';
+  if (dir === 'Down' && (snake.dir === 'Left' || snake.dir === 'Right'))
+    snake.dirWanted = 'Down';
 }
 
 /** Steer P3/P4 (extraSnakes[0] / extraSnakes[1]) when `humanControlled` is set. */
@@ -346,10 +470,17 @@ export function setExtraSnakeWantedDirection(
     if (dir === spawn) snake.dirWanted = dir;
     return;
   }
-  if (dir === 'Left' && (snake.dir === 'Up' || snake.dir === 'Down' || snake.dir === '')) snake.dirWanted = 'Left';
-  if (dir === 'Right' && (snake.dir === 'Up' || snake.dir === 'Down')) snake.dirWanted = 'Right';
-  if (dir === 'Up' && (snake.dir === 'Left' || snake.dir === 'Right')) snake.dirWanted = 'Up';
-  if (dir === 'Down' && (snake.dir === 'Left' || snake.dir === 'Right')) snake.dirWanted = 'Down';
+  if (
+    dir === 'Left' &&
+    (snake.dir === 'Up' || snake.dir === 'Down' || snake.dir === '')
+  )
+    snake.dirWanted = 'Left';
+  if (dir === 'Right' && (snake.dir === 'Up' || snake.dir === 'Down'))
+    snake.dirWanted = 'Right';
+  if (dir === 'Up' && (snake.dir === 'Left' || snake.dir === 'Right'))
+    snake.dirWanted = 'Up';
+  if (dir === 'Down' && (snake.dir === 'Left' || snake.dir === 'Right'))
+    snake.dirWanted = 'Down';
 }
 
 // ============================================================================
@@ -368,8 +499,11 @@ export function stepGame(state: GameState): TickResult {
     }
 
     // Power-up spawn
-    if (state.meta.powerupMode && state.powerUpItems.length === 0 &&
-        state.tickCount >= state.powerUpRespawnCooldownTick) {
+    if (
+      state.meta.powerupMode &&
+      state.powerUpItems.length === 0 &&
+      state.tickCount >= state.powerUpRespawnCooldownTick
+    ) {
       spawnPowerUp(state);
     }
 
@@ -387,25 +521,30 @@ export function stepGame(state: GameState): TickResult {
 
     for (let i = 0; i < playerCount; i += 1) {
       const index = i as PowerUpPlayerIndex;
+      if (!isPlayerActive(state, index)) continue;
       if (!isPlayerHuman(state, index)) decideAiForPlayer(state, index);
     }
 
     for (let i = 0; i < playerCount; i += 1) {
       const index = i as PowerUpPlayerIndex;
-      if (shouldPlayerMove(state, index)) moveSnake(getSnakeByIndex(state, index));
+      if (!isPlayerActive(state, index)) continue;
+      if (shouldPlayerMove(state, index))
+        moveSnake(getSnakeByIndex(state, index));
       if (hasSurgeDoubleStep(state, index)) doubleStepIndices.push(index);
     }
 
     if (doubleStepIndices.length > 0) {
       runCaptureAndCollisionPass(state);
       for (const index of doubleStepIndices) {
-        if (shouldPlayerMove(state, index)) moveSnake(getSnakeByIndex(state, index));
+        if (!isPlayerActive(state, index)) continue;
+        if (shouldPlayerMove(state, index))
+          moveSnake(getSnakeByIndex(state, index));
       }
     }
 
     runCaptureAndCollisionPass(state);
 
-    if (isFfaMode(state)) {
+    if (isEliminationMode(state)) {
       checkFfaGameEnd(state);
     } else if (state.score[0] <= 0 || state.score[1] <= 0) {
       state.gameEnded = true;
@@ -417,21 +556,21 @@ export function stepGame(state: GameState): TickResult {
         state.winnerName = state.p1Name;
       }
     }
-
   } else if (state.countdownStart) {
     state.countdownTicks += 1;
     if (state.countdownTicks > COUNTDOWN_END_TICK) {
       state.gameStarted = true;
       state.countdownStart = false;
+      clearControllerTests(state);
     }
   }
 
   return {
-    winnerChanged: prevWinner !== state.winnerPlayer && state.winnerPlayer !== null,
+    winnerChanged:
+      prevWinner !== state.winnerPlayer && state.winnerPlayer !== null,
     winnerPlayer: state.winnerPlayer,
   };
 }
-
 
 // ============================================================================
 // Convergence
@@ -440,16 +579,19 @@ export function stepGame(state: GameState): TickResult {
 function tickConvergence(state: GameState): void {
   if (!state.shrinkBorder) return;
 
-  const shrinkInterval = state.meta.convergenceShrinkInterval ?? CONVERGENCE_SHRINK_INTERVAL_TICKS;
-  const warningInterval = Math.max(0, shrinkInterval - CONVERGENCE_WARNING_TICKS);
+  const shrinkInterval =
+    state.meta.convergenceShrinkInterval ?? CONVERGENCE_SHRINK_INTERVAL_TICKS;
+  const warningInterval = Math.max(
+    0,
+    shrinkInterval - CONVERGENCE_WARNING_TICKS
+  );
 
   const phase = state.tickCount % shrinkInterval;
   const shrinkThisTick =
     state.tickCount > 0 && state.tickCount % shrinkInterval === 0;
   // Include the shrink frame: when phase wraps to 0, phase >= warningInterval is false,
   // so without shrinkThisTick the warning would blink off exactly when the border steps.
-  state.shrinkBorder.warningActive =
-    phase >= warningInterval || shrinkThisTick;
+  state.shrinkBorder.warningActive = phase >= warningInterval || shrinkThisTick;
 
   if (shrinkThisTick) {
     advanceShrinkBorder(state);
@@ -512,20 +654,33 @@ export function advanceShrinkBorder(state: GameState): void {
 
   // Extra snakes (teams / FFA): fixed spawn points can end up outside the new border
   for (const extra of state.extraSnakes) {
-    if (outOfBounds(state, extra.snake.head) || hitsObstacle(state, extra.snake.head)) {
+    if (
+      outOfBounds(state, extra.snake.head) ||
+      hitsObstacle(state, extra.snake.head)
+    ) {
       resetExtraSnake(extra, state);
     }
   }
-
 }
 
 /** Returns true when pos is safely inside the active (non-wall) area */
-function isPosInsideActiveBorder(sb: import('./types').ShrinkBorder, pos: GridPos): boolean {
-  return pos[0] > sb.left && pos[0] < sb.right && pos[1] > sb.top && pos[1] < sb.bottom;
+function isPosInsideActiveBorder(
+  sb: import('./types').ShrinkBorder,
+  pos: GridPos
+): boolean {
+  return (
+    pos[0] > sb.left &&
+    pos[0] < sb.right &&
+    pos[1] > sb.top &&
+    pos[1] < sb.bottom
+  );
 }
 
 /** Find a random free cell strictly inside the active border */
-function findSafePosInBorder(state: GameState, sb: import('./types').ShrinkBorder): GridPos | null {
+function findSafePosInBorder(
+  state: GameState,
+  sb: import('./types').ShrinkBorder
+): GridPos | null {
   const minX = sb.left + 1;
   const maxX = sb.right - 1;
   const minY = sb.top + 1;
@@ -540,7 +695,10 @@ function findSafePosInBorder(state: GameState, sb: import('./types').ShrinkBorde
 }
 
 /** Deterministic fallback when random placement fails (crowded small arenas). */
-function scanGridForSafePosInBorder(state: GameState, sb: import('./types').ShrinkBorder): GridPos | null {
+function scanGridForSafePosInBorder(
+  state: GameState,
+  sb: import('./types').ShrinkBorder
+): GridPos | null {
   const minX = sb.left + 1;
   const maxX = sb.right - 1;
   const minY = sb.top + 1;
@@ -585,7 +743,10 @@ export function spawnPowerUp(state: GameState): void {
 
 function weightedRandomPowerUp(): PowerUpType {
   const types = Object.keys(POWERUP_SPAWN_WEIGHTS) as PowerUpType[];
-  const totalWeight = types.reduce((sum, t) => sum + POWERUP_SPAWN_WEIGHTS[t], 0);
+  const totalWeight = types.reduce(
+    (sum, t) => sum + POWERUP_SPAWN_WEIGHTS[t],
+    0
+  );
   let rand = gameRandom() * totalWeight;
   for (const type of types) {
     rand -= POWERUP_SPAWN_WEIGHTS[type];
@@ -606,7 +767,10 @@ function runCaptureAndCollisionPass(state: GameState): void {
 // createNewCoinbase
 // ============================================================================
 
-export function createNewCoinbase(state: GameState, feeValue: number = -1): void {
+export function createNewCoinbase(
+  state: GameState,
+  feeValue: number = -1
+): void {
   if (!state.gameStarted || state.gameEnded) return;
 
   let reward: Coinbase['reward'];
@@ -648,10 +812,18 @@ function moveSnake(snake: GameState['p1']): void {
   snake.body.pop();
   snake.dir = snake.dirWanted;
   switch (snake.dir) {
-    case 'Up':    snake.head[1] -= 1; break;
-    case 'Down':  snake.head[1] += 1; break;
-    case 'Left':  snake.head[0] -= 1; break;
-    case 'Right': snake.head[0] += 1; break;
+    case 'Up':
+      snake.head[1] -= 1;
+      break;
+    case 'Down':
+      snake.head[1] += 1;
+      break;
+    case 'Left':
+      snake.head[0] -= 1;
+      break;
+    case 'Right':
+      snake.head[0] += 1;
+      break;
   }
 }
 
@@ -724,7 +896,7 @@ function checkExtraPassThroughCollision(
   aDir: Direction,
   bDir: Direction,
   dx: number,
-  dy: number,
+  dy: number
 ): void {
   if (
     a.snake.head[0] === b.snake.head[0] + dx &&
@@ -762,11 +934,20 @@ function checkExtraSnakePairCollisions(state: GameState): void {
 function outOfBounds(state: GameState, pos: GridPos): boolean {
   const sb = state.shrinkBorder;
   if (sb) {
-    return pos[0] < sb.left || pos[0] > sb.right || pos[1] < sb.top || pos[1] > sb.bottom;
+    return (
+      pos[0] < sb.left ||
+      pos[0] > sb.right ||
+      pos[1] < sb.top ||
+      pos[1] > sb.bottom
+    );
   }
-  return pos[0] > state.cols - 1 || pos[1] < 0 || pos[1] > state.rows - 1 || pos[0] < 0;
+  return (
+    pos[0] > state.cols - 1 ||
+    pos[1] < 0 ||
+    pos[1] > state.rows - 1 ||
+    pos[0] < 0
+  );
 }
-
 
 function hitsObstacle(state: GameState, pos: GridPos): boolean {
   return state.obstacleWalls.some((w) => samePos(w.pos, pos));
@@ -779,7 +960,7 @@ function hitsObstacle(state: GameState, pos: GridPos): boolean {
 function captureCoinbase(state: GameState): void {
   for (let i = 0; i < state.coinbases.length; i += 1) {
     const cb = state.coinbases[i];
-    if (samePos(state.p1.head, cb.pos)) {
+    if (isPlayerActive(state, 0) && samePos(state.p1.head, cb.pos)) {
       if (cb.isDecoy) {
         // Decoy: teleport P1 back to spawn
         resetSnake(state, 'P1');
@@ -790,10 +971,10 @@ function captureCoinbase(state: GameState): void {
       increaseBody(state.p1);
       if (!cb.reward) createNewCoinbase(state);
       state.coinbases.splice(i, 1);
-      state.currentCaptureP1 = getCaptureLabel(state.p1.body.length, state);
+      state.currentCaptureP1 = getCaptureLabel(state.p1.body.length);
       return;
     }
-    if (samePos(state.p2.head, cb.pos)) {
+    if (isPlayerActive(state, 1) && samePos(state.p2.head, cb.pos)) {
       if (cb.isDecoy) {
         resetSnake(state, 'P2');
         state.coinbases.splice(i, 1);
@@ -803,7 +984,7 @@ function captureCoinbase(state: GameState): void {
       increaseBody(state.p2);
       if (!cb.reward) createNewCoinbase(state);
       state.coinbases.splice(i, 1);
-      state.currentCaptureP2 = getCaptureLabel(state.p2.body.length, state);
+      state.currentCaptureP2 = getCaptureLabel(state.p2.body.length);
       return;
     }
   }
@@ -817,18 +998,23 @@ function increaseBody(snake: GameState['p1']): void {
     if (d === 'Right') snake.body.push([hx - 1, hy]);
     else if (d === 'Left') snake.body.push([hx + 1, hy]);
     else if (d === 'Down') snake.body.push([hx, hy - 1]);
-    else snake.body.push([hx, hy + 1]);  // 'Up' or ''
+    else snake.body.push([hx, hy + 1]); // 'Up' or ''
     return;
   }
   const last = snake.body[snake.body.length - 1];
-  const beforeLast = snake.body.length > 1 ? snake.body[snake.body.length - 2] : snake.head;
+  const beforeLast =
+    snake.body.length > 1 ? snake.body[snake.body.length - 2] : snake.head;
   if (last[0] < beforeLast[0]) snake.body.push([last[0] - 1, last[1]]);
   else if (last[0] > beforeLast[0]) snake.body.push([last[0] + 1, last[1]]);
   else if (last[1] < beforeLast[1]) snake.body.push([last[0], last[1] - 1]);
   else snake.body.push([last[0], last[1] + 1]);
 }
 
-function computeCaptureChange(state: GameState, player: PlayerId, cb: Coinbase): number {
+function computeCaptureChange(
+  state: GameState,
+  player: PlayerId,
+  cb: Coinbase
+): number {
   const index = (player === 'P1' ? 0 : 1) as PowerUpPlayerIndex;
   return computeCaptureChangeForIndex(state, index, cb, state.totalPoints);
 }
@@ -836,7 +1022,7 @@ function computeCaptureChange(state: GameState, player: PlayerId, cb: Coinbase):
 function changeScore(state: GameState, player: PlayerId, cb: Coinbase): void {
   const safeChange = computeCaptureChange(state, player, cb);
 
-  if (isFfaMode(state)) {
+  if (isEliminationMode(state)) {
     const winner = (player === 'P1' ? 0 : 1) as FfaPlayerIndex;
     ffaApplyCaptureAmount(state, winner, safeChange);
     return;
@@ -861,7 +1047,6 @@ function changeScore(state: GameState, player: PlayerId, cb: Coinbase): void {
   }
 }
 
-
 function capturePercentByLength(length: number): number {
   for (const level of CAPTURE_LEVELS) {
     if (length >= level.minLength && length <= level.maxLength) {
@@ -871,7 +1056,7 @@ function capturePercentByLength(length: number): number {
   return 32;
 }
 
-export function getCaptureLabel(length: number, _state?: GameState): string {
+export function getCaptureLabel(length: number): string {
   return `${capturePercentByLength(length)}%`;
 }
 
@@ -943,6 +1128,7 @@ function resetSnake(state: GameState, player: PlayerId): void {
   if (!retainSpeed) {
     clearPowerUpsForPlayer(state, 1);
   }
+  clearSurgeForPlayer(state, 1);
 }
 
 // ============================================================================
@@ -953,7 +1139,11 @@ function hasCollisionAt(state: GameState, pos: GridPos): boolean {
   return hasCollisionAtExceptExtra(state, pos);
 }
 
-function hasCollisionAtExceptExtra(state: GameState, pos: GridPos, excludeExtra?: ExtraSnake): boolean {
+function hasCollisionAtExceptExtra(
+  state: GameState,
+  pos: GridPos,
+  excludeExtra?: ExtraSnake
+): boolean {
   if (samePos(state.p1.head, pos) || samePos(state.p2.head, pos)) return true;
   if (state.p1.body.some((part) => samePos(part, pos))) return true;
   if (state.p2.body.some((part) => samePos(part, pos))) return true;
@@ -972,7 +1162,7 @@ function pickSpawnTail(
   state: GameState,
   head: GridPos,
   primary: Exclude<Direction, ''>,
-  excludeExtra: ExtraSnake,
+  excludeExtra: ExtraSnake
 ): GridPos[] {
   const defaultTail = bodySegmentBehindHead(head, primary);
   if (!hasCollisionAtExceptExtra(state, defaultTail, excludeExtra)) {
@@ -997,15 +1187,33 @@ export function canContinueAfterGame(state: GameState, key: string): boolean {
   if (!state.gameEnded) return false;
   const hasWinner =
     state.winnerPlayer !== null ||
-    (isFfaMode(state) && state.winnerName.length > 0);
+    (isEliminationMode(state) && state.winnerName.length > 0);
   if (!hasWinner) return false;
   const normalized = key.toUpperCase();
-  if (state.meta.practiceMode || state.meta.convergenceMode || state.meta.powerupMode) {
+  if (
+    state.meta.practiceMode ||
+    state.meta.convergenceMode ||
+    state.meta.powerupMode
+  ) {
     return normalized === ' ' || normalized === 'ENTER';
   }
   if (state.winnerPlayer === 'P1') return normalized === ' ';
   if (state.winnerPlayer === 'P2') return normalized === 'ENTER';
   // FFA winner may be an extra snake (no P1/P2 slot) — allow either continue key.
+  return normalized === ' ' || normalized === 'ENTER';
+}
+
+/** Online remote play: either player may continue with Space or Enter on their client. */
+export function canContinueOnlineAfterGame(
+  state: GameState,
+  key: string
+): boolean {
+  if (!state.gameEnded) return false;
+  const hasWinner =
+    state.winnerPlayer !== null ||
+    (isEliminationMode(state) && state.winnerName.length > 0);
+  if (!hasWinner) return false;
+  const normalized = key.toUpperCase();
   return normalized === ' ' || normalized === 'ENTER';
 }
 
@@ -1015,11 +1223,12 @@ export function canContinueAfterGame(state: GameState, key: string): boolean {
 
 function ffaExtraSpawnLayout(
   extra: ExtraSnake,
-  state: GameState,
+  state: GameState
 ): { head: GridPos; body: GridPos[]; dirWanted: Direction } {
   const sb = state.shrinkBorder;
   const conv = Boolean(state.meta.convergenceMode && sb);
-  const isBottomRightSpawn = extra.spawnHead[0] === 46 && extra.spawnHead[1] === 20;
+  const isBottomRightSpawn =
+    extra.spawnHead[0] === 46 && extra.spawnHead[1] === 20;
 
   if (isBottomRightSpawn) {
     let head: GridPos = [46, 20];
@@ -1064,14 +1273,16 @@ function resetExtraSnake(extra: ExtraSnake, state: GameState): void {
     dirWanted = extra.spawnDir;
   }
 
-  const primary: Exclude<Direction, ''> = dirWanted === '' ? 'Right' : dirWanted;
+  const primary: Exclude<Direction, ''> =
+    dirWanted === '' ? 'Right' : dirWanted;
   const body = pickSpawnTail(state, head, primary, extra);
 
   extra.snake.head = head;
   extra.snake.body = body;
   extra.snake.dir = '';
   extra.snake.dirWanted = dirWanted;
-  const extraIndex = (state.extraSnakes.indexOf(extra) + 2) as PowerUpPlayerIndex;
+  const extraIndex = (state.extraSnakes.indexOf(extra) +
+    2) as PowerUpPlayerIndex;
   if (extraIndex >= 2) clearPowerUpsForPlayer(state, extraIndex);
 }
 
@@ -1082,22 +1293,30 @@ function findPathGeneric(
   target: GridPos,
   extraBlocked: Set<string>,
   /** First-step facing for this snake (omit when unknown / no reverse constraint). */
-  facing?: Direction,
+  facing?: Direction
 ): GridPos[] {
   const openSet: GridPos[] = [start];
   const cameFrom = new Map<string, string>();
   const gScore = new Map<string, number>([[posKey(start), 0]]);
-  const fScore = new Map<string, number>([[posKey(start), heuristic(start, target)]]);
+  const fScore = new Map<string, number>([
+    [posKey(start), heuristic(start, target)],
+  ]);
 
   while (openSet.length > 0) {
     let current = openSet[0];
     let currentF = fScore.get(posKey(current)) ?? Number.POSITIVE_INFINITY;
     for (const node of openSet) {
       const f = fScore.get(posKey(node)) ?? Number.POSITIVE_INFINITY;
-      if (f < currentF) { current = node; currentF = f; }
+      if (f < currentF) {
+        current = node;
+        currentF = f;
+      }
     }
     if (samePos(current, target)) return reconstructPath(cameFrom, current);
-    openSet.splice(openSet.findIndex((n) => posKey(n) === posKey(current)), 1);
+    openSet.splice(
+      openSet.findIndex((n) => posKey(n) === posKey(current)),
+      1
+    );
 
     const neighbors: GridPos[] = [
       [current[0] + 1, current[1]],
@@ -1113,7 +1332,8 @@ function findPathGeneric(
         const step = stepDirFromTo(current, nb);
         if (step && dirsAreOpposite(facing, step)) continue;
       }
-      const tentative = (gScore.get(posKey(current)) ?? Number.POSITIVE_INFINITY) + 1;
+      const tentative =
+        (gScore.get(posKey(current)) ?? Number.POSITIVE_INFINITY) + 1;
       if (tentative < (gScore.get(posKey(nb)) ?? Number.POSITIVE_INFINITY)) {
         cameFrom.set(posKey(nb), posKey(current));
         gScore.set(posKey(nb), tentative);
@@ -1127,7 +1347,10 @@ function findPathGeneric(
 
 function captureExtraSnakeCoinbases(state: GameState): void {
   for (const extra of state.extraSnakes) {
-    for (let i = 0; i < state.coinbases.length; i++) {
+    const extraIndex = (state.extraSnakes.indexOf(extra) +
+      2) as FfaPlayerIndex;
+    if (!isPlayerActive(state, extraIndex as PowerUpPlayerIndex)) continue;
+    for (let i = 0; i < state.coinbases.length; i += 1) {
       const cb = state.coinbases[i];
       if (!samePos(extra.snake.head, cb.pos)) continue;
       if (cb.isDecoy) {
@@ -1135,20 +1358,20 @@ function captureExtraSnakeCoinbases(state: GameState): void {
         state.coinbases.splice(i, 1);
         break;
       }
-      const reward = cb.reward ?? 2;
-      if (state.meta.teamMode === 'ffa') {
-        const extraIndex = (state.extraSnakes.indexOf(extra) + 2) as FfaPlayerIndex;
+      if (isEliminationMode(state)) {
         const safeChange = computeCaptureChangeForIndex(
           state,
-          extraIndex,
+          extraIndex as PowerUpPlayerIndex,
           cb,
-          state.totalPoints,
+          state.totalPoints
         );
         ffaApplyCaptureAmount(state, extraIndex, safeChange);
       } else {
-        // Teams: coinbase goes to the extra snake's team score
-        if (extra.teamId === 0) state.score[0] = Math.min(state.totalPoints, state.score[0] + reward);
-        else                    state.score[1] = Math.min(state.totalPoints, state.score[1] + reward);
+        const reward = cb.reward ?? 2;
+        if (extra.teamId === 0)
+          state.score[0] = Math.min(state.totalPoints, state.score[0] + reward);
+        else
+          state.score[1] = Math.min(state.totalPoints, state.score[1] + reward);
       }
       increaseBody(extra.snake);
       if (!cb.reward) createNewCoinbase(state);
@@ -1162,7 +1385,8 @@ function checkExtraSnakeCollisions(state: GameState): void {
   checkExtraSnakePairCollisions(state);
 
   for (const extra of state.extraSnakes) {
-    const extraIndex = (state.extraSnakes.indexOf(extra) + 2) as PowerUpPlayerIndex;
+    const extraIndex = (state.extraSnakes.indexOf(extra) +
+      2) as PowerUpPlayerIndex;
     const hasPhantom = hasPowerUp(state, extraIndex, 'PHANTOM');
 
     if (outOfBounds(state, extra.snake.head)) {
@@ -1175,39 +1399,60 @@ function checkExtraSnakeCollisions(state: GameState): void {
       continue;
     }
     // Self-collision
-    if (!hasPhantom && extra.snake.body.some((p) => samePos(p, extra.snake.head))) {
+    if (
+      !hasPhantom &&
+      extra.snake.body.some((p) => samePos(p, extra.snake.head))
+    ) {
       resetExtraSnake(extra, state);
       continue;
     }
     // Hit P1 body
     if (state.p1.body.some((p) => samePos(p, extra.snake.head))) {
-      resetExtraSnake(extra, state); continue;
+      resetExtraSnake(extra, state);
+      continue;
     }
     // Hit P2 body
     if (state.p2.body.some((p) => samePos(p, extra.snake.head))) {
-      resetExtraSnake(extra, state); continue;
+      resetExtraSnake(extra, state);
+      continue;
     }
     // Hit another extra snake body (head-on handled in checkExtraSnakePairCollisions)
     let hitOtherBody = false;
     for (const other of state.extraSnakes) {
       if (other === extra) continue;
       if (other.snake.body.some((p) => samePos(p, extra.snake.head))) {
-        hitOtherBody = true; break;
+        hitOtherBody = true;
+        break;
       }
     }
-    if (hitOtherBody) { resetExtraSnake(extra, state); continue; }
+    if (hitOtherBody) {
+      resetExtraSnake(extra, state);
+      continue;
+    }
   }
   // P1/P2 heads hitting extra snake bodies
   for (const extra of state.extraSnakes) {
-    if (state.p1.body.length > 0 && extra.snake.body.some((p) => samePos(p, state.p1.head))) {
+    if (
+      state.p1.body.length > 0 &&
+      extra.snake.body.some((p) => samePos(p, state.p1.head))
+    ) {
       resetSnake(state, 'P1');
     }
-    if (state.p2.body.length > 0 && extra.snake.body.some((p) => samePos(p, state.p2.head))) {
+    if (
+      state.p2.body.length > 0 &&
+      extra.snake.body.some((p) => samePos(p, state.p2.head))
+    ) {
       resetSnake(state, 'P2');
     }
     // Head-on collisions
-    if (samePos(state.p1.head, extra.snake.head)) { resetSnake(state, 'P1'); resetExtraSnake(extra, state); }
-    if (samePos(state.p2.head, extra.snake.head)) { resetSnake(state, 'P2'); resetExtraSnake(extra, state); }
+    if (samePos(state.p1.head, extra.snake.head)) {
+      resetSnake(state, 'P1');
+      resetExtraSnake(extra, state);
+    }
+    if (samePos(state.p2.head, extra.snake.head)) {
+      resetSnake(state, 'P2');
+      resetExtraSnake(extra, state);
+    }
   }
 }
 
@@ -1226,13 +1471,19 @@ function isPlayerHuman(state: GameState, index: PowerUpPlayerIndex): boolean {
   return state.extraSnakes[1]!.humanControlled;
 }
 
-function getAiTierForPlayer(state: GameState, index: PowerUpPlayerIndex): AiTier {
+function getAiTierForPlayer(
+  state: GameState,
+  index: PowerUpPlayerIndex
+): AiTier {
   if (index === 2) return state.extraSnakes[0]!.aiTier;
   if (index === 3) return state.extraSnakes[1]!.aiTier;
   return state.meta.aiTier;
 }
 
-function applyInitialAiFacing(state: GameState, playerIndex: PowerUpPlayerIndex): void {
+function applyInitialAiFacing(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex
+): void {
   const snake = getSnakeByIndex(state, playerIndex);
   if (playerIndex === 2 || playerIndex === 3) {
     const extra = state.extraSnakes[playerIndex - 2]!;
@@ -1240,23 +1491,35 @@ function applyInitialAiFacing(state: GameState, playerIndex: PowerUpPlayerIndex)
   }
 }
 
-function applyAiDirToSnake(snake: GameState['p1'], dir: Exclude<Direction, ''>): void {
+function applyAiDirToSnake(
+  snake: GameState['p1'],
+  dir: Exclude<Direction, ''>
+): void {
   const cur = snake.dir;
-  if (dir === 'Down' && (cur === 'Left' || cur === 'Right' || cur === '')) snake.dirWanted = 'Down';
-  else if (dir === 'Up' && (cur === 'Left' || cur === 'Right' || cur === '')) snake.dirWanted = 'Up';
-  else if (dir === 'Right' && (cur === 'Up' || cur === 'Down' || cur === '')) snake.dirWanted = 'Right';
-  else if (dir === 'Left' && (cur === 'Up' || cur === 'Down' || cur === '')) snake.dirWanted = 'Left';
+  if (dir === 'Down' && (cur === 'Left' || cur === 'Right' || cur === ''))
+    snake.dirWanted = 'Down';
+  else if (dir === 'Up' && (cur === 'Left' || cur === 'Right' || cur === ''))
+    snake.dirWanted = 'Up';
+  else if (dir === 'Right' && (cur === 'Up' || cur === 'Down' || cur === ''))
+    snake.dirWanted = 'Right';
+  else if (dir === 'Left' && (cur === 'Up' || cur === 'Down' || cur === ''))
+    snake.dirWanted = 'Left';
 }
 
-function blockedSetSelfOnlyForPlayer(state: GameState, playerIndex: PowerUpPlayerIndex): Set<string> {
+function blockedSetSelfOnlyForPlayer(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex
+): Set<string> {
   const blocked = new Set<string>();
-  getSnakeByIndex(state, playerIndex).body.forEach((p) => blocked.add(posKey(p)));
+  getSnakeByIndex(state, playerIndex).body.forEach((p) =>
+    blocked.add(posKey(p))
+  );
   return blocked;
 }
 
 function nearestCoinbaseForPlayer(
   state: GameState,
-  playerIndex: PowerUpPlayerIndex,
+  playerIndex: PowerUpPlayerIndex
 ): GridPos | null {
   const head = getPlayerHead(state, playerIndex);
   let best: GridPos | null = null;
@@ -1276,7 +1539,7 @@ function findStackerPathForPlayer(
   state: GameState,
   playerIndex: PowerUpPlayerIndex,
   start: GridPos,
-  target: GridPos,
+  target: GridPos
 ): GridPos[] {
   const snake = getSnakeByIndex(state, playerIndex);
   const facing = snake.dir || snake.dirWanted;
@@ -1285,7 +1548,7 @@ function findStackerPathForPlayer(
     start,
     target,
     blockedSetSelfOnlyForPlayer(state, playerIndex),
-    facing || undefined,
+    facing || undefined
   );
 }
 
@@ -1293,7 +1556,7 @@ function findStackerPathForPlayer(
 function applyStackerPathToPlayer(
   state: GameState,
   playerIndex: PowerUpPlayerIndex,
-  path: GridPos[],
+  path: GridPos[]
 ): void {
   if (path.length < 2) return;
   const next = path[1];
@@ -1313,7 +1576,10 @@ function applyStackerPathToPlayer(
   if (dir) applyAiDirToSnake(snake, dir);
 }
 
-function blockedSetForPlayer(state: GameState, playerIndex: PowerUpPlayerIndex): Set<string> {
+function blockedSetForPlayer(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex
+): Set<string> {
   const blocked = new Set<string>();
   const add = (p: GridPos) => blocked.add(posKey(p));
   const self = getSnakeByIndex(state, playerIndex);
@@ -1321,6 +1587,7 @@ function blockedSetForPlayer(state: GameState, playerIndex: PowerUpPlayerIndex):
   const count = activePlayerCount(state);
   for (let i = 0; i < count; i += 1) {
     if (i === playerIndex) continue;
+    if (!isPlayerActive(state, i as PowerUpPlayerIndex)) continue;
     const s = getSnakeByIndex(state, i as PowerUpPlayerIndex);
     add(s.head);
     s.body.forEach(add);
@@ -1332,7 +1599,7 @@ function findPathForPlayer(
   state: GameState,
   playerIndex: PowerUpPlayerIndex,
   start: GridPos,
-  target: GridPos,
+  target: GridPos
 ): GridPos[] {
   const snake = getSnakeByIndex(state, playerIndex);
   const facing = snake.dir || snake.dirWanted;
@@ -1341,20 +1608,21 @@ function findPathForPlayer(
     start,
     target,
     blockedSetForPlayer(state, playerIndex),
-    facing || undefined,
+    facing || undefined
   );
 }
 
 function applyPathToPlayer(
   state: GameState,
   playerIndex: PowerUpPlayerIndex,
-  path: GridPos[],
+  path: GridPos[]
 ): void {
   if (path.length < 2) return;
   const next = path[1];
   const count = activePlayerCount(state);
   for (let i = 0; i < count; i += 1) {
     if (i === playerIndex) continue;
+    if (!isPlayerActive(state, i as PowerUpPlayerIndex)) continue;
     const s = getSnakeByIndex(state, i as PowerUpPlayerIndex);
     if (s.body.some((p) => samePos(p, next))) return;
     if (samePos(s.head, next)) return;
@@ -1369,27 +1637,79 @@ function applyPathToPlayer(
   if (dir) applyAiDirToSnake(snake, dir);
 }
 
+function snakeLengthForPlayer(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex
+): number {
+  return getSnakeByIndex(state, playerIndex).body.length;
+}
+
+/** Expected sats stolen from one food at current length (+1 segment after eat). */
+function expectedSatsForFood(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex,
+  _cb: Coinbase
+): number {
+  const lenAfter = snakeLengthForPlayer(state, playerIndex) + 1;
+  const pct = capturePercentByLength(lenAfter);
+  return Math.floor((state.totalPoints * pct) / 100);
+}
+
+function scoreCoinForPlayer(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex,
+  cb: Coinbase,
+  contestHuman: boolean
+): number {
+  const head = getPlayerHead(state, playerIndex);
+  const path = findPathForPlayer(state, playerIndex, head, cb.pos);
+  const ticks = Math.max(1, path.length - 1);
+  const expectedSats = expectedSatsForFood(state, playerIndex, cb);
+  let score = expectedSats / ticks + (cb.reward ?? 2) * 2;
+
+  const curLen = snakeLengthForPlayer(state, playerIndex);
+  const curPct = capturePercentByLength(curLen);
+  const nextPct = capturePercentByLength(curLen + 1);
+  if (nextPct > curPct) score += expectedSats * 0.75;
+
+  const count = activePlayerCount(state);
+  let nearestRival = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < count; i += 1) {
+    if (i === playerIndex) continue;
+    if (!isPlayerActive(state, i as PowerUpPlayerIndex)) continue;
+    const rivalHead = getPlayerHead(state, i as PowerUpPlayerIndex);
+    const d = Math.hypot(cb.pos[0] - rivalHead[0], cb.pos[1] - rivalHead[1]);
+    if (d < nearestRival) nearestRival = d;
+  }
+  const distAi = Math.hypot(cb.pos[0] - head[0], cb.pos[1] - head[1]);
+  score += nearestRival - distAi;
+
+  if (contestHuman && isPlayerActive(state, 0)) {
+    const p1Len = snakeLengthForPlayer(state, 0);
+    if (p1Len >= 6) {
+      const p1Dist = Math.hypot(
+        cb.pos[0] - state.p1.head[0],
+        cb.pos[1] - state.p1.head[1]
+      );
+      if (p1Dist < distAi + 4) score += expectedSats * 0.5;
+    }
+  }
+
+  return score;
+}
+
 function chooseBestCoinbaseForPlayer(
   state: GameState,
   playerIndex: PowerUpPlayerIndex,
+  contestHuman = false
 ): GridPos | null {
   if (state.coinbases.length === 0) return null;
-  const head = getPlayerHead(state, playerIndex);
-  const count = activePlayerCount(state);
   let best: GridPos | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
 
   for (const cb of state.coinbases) {
     if (cb.isDecoy) continue;
-    const distAi = Math.hypot(cb.pos[0] - head[0], cb.pos[1] - head[1]);
-    let nearestRival = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < count; i += 1) {
-      if (i === playerIndex) continue;
-      const rivalHead = getPlayerHead(state, i as PowerUpPlayerIndex);
-      const d = Math.hypot(cb.pos[0] - rivalHead[0], cb.pos[1] - rivalHead[1]);
-      if (d < nearestRival) nearestRival = d;
-    }
-    const score = nearestRival - distAi + (cb.reward ? cb.reward * 2 : 0);
+    const score = scoreCoinForPlayer(state, playerIndex, cb, contestHuman);
     if (score > bestScore) {
       bestScore = score;
       best = cb.pos;
@@ -1398,7 +1718,10 @@ function chooseBestCoinbaseForPlayer(
   return best;
 }
 
-function decideNormieForPlayer(state: GameState, playerIndex: PowerUpPlayerIndex): void {
+function decideNormieForPlayer(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex
+): void {
   const snake = getSnakeByIndex(state, playerIndex);
   const dirs: Exclude<Direction, ''>[] = ['Up', 'Down', 'Left', 'Right'];
   const safe = dirs.filter((d) => !wouldHitWall(state, snake, d));
@@ -1420,14 +1743,17 @@ function decideNormieForPlayer(state: GameState, playerIndex: PowerUpPlayerIndex
   applyAiDirToSnake(snake, safe[Math.floor(gameRandom() * safe.length)]);
 }
 
-function decideStackerForPlayer(state: GameState, playerIndex: PowerUpPlayerIndex): void {
+function decideStackerForPlayer(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex
+): void {
   const head = getPlayerHead(state, playerIndex);
   const target = nearestCoinbaseForPlayer(state, playerIndex);
   if (!target) return;
   applyStackerPathToPlayer(
     state,
     playerIndex,
-    findStackerPathForPlayer(state, playerIndex, head, target),
+    findStackerPathForPlayer(state, playerIndex, head, target)
   );
 }
 
@@ -1435,16 +1761,24 @@ function decideEconomyChaseForPlayer(
   state: GameState,
   playerIndex: PowerUpPlayerIndex,
   chasePowerUps: boolean,
+  contestHuman = false
 ): void {
   const head = getPlayerHead(state, playerIndex);
   const snake = getSnakeByIndex(state, playerIndex);
 
   if (chasePowerUps && state.meta.powerupMode) {
     const nearbyPowerUp = state.powerUpItems.find(
-      (p) => Math.hypot(p.pos[0] - head[0], p.pos[1] - head[1]) < POWER_UP_CHASE_RANGE,
+      (p) =>
+        Math.hypot(p.pos[0] - head[0], p.pos[1] - head[1]) <
+        POWER_UP_CHASE_RANGE
     );
     if (nearbyPowerUp) {
-      const path = findPathForPlayer(state, playerIndex, head, nearbyPowerUp.pos);
+      const path = findPathForPlayer(
+        state,
+        playerIndex,
+        head,
+        nearbyPowerUp.pos
+      );
       if (path.length > 1) {
         applyPathToPlayer(state, playerIndex, path);
         return;
@@ -1452,7 +1786,16 @@ function decideEconomyChaseForPlayer(
     }
   }
 
-  const bestCoinbase = chooseBestCoinbaseForPlayer(state, playerIndex);
+  const contest =
+    contestHuman ||
+    (isEliminationMode(state) &&
+      playerIndex !== 0 &&
+      snakeLengthForPlayer(state, 0) >= 6);
+  const bestCoinbase = chooseBestCoinbaseForPlayer(
+    state,
+    playerIndex,
+    contest
+  );
   if (bestCoinbase) {
     const path = findPathForPlayer(state, playerIndex, head, bestCoinbase);
     if (path.length > 1) {
@@ -1467,8 +1810,15 @@ function decideEconomyChaseForPlayer(
 }
 
 /** Classic 1v1 sovereign intercept (P2 bot); P1 bot uses temporary P1/P2 swap. */
-function decideSovereignDuelLegacy(state: GameState, botIndex: PowerUpPlayerIndex): boolean {
-  if (isFfaMode(state) || activePlayerCount(state) !== 2) return false;
+function decideSovereignDuelLegacy(
+  state: GameState,
+  botIndex: PowerUpPlayerIndex
+): boolean {
+  if (isEliminationMode(state)) {
+    decideEconomyChaseForPlayer(state, botIndex, true, true);
+    return true;
+  }
+  if (activePlayerCount(state) !== 2) return false;
   if (botIndex === 1) {
     decideSovereign(state);
     return true;
@@ -1482,7 +1832,10 @@ function decideSovereignDuelLegacy(state: GameState, botIndex: PowerUpPlayerInde
   return false;
 }
 
-export function decideAiForPlayer(state: GameState, playerIndex: PowerUpPlayerIndex): void {
+export function decideAiForPlayer(
+  state: GameState,
+  playerIndex: PowerUpPlayerIndex
+): void {
   const snake = getSnakeByIndex(state, playerIndex);
   if (snake.dir === '') {
     applyInitialAiFacing(state, playerIndex);
@@ -1501,7 +1854,7 @@ export function decideAiForPlayer(state: GameState, playerIndex: PowerUpPlayerIn
       break;
     case 'sovereign':
       if (!decideSovereignDuelLegacy(state, playerIndex)) {
-        decideEconomyChaseForPlayer(state, playerIndex, true);
+        decideEconomyChaseForPlayer(state, playerIndex, true, true);
       }
       break;
     default:
@@ -1509,42 +1862,11 @@ export function decideAiForPlayer(state: GameState, playerIndex: PowerUpPlayerIn
   }
 }
 
-/** Normie: mostly random with light wall avoidance */
-function decideNormie(state: GameState): void {
-  const dirs: Exclude<Direction, ''>[] = ['Up', 'Down', 'Left', 'Right'];
-  const safe = dirs.filter((d) => !wouldHitWall(state, state.p2, d));
-  if (safe.length === 0) return;
-
-  // 60% chance to just pick a random safe direction
-  if (gameRandom() < 0.6) {
-    const random = safe[Math.floor(gameRandom() * safe.length)];
-    applyAiDir(state, random);
-    return;
-  }
-
-  // Otherwise head vaguely toward nearest coinbase
-  const target = state.coinbases[0]?.pos;
-  if (target) {
-    const preferred = preferredDirToward(state.p2.head, target);
-    if (safe.includes(preferred)) {
-      applyAiDir(state, preferred);
-      return;
-    }
-  }
-  applyAiDir(state, safe[Math.floor(gameRandom() * safe.length)]);
-}
-
-/** Stacker: A* toward nearest coinbase */
-function decideStacker(state: GameState): void {
-  const path = findPathP2(state);
-  applyPathToAi(state, path);
-}
-
 const SOVEREIGN_INTERCEPT_RANGE = 10;
 const SOVEREIGN_INTERCEPT_COMMIT_RANGE = 20;
 const SOVEREIGN_INTERCEPT_PATH_SLACK = 2;
 const SOVEREIGN_COIN_CONTEST_SLACK = 6;
-const SOVEREIGN_PREDICT_STEPS = 4;
+const SOVEREIGN_PREDICT_STEPS = 8;
 const SOVEREIGN_TAIL_SIM_MAX_STEPS = 12;
 
 interface SovereignIntercept {
@@ -1560,7 +1882,10 @@ interface SovereignInterceptPlan {
   strategy: 'head-race' | 'tail-block';
 }
 
-const sovereignInterceptPlans = new WeakMap<GameState, SovereignInterceptPlan>();
+const sovereignInterceptPlans = new WeakMap<
+  GameState,
+  SovereignInterceptPlan
+>();
 
 interface SimSnake {
   head: GridPos;
@@ -1585,7 +1910,11 @@ function snakeBodyOccupies(snake: SimSnake, cell: GridPos): boolean {
   return snake.body.some((p) => samePos(p, cell));
 }
 
-function botHeadMoveSafe(state: GameState, head: GridPos, p1Head: GridPos): boolean {
+function botHeadMoveSafe(
+  state: GameState,
+  head: GridPos,
+  p1Head: GridPos
+): boolean {
   if (samePos(head, p1Head)) return false;
   if (state.p1.body.some((p) => samePos(head, p))) return false;
   return true;
@@ -1608,7 +1937,9 @@ function sovereignPrefersTailBlock(state: GameState): boolean {
 /** Bot always avoids P1 body; head-race alone may target P1's head cell. */
 type PlayerPathAvoidance = 'none' | 'head-and-body' | 'body-only';
 
-function sovereignPathAvoidance(strategy: SovereignIntercept['strategy']): PlayerPathAvoidance {
+function sovereignPathAvoidance(
+  strategy: SovereignIntercept['strategy']
+): PlayerPathAvoidance {
   return strategy === 'head-race' ? 'body-only' : 'head-and-body';
 }
 
@@ -1628,11 +1959,20 @@ function findPlayerFoodPath(state: GameState, coinTarget: GridPos): GridPos[] {
   state.p2.body.forEach(add);
   add(state.p2.head);
   const facing = state.p1.dir || state.p1.dirWanted;
-  return findPathGeneric(state, state.p1.head, coinTarget, blocked, facing || undefined);
+  return findPathGeneric(
+    state,
+    state.p1.head,
+    coinTarget,
+    blocked,
+    facing || undefined
+  );
 }
 
 /** Candidate head destinations: past the choke on P1's route + flank cells. */
-function collectTailBlockHeadTargets(p1Path: GridPos[], blockIndex: number): GridPos[] {
+function collectTailBlockHeadTargets(
+  p1Path: GridPos[],
+  blockIndex: number
+): GridPos[] {
   const block = p1Path[blockIndex]!;
   const targets: GridPos[] = [];
   if (blockIndex + 1 < p1Path.length) targets.push(p1Path[blockIndex + 1]!);
@@ -1659,7 +1999,7 @@ function evaluateTailBlockAlongPath(
   botPath: GridPos[],
   p1Path: GridPos[],
   blockCell: GridPos,
-  playerStepsToBlock: number,
+  playerStepsToBlock: number
 ): { bodyCoverStep: number } | null {
   const sim = cloneSimSnake(state.p2);
   const maxSteps = Math.min(botPath.length - 1, SOVEREIGN_TAIL_SIM_MAX_STEPS);
@@ -1685,7 +2025,7 @@ function evaluateTailBlockAlongPath(
 function findTailBlockIntercept(
   state: GameState,
   p1Path: GridPos[],
-  p2Start: GridPos,
+  p2Start: GridPos
 ): SovereignIntercept | null {
   let best: SovereignIntercept | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
@@ -1700,7 +2040,13 @@ function findTailBlockIntercept(
       if (botPath.length <= 1) continue;
       if (!botPath.some((p) => samePos(p, blockCell))) continue;
 
-      const tailBlock = evaluateTailBlockAlongPath(state, botPath, p1Path, blockCell, i);
+      const tailBlock = evaluateTailBlockAlongPath(
+        state,
+        botPath,
+        p1Path,
+        blockCell,
+        i
+      );
       if (!tailBlock) continue;
 
       const score = tailBlock.bodyCoverStep * 10 + botPath.length;
@@ -1720,7 +2066,7 @@ function findTailBlockIntercept(
 function findHeadRaceIntercept(
   state: GameState,
   p1Path: GridPos[],
-  p2Start: GridPos,
+  p2Start: GridPos
 ): SovereignIntercept | null {
   let best: SovereignIntercept | null = null;
   let bestBotSteps = Number.POSITIVE_INFINITY;
@@ -1732,7 +2078,11 @@ function findHeadRaceIntercept(
     const botSteps = botPath.length - 1;
     if (botSteps <= i + 1 && botSteps < bestBotSteps) {
       bestBotSteps = botSteps;
-      best = { headTarget: candidate, blockCell: candidate, strategy: 'head-race' };
+      best = {
+        headTarget: candidate,
+        blockCell: candidate,
+        strategy: 'head-race',
+      };
     }
   }
 
@@ -1740,12 +2090,14 @@ function findHeadRaceIntercept(
 
   const fallbackIdx = Math.min(SOVEREIGN_PREDICT_STEPS, p1Path.length - 1);
   const cell = p1Path[fallbackIdx];
-  return cell ? { headTarget: cell, blockCell: cell, strategy: 'head-race' } : null;
+  return cell
+    ? { headTarget: cell, blockCell: cell, strategy: 'head-race' }
+    : null;
 }
 
 function findSovereignInterceptTarget(
   state: GameState,
-  coinTarget: GridPos,
+  coinTarget: GridPos
 ): SovereignIntercept | null {
   const p1Path = findPlayerFoodPath(state, coinTarget);
   if (p1Path.length <= 1) return null;
@@ -1762,10 +2114,11 @@ function shouldStartSovereignIntercept(
   state: GameState,
   coinTarget: GridPos,
   coinPath: GridPos[],
-  interceptPath: GridPos[],
+  interceptPath: GridPos[]
 ): boolean {
   if (interceptPath.length <= 1) return false;
-  if (gridDist(state.p1.head, state.p2.head) > SOVEREIGN_INTERCEPT_RANGE) return false;
+  if (gridDist(state.p1.head, state.p2.head) > SOVEREIGN_INTERCEPT_RANGE)
+    return false;
 
   const distP1Coin = gridDist(state.p1.head, coinTarget);
   const distP2Coin = gridDist(state.p2.head, coinTarget);
@@ -1775,11 +2128,17 @@ function shouldStartSovereignIntercept(
   const interceptWorthwhile =
     interceptPath.length <= coinPath.length + SOVEREIGN_INTERCEPT_PATH_SLACK;
 
-  return interceptWorthwhile && (playerWinningRace || interceptPath.length <= coinPath.length);
+  return (
+    interceptWorthwhile &&
+    (playerWinningRace || interceptPath.length <= coinPath.length)
+  );
 }
 
 /** P1 is still trying for the coin — not a full retreat. */
-function playerStillContestingCoin(state: GameState, coinTarget: GridPos): boolean {
+function playerStillContestingCoin(
+  state: GameState,
+  coinTarget: GridPos
+): boolean {
   const distP1Coin = gridDist(state.p1.head, coinTarget);
   const distP2Coin = gridDist(state.p2.head, coinTarget);
   if (distP1Coin > SOVEREIGN_INTERCEPT_COMMIT_RANGE) return false;
@@ -1790,8 +2149,14 @@ function isHoldingBlockCell(state: GameState, blockCell: GridPos): boolean {
   return gridDist(state.p2.head, blockCell) <= 1;
 }
 
-function sovereignInterceptMoveTarget(state: GameState, plan: SovereignInterceptPlan): GridPos {
-  if (plan.strategy === 'tail-block' && !bodyOccupiesCell(state.p2, plan.blockCell)) {
+function sovereignInterceptMoveTarget(
+  state: GameState,
+  plan: SovereignInterceptPlan
+): GridPos {
+  if (
+    plan.strategy === 'tail-block' &&
+    !bodyOccupiesCell(state.p2, plan.blockCell)
+  ) {
     return plan.headTarget;
   }
   return plan.blockCell;
@@ -1801,13 +2166,18 @@ function shouldContinueSovereignIntercept(
   state: GameState,
   plan: SovereignInterceptPlan,
   interceptPath: GridPos[],
-  coinTarget: GridPos,
+  coinTarget: GridPos
 ): boolean {
   if (!playerStillContestingCoin(state, coinTarget)) return false;
-  if (plan.strategy === 'tail-block' && bodyOccupiesCell(state.p2, plan.blockCell)) return false;
+  if (
+    plan.strategy === 'tail-block' &&
+    bodyOccupiesCell(state.p2, plan.blockCell)
+  )
+    return false;
   if (isHoldingBlockCell(state, plan.blockCell)) return true;
   if (interceptPath.length <= 1) return false;
-  if (gridDist(state.p1.head, state.p2.head) > SOVEREIGN_INTERCEPT_COMMIT_RANGE) return false;
+  if (gridDist(state.p1.head, state.p2.head) > SOVEREIGN_INTERCEPT_COMMIT_RANGE)
+    return false;
   return true;
 }
 
@@ -1826,10 +2196,16 @@ function applyHoldAtBlockCell(state: GameState, blockCell: GridPos): void {
 /** Best coin + nearby power-ups, avoids P1 snake. Shared by Tactician and Sovereign fallback. */
 function decideEconomyChase(state: GameState): void {
   const nearbyPowerUp = state.powerUpItems.find(
-    (p) => Math.hypot(p.pos[0] - state.p2.head[0], p.pos[1] - state.p2.head[1]) < 6
+    (p) =>
+      Math.hypot(p.pos[0] - state.p2.head[0], p.pos[1] - state.p2.head[1]) < 6
   );
   if (nearbyPowerUp) {
-    const path = findPath(state, state.p2.head, nearbyPowerUp.pos, 'head-and-body');
+    const path = findPath(
+      state,
+      state.p2.head,
+      nearbyPowerUp.pos,
+      'head-and-body'
+    );
     if (path.length > 1) {
       applyPathToAi(state, path);
       return;
@@ -1850,16 +2226,14 @@ function decideEconomyChase(state: GameState): void {
   if (safe.length > 0) applyAiDir(state, safe[0]);
 }
 
-/** Noderunner: economy bot — best coin, power-ups, avoids P1. No intercept. */
-function decideNoderunner(state: GameState): void {
-  decideEconomyChase(state);
-}
-
 /** Sovereign: economy play + intercept when racing P1 for the best coin. */
 function decideSovereign(state: GameState): void {
-  const coinTarget = chooseBestCoinbaseForAi(state) ?? nearestCoinbaseTarget(state);
+  const coinTarget =
+    chooseBestCoinbaseForAi(state) ?? nearestCoinbaseTarget(state);
   const start: GridPos = [state.p2.head[0], state.p2.head[1]];
-  const coinPath = coinTarget ? findPath(state, start, coinTarget, 'head-and-body') : [start];
+  const coinPath = coinTarget
+    ? findPath(state, start, coinTarget, 'head-and-body')
+    : [start];
 
   const existingPlan = sovereignInterceptPlans.get(state);
   if (existingPlan?.mode === 'intercept' && coinTarget) {
@@ -1871,7 +2245,9 @@ function decideSovereign(state: GameState): void {
     const avoidance = sovereignPathAvoidance(plan.strategy);
     const interceptPath = findPath(state, start, moveTarget, avoidance);
 
-    if (shouldContinueSovereignIntercept(state, plan, interceptPath, coinTarget)) {
+    if (
+      shouldContinueSovereignIntercept(state, plan, interceptPath, coinTarget)
+    ) {
       if (interceptPath.length >= 2) {
         applyPathToAi(state, interceptPath);
       } else if (isHoldingBlockCell(state, plan.blockCell)) {
@@ -1888,11 +2264,20 @@ function decideSovereign(state: GameState): void {
     sovereignInterceptPlans.delete(state);
   }
 
-  const intercept = coinTarget ? findSovereignInterceptTarget(state, coinTarget) : null;
+  const intercept = coinTarget
+    ? findSovereignInterceptTarget(state, coinTarget)
+    : null;
   if (intercept && coinTarget) {
     const avoidance = sovereignPathAvoidance(intercept.strategy);
-    const interceptPath = findPath(state, start, intercept.headTarget, avoidance);
-    if (shouldStartSovereignIntercept(state, coinTarget, coinPath, interceptPath)) {
+    const interceptPath = findPath(
+      state,
+      start,
+      intercept.headTarget,
+      avoidance
+    );
+    if (
+      shouldStartSovereignIntercept(state, coinTarget, coinPath, interceptPath)
+    ) {
       applyPathToAi(state, interceptPath);
       sovereignInterceptPlans.set(state, {
         mode: 'intercept',
@@ -1909,22 +2294,7 @@ function decideSovereign(state: GameState): void {
 }
 
 function chooseBestCoinbaseForAi(state: GameState): GridPos | null {
-  if (state.coinbases.length === 0) return null;
-
-  let best: GridPos | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
-
-  for (const cb of state.coinbases) {
-    if (cb.isDecoy) continue;
-    const distAi = Math.hypot(cb.pos[0] - state.p2.head[0], cb.pos[1] - state.p2.head[1]);
-    const distPlayer = Math.hypot(cb.pos[0] - state.p1.head[0], cb.pos[1] - state.p1.head[1]);
-    const score = distPlayer - distAi + (cb.reward ? cb.reward * 2 : 0);
-    if (score > bestScore) {
-      bestScore = score;
-      best = cb.pos;
-    }
-  }
-  return best;
+  return chooseBestCoinbaseForPlayer(state, 1, true);
 }
 
 function applyPathToAi(state: GameState, path: GridPos[]): void {
@@ -1958,7 +2328,10 @@ function dirsAreOpposite(a: Direction, b: Direction): boolean {
   );
 }
 
-function stepDirFromTo(from: GridPos, to: GridPos): Exclude<Direction, ''> | null {
+function stepDirFromTo(
+  from: GridPos,
+  to: GridPos
+): Exclude<Direction, ''> | null {
   if (to[0] > from[0]) return 'Right';
   if (to[0] < from[0]) return 'Left';
   if (to[1] > from[1]) return 'Down';
@@ -1966,7 +2339,11 @@ function stepDirFromTo(from: GridPos, to: GridPos): Exclude<Direction, ''> | nul
   return null;
 }
 
-function wouldHitWall(state: GameState, snake: GameState['p1'], dir: Direction): boolean {
+function wouldHitWall(
+  state: GameState,
+  snake: GameState['p1'],
+  dir: Direction
+): boolean {
   const facing = snake.dir || snake.dirWanted;
   if (facing && dir && dirsAreOpposite(facing, dir)) return true;
   const next: GridPos = [snake.head[0], snake.head[1]];
@@ -1974,11 +2351,17 @@ function wouldHitWall(state: GameState, snake: GameState['p1'], dir: Direction):
   else if (dir === 'Down') next[1] += 1;
   else if (dir === 'Left') next[0] -= 1;
   else if (dir === 'Right') next[0] += 1;
-  return outOfBounds(state, next) || hitsObstacle(state, next) ||
-    snake.body.some((p) => samePos(p, next));
+  return (
+    outOfBounds(state, next) ||
+    hitsObstacle(state, next) ||
+    snake.body.some((p) => samePos(p, next))
+  );
 }
 
-function preferredDirToward(from: GridPos, to: GridPos): Exclude<Direction, ''> {
+function preferredDirToward(
+  from: GridPos,
+  to: GridPos
+): Exclude<Direction, ''> {
   const dx = to[0] - from[0];
   const dy = to[1] - from[1];
   if (Math.abs(dx) >= Math.abs(dy)) return dx > 0 ? 'Right' : 'Left';
@@ -1989,35 +2372,36 @@ function preferredDirToward(from: GridPos, to: GridPos): Exclude<Direction, ''> 
 // Pathfinding
 // ============================================================================
 
-function findPathP2(state: GameState, avoidPlayer = false): GridPos[] {
-  const start: GridPos = [state.p2.head[0], state.p2.head[1]];
-  const target = state.coinbases.find((cb) => !cb.isDecoy)?.pos;
-  if (!target) return [start];
-  return findPath(state, start, target, avoidPlayer ? 'head-and-body' : 'none');
-}
-
 function findPath(
   state: GameState,
   start: GridPos,
   target: GridPos,
-  playerAvoidance: PlayerPathAvoidance = 'none',
+  playerAvoidance: PlayerPathAvoidance = 'none'
 ): GridPos[] {
   const openSet: GridPos[] = [start];
   const cameFrom = new Map<string, string>();
   const gScore = new Map<string, number>([[posKey(start), 0]]);
-  const fScore = new Map<string, number>([[posKey(start), heuristic(start, target)]]);
+  const fScore = new Map<string, number>([
+    [posKey(start), heuristic(start, target)],
+  ]);
 
   while (openSet.length > 0) {
     let current = openSet[0];
     let currentF = fScore.get(posKey(current)) ?? Number.POSITIVE_INFINITY;
     for (const node of openSet) {
       const score = fScore.get(posKey(node)) ?? Number.POSITIVE_INFINITY;
-      if (score < currentF) { current = node; currentF = score; }
+      if (score < currentF) {
+        current = node;
+        currentF = score;
+      }
     }
 
     if (samePos(current, target)) return reconstructPath(cameFrom, current);
 
-    openSet.splice(openSet.findIndex((n) => posKey(n) === posKey(current)), 1);
+    openSet.splice(
+      openSet.findIndex((n) => posKey(n) === posKey(current)),
+      1
+    );
 
     const neighbors: GridPos[] = [
       [current[0] + 1, current[1]],
@@ -2030,20 +2414,32 @@ function findPath(
       if (outOfBounds(state, neighbor)) continue;
       if (hitsObstacle(state, neighbor)) continue;
       if (state.p2.body.some((p) => samePos(p, neighbor))) continue;
-      if (playerAvoidance !== 'none' && state.p1.body.some((p) => samePos(p, neighbor))) continue;
-      if (playerAvoidance === 'head-and-body' && samePos(state.p1.head, neighbor)) continue;
+      if (
+        playerAvoidance !== 'none' &&
+        state.p1.body.some((p) => samePos(p, neighbor))
+      )
+        continue;
+      if (
+        playerAvoidance === 'head-and-body' &&
+        samePos(state.p1.head, neighbor)
+      )
+        continue;
       if (samePos(current, start) && samePos(start, state.p2.head)) {
         const facing = state.p2.dir || state.p2.dirWanted;
         const step = stepDirFromTo(current, neighbor);
         if (facing && step && dirsAreOpposite(facing, step)) continue;
       }
 
-      const tentative = (gScore.get(posKey(current)) ?? Number.POSITIVE_INFINITY) + 1;
-      if (tentative < (gScore.get(posKey(neighbor)) ?? Number.POSITIVE_INFINITY)) {
+      const tentative =
+        (gScore.get(posKey(current)) ?? Number.POSITIVE_INFINITY) + 1;
+      if (
+        tentative < (gScore.get(posKey(neighbor)) ?? Number.POSITIVE_INFINITY)
+      ) {
         cameFrom.set(posKey(neighbor), posKey(current));
         gScore.set(posKey(neighbor), tentative);
         fScore.set(posKey(neighbor), tentative + heuristic(neighbor, target));
-        if (!openSet.some((n) => posKey(n) === posKey(neighbor))) openSet.push(neighbor);
+        if (!openSet.some((n) => posKey(n) === posKey(neighbor)))
+          openSet.push(neighbor);
       }
     }
   }
@@ -2058,7 +2454,10 @@ function posKey(pos: GridPos): string {
   return `${pos[0]}:${pos[1]}`;
 }
 
-function reconstructPath(cameFrom: Map<string, string>, current: GridPos): GridPos[] {
+function reconstructPath(
+  cameFrom: Map<string, string>,
+  current: GridPos
+): GridPos[] {
   const path: GridPos[] = [[current[0], current[1]]];
   let cursor = posKey(current);
   while (cameFrom.has(cursor)) {
@@ -2090,4 +2489,3 @@ export function getMetaFromDuel(
   }
   return { modeLabel: mode || 'P2P', practiceMode: false, isTournament: false };
 }
-

@@ -12,7 +12,7 @@ export type ChallengeCatalogEntry = {
   id: string;
   rank: number;
   name: string;
-  format: '1v1' | '4P FFA';
+  format: '1v1' | '4P FFA' | '2v1';
   aiTier: 'normie' | 'stacker' | 'noderunner' | 'sovereign';
   powerup: boolean;
   bountySats: number;
@@ -21,11 +21,11 @@ export type ChallengeCatalogEntry = {
 /** Server source of truth for practice challenge bounties. */
 export const CHALLENGE_CATALOG: ChallengeCatalogEntry[] = [
   { id: 'normie', rank: 1, name: 'NORMIE DUEL', format: '1v1', aiTier: 'normie', powerup: false, bountySats: 21 },
-  { id: 'stacker', rank: 2, name: 'STACKER TRIAL', format: '1v1', aiTier: 'stacker', powerup: false, bountySats: 210 },
-  { id: 'noderunner', rank: 3, name: 'NODE RUNNER', format: '1v1', aiTier: 'noderunner', powerup: true, bountySats: 420 },
-  { id: 'gauntlet', rank: 4, name: 'SOVEREIGN GAUNTLET', format: '1v1', aiTier: 'sovereign', powerup: false, bountySats: 1337 },
-  { id: 'ffa', rank: 5, name: 'FFA RUMBLE', format: '4P FFA', aiTier: 'noderunner', powerup: false, bountySats: 2100 },
-  { id: 'sovereign-stack', rank: 6, name: 'SOVEREIGN STACK', format: '1v1', aiTier: 'sovereign', powerup: true, bountySats: 4200 },
+  { id: 'stacker', rank: 2, name: 'STACKER TRIAL', format: '1v1', aiTier: 'stacker', powerup: false, bountySats: 50 },
+  { id: 'noderunner', rank: 3, name: 'NODE RUNNER', format: '1v1', aiTier: 'noderunner', powerup: true, bountySats: 210 },
+  { id: 'ffa', rank: 4, name: 'FFA RUMBLE', format: '4P FFA', aiTier: 'noderunner', powerup: false, bountySats: 600 },
+  { id: 'gauntlet', rank: 5, name: 'SOVEREIGN GAUNTLET', format: '1v1', aiTier: 'sovereign', powerup: false, bountySats: 1337 },
+  { id: 'sovereign-stack', rank: 6, name: 'TWIN GAUNTLET', format: '2v1', aiTier: 'sovereign', powerup: false, bountySats: 6900 },
 ];
 
 export function getChallengeById(id: string): ChallengeCatalogEntry | undefined {

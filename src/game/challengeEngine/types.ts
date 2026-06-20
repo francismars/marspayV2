@@ -62,7 +62,7 @@ export interface ActivePowerUp {
   chargesLeft?: number;
 }
 
-export type TeamMode = 'solo' | 'ffa';
+export type TeamMode = 'solo' | 'ffa' | '2v1';
 
 export interface ExtraSnake {
   snake: SnakeState;
@@ -138,6 +138,12 @@ export interface GameState {
   extraSnakes: ExtraSnake[];
   /** FFA: per-player starting sats (P1, P2, P3, P4). */
   ffaInitialScores?: [number, number, number, number];
+  /** FFA / 2v1: player eliminated when sats hit 0. */
+  ffaEliminated?: [boolean, boolean, boolean, boolean];
+  /** Pre-start controller test (replay engine stub). */
+  controllerTestP1?: boolean;
+  controllerTestP2?: boolean;
+  controllerTestExtra?: boolean[];
 }
 
 export interface FfaHudPlayer {
