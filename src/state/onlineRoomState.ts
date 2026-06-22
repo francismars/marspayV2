@@ -43,6 +43,7 @@ import {
   removeOnlineSeatLightningForSession,
   listOnlineSeatLightningRecordsForRoom,
 } from './onlineSeatLightningState';
+import { getAppNostrPubkeyForSession } from './nostrAppSessionState';
 
 const PIN_TTL_MS = 2 * 60 * 1000;
 /** Home / NIP-07 path: pubkey linked to session before zap (no PIN in comment). */
@@ -423,6 +424,59 @@ export function listOnlineRooms(): OnlineRoomListItem[] {
   }));
 }
 
+/** Re-bind a paid seat when the client reconnects with a new sessionID but same Nostr/Lightning pubkey. */
+function tryReclaimPaidSeatOnJoin(
+  room: OnlineRoom,
+  roomId: string,
+  sessionID: string,
+  socketID: string
+): boolean {
+  const claimPubkeys = new Set<string>();
+  const appPk = getAppNostrPubkeyForSession(sessionID);
+  if (appPk) {
+    claimPubkeys.add(appPk.toLowerCase());
+  }
+  const lnRec = peekOnlineSeatLightningForSession(sessionID);
+  if (lnRec?.zapPubkeyHex) {
+    claimPubkeys.add(lnRec.zapPubkeyHex.toLowerCase());
+  }
+  if (claimPubkeys.size === 0) {
+    return false;
+  }
+
+  for (const [role, seat] of room.seats.entries()) {
+    if (seat.status !== 'paid' || seat.sessionID === sessionID) {
+      continue;
+    }
+    const seatPk = seat.pubkey?.toLowerCase();
+    if (!seatPk || !claimPubkeys.has(seatPk)) {
+      continue;
+    }
+    const oldSessionID = seat.sessionID;
+    if (oldSessionID && room.members.has(oldSessionID)) {
+      continue;
+    }
+    if (oldSessionID) {
+      roomIdBySession.delete(oldSessionID);
+      room.spectators.delete(oldSessionID);
+    }
+    room.seats.set(role, {
+      ...seat,
+      sessionID,
+      socketID,
+      disconnectedAt: undefined,
+      ready: false,
+    });
+    room.spectators.delete(sessionID);
+    roomIdBySession.set(sessionID, roomId);
+    logOnlineState(
+      `reclaimed paid seat roomId=${roomId} role=${role} session=${sessionID} pubkey=${seatPk.slice(0, 8)}…`
+    );
+    return true;
+  }
+  return false;
+}
+
 export function joinRoom(
   roomId: string,
   sessionID: string,
@@ -440,11 +494,16 @@ export function joinRoom(
     lastSeen: now,
   });
   room.spectators.add(sessionID);
+  let seated = false;
   for (const [role, seat] of room.seats.entries()) {
     if (seat.sessionID === sessionID) {
       room.seats.set(role, { ...seat, socketID, disconnectedAt: undefined });
       room.spectators.delete(sessionID);
+      seated = true;
     }
+  }
+  if (!seated) {
+    tryReclaimPaidSeatOnJoin(room, roomId, sessionID, socketID);
   }
   room.updatedAt = now;
   roomIdBySession.set(sessionID, roomId);
@@ -973,6 +1032,19 @@ export function seatPaidPlayer(params: {
     payMethod: params.payMethod,
   });
   room.spectators.delete(params.sessionID);
+  roomIdBySession.set(params.sessionID, params.roomId);
+  const member = room.members.get(params.sessionID);
+  if (member) {
+    member.socketID = params.socketID;
+    member.lastSeen = now;
+  } else {
+    room.members.set(params.sessionID, {
+      sessionID: params.sessionID,
+      socketID: params.socketID,
+      joinedAt: now,
+      lastSeen: now,
+    });
+  }
   syncAuthoritativePlayers(room.roomId);
   room.updatedAt = now;
   logOnlineState(

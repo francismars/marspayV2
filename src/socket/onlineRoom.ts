@@ -404,6 +404,14 @@ export function getOnlineRoomStateHandler(
   const room = getRoomById(payload.roomId);
   if (room) {
     logOnline(sessionID, `getOnlineRoomState roomId=${room.roomId} phase=${room.phase}`);
+    if (sessionID) {
+      const joined = joinRoom(payload.roomId, sessionID, socket.id);
+      socket.join(payload.roomId);
+      socket.data.currentOnlineRoomId = payload.roomId;
+      if (joined?.matchStarted) {
+        publishOnlineMatchStarted(payload.roomId, sessionID);
+      }
+    }
     socket.emit('onlineRoomUpdated', serializeRoom(room, viewer));
     return;
   }
