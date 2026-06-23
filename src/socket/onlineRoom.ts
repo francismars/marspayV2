@@ -32,6 +32,7 @@ import getLNURLCallback from '../calls/LNAddress/getLNURLCallback';
 import getInvoiceFromCallback from '../calls/LNAddress/getInvoiceFromCallback';
 import payInvoice from '../calls/LNBits/payInvoice';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
+import { onlineGamePublicUrl, onlineLobbyPublicUrl } from '../consts/gamePublicUrl';
 import { GameMode, PlayerRole } from '../types/game';
 import type { OnlineRoomListItem } from '../types/online';
 import { io } from '../server';
@@ -173,11 +174,11 @@ async function publishOnlineThreadReply(
   sessionID: string,
   content: string,
   mentions?: OnlineSeatMention[]
-) {
+): Promise<string | undefined> {
   const root = room.kind1EventId;
   const parent = nostrThreadParent(room);
   if (!root || !parent) {
-    return;
+    return undefined;
   }
   const eventId = await publishOnlineKind1Reply({
     sessionID,
@@ -190,6 +191,7 @@ async function publishOnlineThreadReply(
   if (eventId) {
     advanceNostrThreadTip(room.roomId, eventId);
   }
+  return eventId;
 }
 
 function publishOnlineMatchStarted(roomId: string, sessionID: string) {
@@ -199,10 +201,19 @@ function publishOnlineMatchStarted(roomId: string, sessionID: string) {
   }
   const mentions = getSeatMentions(room.roomId);
   const vsLine = `${formatOnlinePlayerNostrLabel(mentions[0] ?? { name: 'Player 1' })} vs ${formatOnlinePlayerNostrLabel(mentions[1] ?? { name: 'Player 2' })}`;
+  const lobbyUrl = onlineLobbyPublicUrl(room.roomId);
+  const gameUrl = onlineGamePublicUrl(room.roomId);
   void publishOnlineThreadReply(
     room,
     sessionID,
-    `ONLINE MATCH STARTED · room ${room.roomCode}\n${vsLine}\nSpectators can now watch live.`,
+    [
+      `ONLINE MATCH STARTED · room ${room.roomCode}`,
+      vsLine,
+      'Spectators can now watch live.',
+      '',
+      `Watch live: ${gameUrl}`,
+      `Lobby: ${lobbyUrl}`,
+    ].join('\n'),
     mentions
   );
 }
@@ -271,6 +282,7 @@ export async function createOnlineRoomHandler(
         hostLNAddress: payload?.hostLNAddress,
         numberOfPlayers: 2,
         roomCode: room.roomCode,
+        roomId: room.roomId,
       });
       logOnline(sessionID, `publishGameKind1 returned roomId=${room.roomId}`);
       const kind1 = getKind1sfromSessionID(sessionID)?.slice(-1)[0];
@@ -797,13 +809,38 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
         winnerRole === PlayerRole.Player1 ? PlayerRole.Player2 : PlayerRole.Player1;
       const loserSeat = loserRole ? room.seats.get(loserRole) : undefined;
       const requiredAmount = Math.max(1, Math.floor(room.postGame.winnerPoints * ONLINE_PAYOUT_MULTIPLIER));
+      const mentions = getSeatMentions(room.roomId);
+      const loserLabel = formatOnlinePlayerNostrLabel({
+        pubkey: loserSeat?.payMethod === 'lightning' ? undefined : loserSeat?.pubkey,
+        name: loserSeat?.name ?? 'the losing player',
+        payMethod: loserSeat?.payMethod,
+      });
+      const lobbyUrl = onlineLobbyPublicUrl(room.roomId);
       void (async () => {
         try {
+          await publishOnlineThreadReply(
+            room,
+            sessionID,
+            [
+              `DOUBLE OR NOTHING · room ${room.roomCode}`,
+              'Both players agreed to a rematch.',
+              `Waiting for ${loserLabel} to pay ${requiredAmount} sats.`,
+              '',
+              `Join / spectate: ${lobbyUrl}`,
+            ].join('\n'),
+            mentions
+          );
+          const liveForRematch = getRoomById(room.roomId);
+          if (!liveForRematch?.kind1EventId) {
+            logOnline(sessionID, `onlineDoubleOrNothing rematch skipped roomId=${room.roomId} reason=kind1_missing`);
+            return;
+          }
           const published = await publishOnlineRematchKind1({
             sessionID,
-            rootEventId: room.kind1EventId,
-            parentEventId: nostrThreadParent(room),
-            roomCode: room.roomCode,
+            rootEventId: liveForRematch.kind1EventId,
+            parentEventId: nostrThreadParent(liveForRematch),
+            roomId: liveForRematch.roomId,
+            roomCode: liveForRematch.roomCode,
             amount: requiredAmount,
             loserPubkey: loserSeat?.pubkey,
             loserName: loserSeat?.name,

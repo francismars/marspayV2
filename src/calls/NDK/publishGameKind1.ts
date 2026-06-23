@@ -1,6 +1,7 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools';
 import { ALLOWEDEMOJIS } from '../../consts/emojis';
+import { onlineLobbyPublicUrl } from '../../consts/gamePublicUrl';
 import { BUYINMAX, BUYINMIN, ONLINE_BUYIN_DEFAULT } from '../../consts/values';
 import { getGameInfoFromID } from '../../state/gameState';
 import { appendKind1toSessionID, getKind1sfromSessionID, setKind1IDtoSessionID } from '../../state/nostrState';
@@ -21,6 +22,7 @@ interface PublishGameKind1Opts {
   numberOfPlayers?: number;
   tournamentStatus?: 'open' | 'full' | 'round';
   roomCode?: string;
+  roomId?: string;
 }
 
 export async function publishGameKind1(sessionID: string, opts: PublishGameKind1Opts = {}) {
@@ -123,7 +125,17 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
       ndkEvent.content = `TOURNAMENT UPDATE ${emojis}.\nGame ${winnerLength} result: ${winnerMention} defeated ${loserMention}.\n${winnerMention} advances to the next round.\nFollow this thread for the next matchup and final champion.`;
     }
   } else if (mode === GameMode.ONLINE) {
-    ndkEvent.content = `CHAIN DUEL ONLINE ROOM\nRoom code: ${opts.roomCode ?? 'N/A'}.\nBuy-In: ${value} sats.\nFirst 2 valid zaps get Player 1 and Player 2.`;
+    const roomCode = opts.roomCode ?? 'N/A';
+    const lines = [
+      `CHAIN DUEL ONLINE ROOM`,
+      `Room code: ${roomCode}.`,
+      `Buy-In: ${value} sats.`,
+      `First 2 valid zaps get Player 1 and Player 2.`,
+    ];
+    if (opts.roomId) {
+      lines.push('', `Join / spectate: ${onlineLobbyPublicUrl(opts.roomId)}`);
+    }
+    ndkEvent.content = lines.join('\n');
   } else if (!winnerLength) {
     ndkEvent.content = `CHAIN DUEL P2P NOSTR MODE.\nGAMEID: ${emojis}.\nZap a minimum of ${value} sats to register.`;
   } else {

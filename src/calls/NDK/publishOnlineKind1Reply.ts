@@ -52,10 +52,11 @@ export async function publishOnlineKind1Reply(
   const parentId = opts.parentEventId?.trim() || opts.rootEventId;
   const ndkEvent = new NDKEvent(ndkInstance);
   ndkEvent.kind = 1;
-  ndkEvent.tags = [['e', opts.rootEventId, '', 'root']];
-  if (parentId !== opts.rootEventId) {
-    ndkEvent.tags.push(['e', parentId, '', 'reply']);
-  }
+  // NIP-10: always tag root + immediate parent so clients render a linear thread.
+  ndkEvent.tags = [
+    ['e', opts.rootEventId, '', 'root'],
+    ['e', parentId, '', 'reply'],
+  ];
   const validMentions = (opts.mentions ?? []).filter((mention) => !!mention.pubkey || !!mention.name);
   const dedupedMentions: OnlineReplyMention[] = [];
   const seen = new Set<string>();

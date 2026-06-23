@@ -1,5 +1,6 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools';
+import { onlineLobbyPublicUrl } from '../../consts/gamePublicUrl';
 import { appendKind1toSessionID, setKind1IDtoSessionID } from '../../state/nostrState';
 import { GameMode } from '../../types/game';
 import { dateNow } from '../../utils/time';
@@ -13,6 +14,7 @@ interface PublishOnlineRematchKind1Opts {
   rootEventId?: string;
   /** Parent note in the linear thread (e.g. match result). */
   parentEventId?: string;
+  roomId: string;
   roomCode: string;
   amount: number;
   loserPubkey?: string;
@@ -39,10 +41,8 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
     ['zap-max', String(opts.amount * 1000)],
     ['zap-uses', '1'],
     ['e', opts.rootEventId, '', 'root'],
+    ['e', parentId, '', 'reply'],
   ];
-  if (parentId && parentId !== opts.rootEventId) {
-    ndkEvent.tags.push(['e', parentId, '', 'reply']);
-  }
   if (pinNostrIdentity && opts.loserPubkey) {
     ndkEvent.tags.push(['p', opts.loserPubkey, '', 'mention']);
   }
@@ -50,7 +50,13 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
     ? `nostr:${nip19.npubEncode(opts.loserPubkey!)}`
     : opts.loserName?.trim() || 'the losing player';
   const roomCode = opts.roomCode.trim().toUpperCase() || 'N/A';
-  ndkEvent.content = `ONLINE REMATCH · room ${roomCode}\nDouble or Nothing accepted.\nWaiting for ${loserLabel} to zap exactly ${opts.amount} sats to continue.`;
+  const lobbyUrl = onlineLobbyPublicUrl(opts.roomId);
+  ndkEvent.content = [
+    `ONLINE REMATCH · room ${roomCode}`,
+    `Waiting for ${loserLabel} to zap exactly ${opts.amount} sats to continue.`,
+    '',
+    `Join / spectate: ${lobbyUrl}`,
+  ].join('\n');
   await ndkEvent.publish();
   setKind1IDtoSessionID(ndkEvent.id, opts.sessionID);
   const note1 = nip19.noteEncode(ndkEvent.id);
