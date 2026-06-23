@@ -26,6 +26,7 @@ import {
   getDailyZapBudgetRemaining,
   recordDailyZapSpend,
   getChallengeById,
+  getUnusedClaimTokenForRun,
   isAnonymousRunPubkey,
   type ChallengeInputEntry,
 } from '../state/challengeState';
@@ -139,6 +140,37 @@ export async function requestChallengeRunHandler(
   });
 }
 
+function emitSubmitChallengeWinOk(
+  socket: Socket,
+  params: {
+    claimToken: string;
+    claimExpiresAt: number;
+    noteContent: string;
+    noteTags: string[][];
+    bountySats: number;
+    challengeName: string;
+  }
+) {
+  socket.emit('resSubmitChallengeWin', { ok: true, ...params });
+}
+
+function emitExistingClaimToken(
+  socket: Socket,
+  run: NonNullable<ReturnType<typeof getChallengeRun>>
+): boolean {
+  const existing = getUnusedClaimTokenForRun(run.runId);
+  if (!existing || hasClaimedRun(run.runId)) return false;
+  emitSubmitChallengeWinOk(socket, {
+    claimToken: existing.token,
+    claimExpiresAt: existing.expiresAt,
+    noteContent: existing.noteContent,
+    noteTags: existing.noteTags,
+    bountySats: existing.bountySats,
+    challengeName: run.config.name,
+  });
+  return true;
+}
+
 export async function submitChallengeWinHandler(
   socket: Socket,
   payload: {
@@ -147,6 +179,8 @@ export async function submitChallengeWinHandler(
     countdownStartTick?: number;
   }
 ) {
+  const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : '';
+  try {
   const sessionID = socket.data.sessionID as string | undefined;
   if (!sessionID) {
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'no_session' });
@@ -158,7 +192,6 @@ export async function submitChallengeWinHandler(
   }
   const appSession = getAppNostrSession(sessionID);
 
-  const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : '';
   const run = getChallengeRun(runId);
   if (!run) {
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_not_found' });
@@ -172,11 +205,13 @@ export async function submitChallengeWinHandler(
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_expired' });
     return;
   }
+  if (run.status === 'won') {
+    if (emitExistingClaimToken(socket, run)) return;
+    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_already_won' });
+    return;
+  }
   if (run.status !== 'active') {
-    socket.emit('resSubmitChallengeWin', {
-      ok: false,
-      reason: run.status === 'won' ? 'run_already_won' : 'run_not_active',
-    });
+    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_not_active' });
     return;
   }
   if (hasClaimedRun(runId)) {
@@ -223,6 +258,7 @@ export async function submitChallengeWinHandler(
     );
   }
 
+  const replayStartedAt = Date.now();
   const replay = replayChallengeWin({
     seed: run.seed,
     challenge: run.config,
@@ -230,6 +266,7 @@ export async function submitChallengeWinHandler(
     countdownStartTick:
       typeof payload?.countdownStartTick === 'number' ? payload.countdownStartTick : undefined,
   });
+  const replayMs = Date.now() - replayStartedAt;
 
   if (!replay.ok) {
     recordChallengeOutcome({
@@ -238,7 +275,7 @@ export async function submitChallengeWinHandler(
       replayReason: replay.reason,
     });
     console.log(
-      `${dateNow()} [CHALLENGE_WIN] replay_failed runId=${runId} challenge=${run.challengeId} reason=${replay.reason} debug=${JSON.stringify(replay.debug ?? {})} telemetry=${JSON.stringify(getChallengeTelemetrySnapshot().byChallenge[run.challengeId] ?? {})}`
+      `${dateNow()} [CHALLENGE_WIN] replay_failed runId=${runId} challenge=${run.challengeId} replayMs=${replayMs} reason=${replay.reason} debug=${JSON.stringify(replay.debug ?? {})} telemetry=${JSON.stringify(getChallengeTelemetrySnapshot().byChallenge[run.challengeId] ?? {})}`
     );
     socket.emit('resSubmitChallengeWin', { ok: false, reason: replay.reason, debug: replay.debug });
     return;
@@ -246,7 +283,7 @@ export async function submitChallengeWinHandler(
 
   recordChallengeOutcome({ challengeId: run.challengeId, outcome: 'win' });
   console.log(
-    `${dateNow()} [CHALLENGE_WIN] replay_ok runId=${runId} challenge=${run.challengeId} simSteps=${replay.simSteps} tickCount=${replay.tickCount} telemetry=${JSON.stringify(getChallengeTelemetrySnapshot().byChallenge[run.challengeId] ?? {})}`
+    `${dateNow()} [CHALLENGE_WIN] replay_ok runId=${runId} challenge=${run.challengeId} replayMs=${replayMs} simSteps=${replay.simSteps} tickCount=${replay.tickCount} telemetry=${JSON.stringify(getChallengeTelemetrySnapshot().byChallenge[run.challengeId] ?? {})}`
   );
 
   markRunWon(runId, inputLog, payload?.countdownStartTick ?? 0);
@@ -259,8 +296,7 @@ export async function submitChallengeWinHandler(
     noteTags,
   });
 
-  socket.emit('resSubmitChallengeWin', {
-    ok: true,
+  emitSubmitChallengeWinOk(socket, {
     claimToken: claim.token,
     claimExpiresAt: claim.expiresAt,
     noteContent: claim.noteContent,
@@ -268,6 +304,13 @@ export async function submitChallengeWinHandler(
     bountySats: run.bountySats,
     challengeName: run.config.name,
   });
+  } catch (error) {
+    console.error(
+      `${dateNow()} [CHALLENGE_WIN] handler_error runId=${runId}`,
+      error
+    );
+    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'server_error' });
+  }
 }
 
 export async function claimChallengeBountyHandler(

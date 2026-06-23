@@ -87,6 +87,7 @@ export type ChallengeClaimRecord = {
 
 const runsById = new Map<string, ChallengeRunRecord>();
 const claimTokensByToken = new Map<string, ClaimTokenRecord>();
+const claimTokenByRunId = new Map<string, string>();
 const claimsByKey = new Map<string, ChallengeClaimRecord>();
 const paidRunIds = new Set<string>();
 
@@ -200,7 +201,16 @@ export function createClaimToken(params: {
     used: false,
   };
   claimTokensByToken.set(token, record);
+  claimTokenByRunId.set(params.run.runId, token);
   return record;
+}
+
+export function getUnusedClaimTokenForRun(runId: string): ClaimTokenRecord | undefined {
+  const token = claimTokenByRunId.get(runId);
+  if (!token) return undefined;
+  const rec = claimTokensByToken.get(token);
+  if (!rec || rec.used || rec.expiresAt < Date.now()) return undefined;
+  return rec;
 }
 
 export function consumeClaimToken(token: string): ClaimTokenRecord | undefined {
