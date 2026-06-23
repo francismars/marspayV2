@@ -1,22 +1,63 @@
-import type { Server } from 'socket.io';
+import type { Server, Socket } from 'socket.io';
 import { spawnBlockRewardCoinbase } from '../game/onlineEngine';
 import { dateNow } from '../utils/time';
 import {
   fetchLatestMempoolTipBlock,
   MEMPOOL_API_HOSTS,
   resolveMempoolApiHosts,
+  type MempoolBlockInfo,
 } from './mempoolApi';
 import { forEachPlayingOnlineRoom } from './onlineRoomState';
 import { pruneOnlineSnapshotForWire } from './onlineSnapshotWire';
 
-/** Same cadence as chain-duel-react `startMempoolFeed`. */
+/** Same cadence as marspay mempool poll interval. */
 const MEMPOOL_POLL_MS = 5000;
 /** Log repeated poll failures at most once per minute. */
 const POLL_FAILURE_LOG_EVERY = 12;
 
+export interface MempoolTipWirePayload {
+  height: number;
+  timestamp: number;
+  size: number;
+  tx_count: number;
+  extras?: MempoolBlockInfo['extras'];
+  isNewBlock: boolean;
+}
+
+let cachedTip: MempoolBlockInfo | null = null;
+
+function toWirePayload(
+  block: MempoolBlockInfo,
+  isNewBlock: boolean
+): MempoolTipWirePayload {
+  return {
+    height: block.height,
+    timestamp: block.timestamp,
+    size: block.size,
+    tx_count: block.tx_count,
+    extras: block.extras,
+    isNewBlock,
+  };
+}
+
+function emitMempoolTip(
+  io: Server,
+  block: MempoolBlockInfo,
+  isNewBlock: boolean
+): void {
+  cachedTip = block;
+  io.emit('mempoolTip', toWirePayload(block, isNewBlock));
+}
+
+/** Send the latest cached tip to a newly connected client (footer init). */
+export function emitCachedMempoolTipToSocket(socket: Socket): void {
+  if (!cachedTip) return;
+  socket.emit('mempoolTip', toWirePayload(cachedTip, false));
+}
+
 /**
- * Polls mempool mirrors for a new tip block; on height increase, spawns a bonus (or plain)
- * coinbase in every `playing` online room and pushes a pruned snapshot + effect event.
+ * Polls mempool mirrors for tip block updates. Broadcasts `mempoolTip` to all
+ * sockets for footer UI; on height increase, spawns coinbase in online rooms.
  */
 export function startMempoolBlockWatcher(io: Server): void {
   let latestHeight = -1;
@@ -60,12 +101,14 @@ export function startMempoolBlockWatcher(io: Server): void {
 
       if (latestHeight === -1) {
         latestHeight = height;
+        emitMempoolTip(io, block, false);
         return;
       }
       if (height <= latestHeight) {
         return;
       }
       latestHeight = height;
+      emitMempoolTip(io, block, true);
 
       forEachPlayingOnlineRoom((room) => {
         const spawned = spawnBlockRewardCoinbase(room.snapshot.state, medianFeeSatPerVb);

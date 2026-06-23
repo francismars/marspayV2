@@ -1,17 +1,28 @@
-/** Keep in sync with chain-duel-react `src/game/io/mempool.ts` `MEMPOOL_API_HOSTS`. */
+/** Public mempool.space mirrors polled server-side only. */
 export const MEMPOOL_API_HOSTS = [
   'https://mempool.space',
   'https://mempool.emzy.de',
   'https://mempool.bitaroo.net',
 ] as const;
 
-export interface MempoolTipBlock {
+export interface MempoolBlockInfo {
   height: number;
-  extras?: { medianFee?: number };
+  timestamp: number;
+  size: number;
+  tx_count: number;
+  extras?: {
+    medianFee?: number;
+    pool?: {
+      name?: string;
+    };
+  };
 }
 
+/** @deprecated use MempoolBlockInfo */
+export type MempoolTipBlock = Pick<MempoolBlockInfo, 'height' | 'extras'>;
+
 export interface MempoolTipBlockResult {
-  block: MempoolTipBlock;
+  block: MempoolBlockInfo;
   host: string;
 }
 
@@ -27,19 +38,37 @@ export function resolveMempoolApiHosts(): string[] {
   return [normalized, ...hosts.filter((host) => host !== normalized)];
 }
 
+function isValidBlock(block: unknown): block is MempoolBlockInfo {
+  if (!block || typeof block !== 'object') return false;
+  const b = block as MempoolBlockInfo;
+  return (
+    typeof b.height === 'number' &&
+    Number.isFinite(b.height) &&
+    typeof b.timestamp === 'number'
+  );
+}
+
+async function fetchBlockFromHost(host: string): Promise<MempoolBlockInfo | null> {
+  const tipHash = (await fetchText(`${host}/api/blocks/tip/hash`)).trim();
+  if (!tipHash) return null;
+  const block = (await fetchJson(`${host}/api/v1/block/${tipHash}`)) as MempoolBlockInfo;
+  return isValidBlock(block) ? block : null;
+}
+
+export async function fetchLatestMempoolBlock(
+  hosts: readonly string[] = resolveMempoolApiHosts()
+): Promise<MempoolBlockInfo | null> {
+  const result = await fetchLatestMempoolTipBlock(hosts);
+  return result?.block ?? null;
+}
+
 export async function fetchLatestMempoolTipBlock(
   hosts: readonly string[] = resolveMempoolApiHosts()
 ): Promise<MempoolTipBlockResult | null> {
   for (const host of hosts) {
     try {
-      const tipHash = (await fetchText(`${host}/api/blocks/tip/hash`)).trim();
-      if (!tipHash) {
-        continue;
-      }
-      const block = (await fetchJson(
-        `${host}/api/v1/block/${tipHash}`
-      )) as MempoolTipBlock;
-      if (typeof block?.height === 'number' && Number.isFinite(block.height)) {
+      const block = await fetchBlockFromHost(host);
+      if (block) {
         return { block, host };
       }
     } catch {

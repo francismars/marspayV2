@@ -10,7 +10,10 @@ import { getTournamentMenuInfos } from './tournament';
 import { cancelTournament } from './cancelTournament';
 import { getNostrP2PMenuInfos } from './nostrP2PMenu';
 import { getTournamentNostrInfos } from './nostrTournament';
-import { startMempoolBlockWatcher } from '../state/mempoolBlockWatcher';
+import {
+  emitCachedMempoolTipToSocket,
+  startMempoolBlockWatcher,
+} from '../state/mempoolBlockWatcher';
 import {
   cancelOnlineRoomHandler,
   createOnlineNostrPayoutHandler,
@@ -81,6 +84,7 @@ export default function registerSocketHandlers(io: Server) {
   });
 
   io.on('connection', (socket: Socket) => {
+    emitCachedMempoolTipToSocket(socket);
     emitAppNostrSession(socket);
 
     socket.on('requestAppNostrLinkChallenge', () => {
