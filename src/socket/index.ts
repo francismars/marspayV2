@@ -351,6 +351,10 @@ export default function registerSocketHandlers(io: Server) {
       cancelOnlineSeatLightningHandler(socket);
     });
 
+    socket.on('requestMempoolTip', () => {
+      emitCachedMempoolTipToSocket(socket);
+    });
+
     socket.on('disconnect', () => {
       const sessionID = socket.data.sessionID as string | undefined;
       if (sessionID) {
