@@ -62,6 +62,8 @@ import {
   submitChallengeWinHandler,
 } from './challengeBounty';
 import type { AppNostrSignerMode } from '../state/nostrAppSessionState';
+import { trackEvent } from '../telemetry/trackEvent';
+import { reportClientEventHandler } from '../telemetry/clientTelemetry';
 
 function guardSocketAsync<T extends unknown[]>(
   socket: Socket,
@@ -355,9 +357,25 @@ export default function registerSocketHandlers(io: Server) {
       emitCachedMempoolTipToSocket(socket);
     });
 
+    socket.on(
+      'reportClientEvent',
+      (payload?: { event?: string; route?: string; detail?: string }) => {
+        reportClientEventHandler(socket, payload);
+      }
+    );
+
     socket.on('disconnect', () => {
       const sessionID = socket.data.sessionID as string | undefined;
       if (sessionID) {
+        const connectedAt = socket.data.connectedAt as number | undefined;
+        const durationMs =
+          typeof connectedAt === 'number' ? Math.max(0, Date.now() - connectedAt) : undefined;
+        trackEvent({
+          event: 'session.disconnected',
+          outcome: 'ok',
+          sessionID,
+          meta: durationMs != null ? { durationMs } : {},
+        });
         leaveRoom(sessionID);
       }
     });

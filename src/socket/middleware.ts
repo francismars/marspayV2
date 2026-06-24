@@ -11,6 +11,7 @@ import { dateNow } from '../utils/time';
 import { SESSIONIDLENGHT } from '../consts/values';
 import { Session } from '../types/session';
 import { normalizeIP } from '../utils/ip';
+import { trackEvent } from '../telemetry/trackEvent';
 
 export default async function middleware(
   io: Server,
@@ -36,16 +37,24 @@ export default async function middleware(
       }).`
     );
     socket.data.sessionID = sessionID;
+    socket.data.connectedAt = Date.now();
     setIDToSocket(sessionID, session);
     await socket.join(sessionSocketRoomName(sessionID));
     socket.emit('session', {
       sessionID,
+    });
+    trackEvent({
+      event: 'session.connected',
+      outcome: 'ok',
+      sessionID,
+      meta: { reconnect: hadMapping },
     });
     return next();
   }
   const emoji = ALLOWEDEMOJIS[Math.floor(Math.random() * ALLOWEDEMOJIS.length)];
   const newID = customAlphabet(nolookalikes, SESSIONIDLENGHT);
   socket.data.sessionID = `${emoji}:${newID()}`;
+  socket.data.connectedAt = Date.now();
   const realIP = socket.handshake.headers['x-real-ip']; //normalizeIP()
   console.log(
     `${dateNow()} [${
@@ -56,6 +65,12 @@ export default async function middleware(
   await socket.join(sessionSocketRoomName(socket.data.sessionID));
   socket.emit('session', {
     sessionID: socket.data.sessionID,
+  });
+  trackEvent({
+    event: 'session.connected',
+    outcome: 'ok',
+    sessionID: socket.data.sessionID as string,
+    meta: { reconnect: false, newSession: true },
   });
   return next();
 }

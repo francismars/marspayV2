@@ -31,6 +31,7 @@ import {
   settleOnlineRematchPayment,
   serializeRoom,
 } from '../../state/onlineRoomState';
+import { trackOnlineOk, trackOnlineReject } from '../../telemetry/onlineTelemetry';
 
 const processedZapEventIDs = new Set<string>();
 
@@ -186,6 +187,11 @@ async function listenToSubscriptions(event: NDKEvent) {
       console.log(
         `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=amount_too_low min=${minBuyIn} got=${zapAmount}`
       );
+      trackOnlineReject('online.seat.pay_rejected', 'amount_too_low', {
+        sessionID,
+        roomId: room.roomId,
+        amountSats: zapAmount,
+      });
       io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: 'amount_too_low' });
       return;
     }
@@ -197,6 +203,10 @@ async function listenToSubscriptions(event: NDKEvent) {
         console.log(
           `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=${consumed.reason}`
         );
+        trackOnlineReject('online.seat.pay_rejected', consumed.reason ?? 'pin_invalid', {
+          sessionID,
+          roomId: room.roomId,
+        });
         io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: consumed.reason });
         return;
       }
@@ -223,6 +233,12 @@ async function listenToSubscriptions(event: NDKEvent) {
       console.log(
         `${dateNow()} [${sessionID}] [ONLINE] seat assigned roomId=${room.roomId} role=${seatResult.role} session=${consumed.record.sessionID}`
       );
+      trackOnlineOk('online.seat.paid', {
+        sessionID: consumed.record.sessionID,
+        roomId: room.roomId,
+        amountSats: zapAmount,
+        meta: { method: 'nostr_zap_pin' },
+      });
       io.to(room.roomId).emit('onlineSeatAssigned', {
         roomId: room.roomId,
         playerRole: seatResult.role,
@@ -267,6 +283,12 @@ async function listenToSubscriptions(event: NDKEvent) {
       console.log(
         `${dateNow()} [${sessionID}] [ONLINE] seat assigned (nostr link) roomId=${room.roomId} role=${seatResult.role} session=${nostrConsumed.record.sessionID}`
       );
+      trackOnlineOk('online.seat.paid', {
+        sessionID: nostrConsumed.record.sessionID,
+        roomId: room.roomId,
+        amountSats: zapAmount,
+        meta: { method: 'nostr_link' },
+      });
       io.to(room.roomId).emit('onlineSeatAssigned', {
         roomId: room.roomId,
         playerRole: seatResult.role,

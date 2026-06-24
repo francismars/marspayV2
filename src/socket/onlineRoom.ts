@@ -54,6 +54,7 @@ import {
   getAppNostrSession,
 } from '../state/nostrAppSessionState';
 import { dateNow } from '../utils/time';
+import { maybeTrackOnlinePing, trackOnlineOk, trackOnlineReject } from '../telemetry/onlineTelemetry';
 import {
   advanceNostrThreadTip,
   areSeatsFilled,
@@ -268,6 +269,12 @@ export async function createOnlineRoomHandler(
     nostrMeta: room.nostrMeta,
     room: roomState,
   });
+  trackOnlineOk('online.room.created', {
+    sessionID,
+    roomId: room.roomId,
+    roomCode: room.roomCode,
+    buyin: room.buyin,
+  });
 
   // Publish Kind1 asynchronously so room creation UX is never blocked
   // by relay availability or NDK connection delays.
@@ -345,6 +352,10 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
   const joined = joinRoom(payload.roomId, sessionID, socket.id);
   if (!joined) {
     logOnline(sessionID, `joinOnlineRoom failed roomId=${payload.roomId} reason=room_not_found`);
+    trackOnlineReject('online.room.joined', 'room_not_found', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
@@ -370,6 +381,12 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
     nostrMeta: room.nostrMeta,
     room: roomState,
   });
+  trackOnlineOk('online.room.joined', {
+    sessionID,
+    roomId: room.roomId,
+    roomCode: room.roomCode,
+    buyin: room.buyin,
+  });
 }
 
 export function joinOnlineRoomByCodeHandler(socket: Socket, payload: { roomCode: string }) {
@@ -378,9 +395,19 @@ export function joinOnlineRoomByCodeHandler(socket: Socket, payload: { roomCode:
   const room = getRoomByCode(payload.roomCode);
   if (!room) {
     logOnline(sessionID, `joinOnlineRoomByCode failed code=${payload.roomCode} reason=room_not_found`);
+    trackOnlineReject('online.room.joined_code', 'room_not_found', {
+      sessionID,
+      roomCode: payload.roomCode,
+    });
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
+  trackOnlineOk('online.room.joined_code', {
+    sessionID,
+    roomId: room.roomId,
+    roomCode: room.roomCode,
+    buyin: room.buyin,
+  });
   joinOnlineRoomHandler(socket, { roomId: room.roomId });
 }
 
@@ -393,6 +420,10 @@ export function spectateOnlineRoomHandler(socket: Socket, payload: { roomId: str
   const joined = joinRoom(payload.roomId, sessionID, socket.id);
   if (!joined) {
     logOnline(sessionID, `spectateOnlineRoom failed roomId=${payload.roomId} reason=room_not_found`);
+    trackOnlineReject('online.room.spectate', 'room_not_found', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
@@ -405,6 +436,12 @@ export function spectateOnlineRoomHandler(socket: Socket, payload: { roomId: str
   }
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
   broadcastOnlineRoomLists();
+  trackOnlineOk('online.room.spectate', {
+    sessionID,
+    roomId: room.roomId,
+    roomCode: room.roomCode,
+    buyin: room.buyin,
+  });
 }
 
 export function getOnlineRoomStateHandler(
@@ -461,14 +498,27 @@ export function cancelOnlineRoomHandler(socket: Socket, payload: { roomId: strin
   const room = getRoomById(payload.roomId);
   if (!sessionID || !room || !room.members.has(sessionID)) {
     logOnline(sessionID, `cancelOnlineRoom denied roomId=${payload.roomId}`);
+    trackOnlineReject('online.room.cancelled', 'denied', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     return;
   }
   if (hasAnyPaidSeat(payload.roomId)) {
     logOnline(sessionID, `cancelOnlineRoom blocked roomId=${payload.roomId} reason=paid_seat_exists`);
+    trackOnlineReject('online.room.cancelled', 'paid_seat_exists', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     socket.emit('onlinePinInvalid', { reason: 'room_has_paid_seats' });
     return;
   }
   logOnline(sessionID, `cancelOnlineRoom roomId=${room.roomId}`);
+  trackOnlineOk('online.room.cancelled', {
+    sessionID,
+    roomId: room.roomId,
+    roomCode: room.roomCode,
+  });
   setRoomPhase(room.roomId, 'cancelled');
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
   deleteRoom(room.roomId);
@@ -512,6 +562,7 @@ export function reportOnlineRoomPingHandler(
   seat.pingMs = latencyMs;
   room.updatedAt = Date.now();
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
+  maybeTrackOnlinePing({ sessionID, roomId: room.roomId, latencyMs });
 }
 
 export function roomInputHandler(
@@ -556,11 +607,19 @@ export function startOnlineGameHandler(socket: Socket, payload: { roomId: string
   const ready = setSeatReady(payload.roomId, sessionID, true);
   if (!ready.ok) {
     logOnline(sessionID, `startOnlineGame blocked roomId=${payload.roomId} reason=${ready.reason}`);
+    trackOnlineReject('online.game.started', ready.reason ?? 'blocked', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     socket.emit('onlinePinInvalid', { reason: ready.reason });
     return;
   }
   if (!areSeatsFilled(payload.roomId)) {
     logOnline(sessionID, `startOnlineGame blocked roomId=${payload.roomId} reason=seats_not_filled`);
+    trackOnlineReject('online.game.started', 'seats_not_filled', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     socket.emit('onlinePinInvalid', { reason: 'seats_not_filled' });
   }
   logOnline(
@@ -568,6 +627,12 @@ export function startOnlineGameHandler(socket: Socket, payload: { roomId: string
     `startOnlineGame compatibility signal roomId=${payload.roomId} started=${ready.started}`
   );
   if (ready.started) {
+    trackOnlineOk('online.game.started', {
+      sessionID,
+      roomId: payload.roomId,
+      roomCode: room.roomCode,
+      buyin: room.buyin,
+    });
     publishOnlineMatchStarted(payload.roomId, sessionID);
   }
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
@@ -587,6 +652,10 @@ export function onlineSetReadyHandler(
   const result = setSeatReady(payload.roomId, sessionID, !!payload.ready);
   if (!result.ok) {
     logOnline(sessionID, `onlineSetReady blocked roomId=${payload.roomId} reason=${result.reason}`);
+    trackOnlineReject('online.seat.ready', result.reason ?? 'blocked', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     socket.emit('onlinePinInvalid', { reason: result.reason });
     return;
   }
@@ -594,7 +663,19 @@ export function onlineSetReadyHandler(
     sessionID,
     `onlineSetReady roomId=${payload.roomId} ready=${payload.ready} started=${result.started}`
   );
+  trackOnlineOk('online.seat.ready', {
+    sessionID,
+    roomId: payload.roomId,
+    roomCode: room.roomCode,
+    meta: { ready: payload.ready, started: result.started },
+  });
   if (result.started) {
+    trackOnlineOk('online.game.started', {
+      sessionID,
+      roomId: payload.roomId,
+      roomCode: room.roomCode,
+      buyin: room.buyin,
+    });
     publishOnlineMatchStarted(payload.roomId, sessionID);
   }
   io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
@@ -666,6 +747,10 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
   const isWinnerSocket = Boolean(winnerSeat?.socketID && winnerSeat.socketID === socket.id);
   if (!info || (!isWinnerSession && !isWinnerSocket)) {
     logOnline(sessionID, `createOnlineWithdrawal denied roomId=${payload.roomId}`);
+    trackOnlineReject('online.payout.withdrawal', 'only_winner_can_withdraw', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     socket.emit('onlinePinInvalid', { reason: 'only_winner_can_withdraw' });
     return;
   }
@@ -697,6 +782,11 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
   setLNURLWToID(lnurlw.id, sessionID);
   setOnlinePostGameLnurlw(payload.roomId, lnurlw.lnurl);
   logOnline(sessionID, `createOnlineWithdrawal success roomId=${payload.roomId} amount=${amount}`);
+  trackOnlineOk('online.payout.withdrawal', {
+    sessionID,
+    roomId: payload.roomId,
+    amountSats: amount,
+  });
   const liveRoom = getRoomById(payload.roomId);
   if (liveRoom) {
     io.to(liveRoom.roomId).emit('onlineRoomUpdated', serializeRoom(liveRoom));
@@ -725,6 +815,10 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
   const isWinnerSocket = Boolean(winnerSeat?.socketID && winnerSeat.socketID === socket.id);
   if (!info || (!isWinnerSession && !isWinnerSocket)) {
     logOnline(sessionID, `createOnlineNostrPayout denied roomId=${payload.roomId}`);
+    trackOnlineReject('online.payout.nostr', 'only_winner_can_withdraw', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     socket.emit('onlinePinInvalid', { reason: 'only_winner_can_withdraw' });
     return;
   }
@@ -764,6 +858,11 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
   }
   setOnlinePostGameNostrPayout(payload.roomId, lnAddress);
   logOnline(sessionID, `createOnlineNostrPayout success roomId=${payload.roomId} amount=${amount} ln=${lnAddress}`);
+  trackOnlineOk('online.payout.nostr', {
+    sessionID,
+    roomId: payload.roomId,
+    amountSats: amount,
+  });
   const liveRoom = getRoomById(payload.roomId);
   if (liveRoom) {
     io.to(liveRoom.roomId).emit('onlineRoomUpdated', serializeRoom(liveRoom));
@@ -792,9 +891,18 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
   const vote = voteOnlineDoubleOrNothing(payload.roomId, sessionID);
   if (!vote.ok) {
     logOnline(sessionID, `onlineDoubleOrNothing denied roomId=${payload.roomId} reason=${vote.reason}`);
+    trackOnlineReject('online.rematch.vote', vote.reason ?? 'denied', {
+      sessionID,
+      roomId: payload.roomId,
+    });
     socket.emit('onlinePinInvalid', { reason: vote.reason });
     return;
   }
+  trackOnlineOk('online.rematch.vote', {
+    sessionID,
+    roomId: payload.roomId,
+    meta: { agreed: vote.agreed, votes: vote.votes },
+  });
   io.to(payload.roomId).emit('onlineDoubleOrNothingUpdate', {
     roomId: payload.roomId,
     votes: vote.votes,
@@ -1191,13 +1299,20 @@ export async function requestOnlineSeatLightningHandler(
     return;
   }
   const roomId = payload?.roomId;
+  const rejectSeatLightning = (reason: string) => {
+    trackOnlineReject('online.seat.lightning.requested', reason, {
+      sessionID,
+      roomId,
+    });
+    socket.emit('resOnlineSeatLightningError', { reason });
+  };
   if (!roomId) {
-    socket.emit('resOnlineSeatLightningError', { reason: 'room_not_found' });
+    rejectSeatLightning('room_not_found');
     return;
   }
   const room = getRoomById(roomId);
   if (!room) {
-    socket.emit('resOnlineSeatLightningError', { reason: 'room_not_found' });
+    rejectSeatLightning('room_not_found');
     return;
   }
   const rematchLoser = isRematchLoserSession(room, sessionID);
@@ -1206,33 +1321,33 @@ export async function requestOnlineSeatLightningHandler(
   if (rematchLoser) {
     payAmount = room.postGame.rematchRequiredAmount ?? 0;
     if (payAmount <= 0 || !room.postGame.rematchEventId) {
-      socket.emit('resOnlineSeatLightningError', { reason: 'rematch_not_ready' });
+      rejectSeatLightning('rematch_not_ready');
       return;
     }
     purpose = 'rematch';
   } else {
     if (room.phase !== 'lobby') {
-      socket.emit('resOnlineSeatLightningError', { reason: 'room_not_accepting' });
+      rejectSeatLightning('room_not_accepting');
       return;
     }
     if (room.postGame.rematchRequested) {
-      socket.emit('resOnlineSeatLightningError', { reason: 'rematch_locked' });
+      rejectSeatLightning('rematch_locked');
       return;
     }
     const alreadyPaid = [...room.seats.values()].some(
       (s) => s.sessionID === sessionID && s.status === 'paid'
     );
     if (alreadyPaid) {
-      socket.emit('resOnlineSeatLightningError', { reason: 'already_seated' });
+      rejectSeatLightning('already_seated');
       return;
     }
     const hasOpen = [...room.seats.values()].some((s) => s.status === 'open');
     if (!hasOpen) {
-      socket.emit('resOnlineSeatLightningError', { reason: 'seats_full' });
+      rejectSeatLightning('seats_full');
       return;
     }
     if (!room.kind1EventId) {
-      socket.emit('resOnlineSeatLightningError', { reason: 'kind1_not_ready' });
+      rejectSeatLightning('kind1_not_ready');
       return;
     }
     payAmount = room.buyin;
@@ -1247,14 +1362,14 @@ export async function requestOnlineSeatLightningHandler(
     linkPayMethod: 'lightning',
   });
   if (!nostrReg.ok) {
-    socket.emit('resOnlineSeatLightningError', { reason: nostrReg.reason });
+    rejectSeatLightning(nostrReg.reason);
     return;
   }
   const desc = purpose === 'rematch' ? `CD rematch ${room.roomCode}` : `CD online ${room.roomCode}`;
   const created = await createLNURLP(desc, payAmount, payAmount, 0);
   if (!created) {
     removeNostrLinkRegistrationForPubkey(room.roomId, pkHex, sessionID);
-    socket.emit('resOnlineSeatLightningError', { reason: 'lnbits_unavailable' });
+    rejectSeatLightning('lnbits_unavailable');
     return;
   }
   const expiresAt = Date.now() + ONLINE_SEAT_LIGHTNING_TTL_MS;
@@ -1276,6 +1391,13 @@ export async function requestOnlineSeatLightningHandler(
     lightningUri,
     buyin: payAmount,
     expiresAt,
+  });
+  trackOnlineOk('online.seat.lightning.requested', {
+    sessionID,
+    roomId: room.roomId,
+    roomCode: room.roomCode,
+    buyin: payAmount,
+    meta: { purpose },
   });
 }
 

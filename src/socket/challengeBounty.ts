@@ -34,6 +34,12 @@ import {
   getChallengeTelemetrySnapshot,
   recordChallengeOutcome,
 } from '../state/challengeTelemetry';
+import {
+  pubkeyPrefix,
+  trackEligibility,
+  trackEvent,
+  trackReject,
+} from '../telemetry/trackEvent';
 
 /** @chainduel — used in victory notes (NIP-27 mention). */
 const CHAINDUEL_NPUB = 'npub1kd3nlw09ufkgmts2kaf0x8m4mq57exn6l8rz50v5ngyr2h3j5cfswdsdth';
@@ -90,6 +96,7 @@ export async function getChallengeEligibilityHandler(
   const result = await evaluateChallengeEligibility(appSession?.pubkey, Boolean(appSession), {
     forceRefresh: payload?.refresh === true,
   });
+  trackEligibility(sessionID, result, { refresh: payload?.refresh === true });
   socket.emit('resChallengeEligibility', result);
 }
 
@@ -98,36 +105,61 @@ export async function requestChallengeRunHandler(
   payload: { challengeId?: string }
 ) {
   const sessionID = socket.data.sessionID as string | undefined;
+  const challengeIdInput =
+    typeof payload?.challengeId === 'string' ? payload.challengeId.trim() : '';
   if (!sessionID) {
+    trackReject('challenge.run', 'no_session', { challengeId: challengeIdInput || undefined });
     socket.emit('resChallengeRun', { ok: false, reason: 'no_session' });
     return;
   }
   if (!checkChallengeRunRateLimit(sessionID)) {
+    trackReject('challenge.run', 'rate_limited', { sessionID, challengeId: challengeIdInput || undefined });
     socket.emit('resChallengeRun', { ok: false, reason: 'rate_limited' });
     return;
   }
   const appSession = getAppNostrSession(sessionID);
   if (!appSession?.pubkey) {
+    trackReject('challenge.run', 'nostr_sign_in_required', { sessionID, challengeId: challengeIdInput || undefined });
     socket.emit('resChallengeRun', { ok: false, reason: 'nostr_sign_in_required' });
     return;
   }
 
   const eligibility = await evaluateChallengeEligibility(appSession.pubkey, true);
   if (!eligibility.eligible) {
+    trackReject('challenge.run', 'not_eligible', {
+      sessionID,
+      challengeId: challengeIdInput || undefined,
+      pubkeyPrefix: pubkeyPrefix(appSession.pubkey),
+    });
     socket.emit('resChallengeRun', { ok: false, reason: 'not_eligible' });
     return;
   }
 
-  const challengeId = typeof payload?.challengeId === 'string' ? payload.challengeId.trim() : '';
+  const challengeId = challengeIdInput;
   const created = createChallengeRun({
     pubkey: appSession.pubkey,
     sessionID,
     challengeId,
   });
   if ('error' in created) {
+    trackReject('challenge.run', created.error, {
+      sessionID,
+      challengeId: challengeId || undefined,
+      pubkeyPrefix: pubkeyPrefix(appSession.pubkey),
+    });
     socket.emit('resChallengeRun', { ok: false, reason: created.error });
     return;
   }
+
+  trackEvent({
+    event: 'challenge.run',
+    outcome: 'ok',
+    sessionID,
+    challengeId: created.challengeId,
+    runId: created.runId,
+    pubkeyPrefix: pubkeyPrefix(appSession.pubkey),
+    amountSats: created.bountySats,
+  });
 
   socket.emit('resChallengeRun', {
     ok: true,
@@ -168,6 +200,14 @@ function emitExistingClaimToken(
     bountySats: existing.bountySats,
     challengeName: run.config.name,
   });
+  trackEvent({
+    event: 'challenge.win.token',
+    outcome: 'ok',
+    sessionID: run.sessionID,
+    runId: run.runId,
+    challengeId: run.challengeId,
+    meta: { reused: true },
+  });
   return true;
 }
 
@@ -180,13 +220,18 @@ export async function submitChallengeWinHandler(
   }
 ) {
   const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : '';
-  try {
   const sessionID = socket.data.sessionID as string | undefined;
+  const rejectWin = (reason: string, challengeId?: string) => {
+    trackReject('challenge.win.submit', reason, { sessionID, runId, challengeId });
+    socket.emit('resSubmitChallengeWin', { ok: false, reason });
+  };
+  try {
   if (!sessionID) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'no_session' });
+    rejectWin('no_session');
     return;
   }
   if (!checkChallengeSubmitRateLimit(sessionID)) {
+    trackReject('challenge.win.submit', 'rate_limited', { sessionID, runId });
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'rate_limited' });
     return;
   }
@@ -194,46 +239,60 @@ export async function submitChallengeWinHandler(
 
   const run = getChallengeRun(runId);
   if (!run) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_not_found' });
+    rejectWin('run_not_found');
     return;
   }
   if (run.sessionID !== sessionID) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'session_mismatch' });
+    rejectWin('session_mismatch', run.challengeId);
     return;
   }
   if (run.status === 'expired') {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_expired' });
+    rejectWin('run_expired', run.challengeId);
     return;
   }
   if (run.status === 'won') {
     if (emitExistingClaimToken(socket, run)) return;
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_already_won' });
+    rejectWin('run_already_won', run.challengeId);
     return;
   }
   if (run.status !== 'active') {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_not_active' });
+    rejectWin('run_not_active', run.challengeId);
     return;
   }
   if (hasClaimedRun(runId)) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'run_already_claimed' });
+    rejectWin('run_already_claimed', run.challengeId);
     return;
   }
   if (!isAnonymousRunPubkey(run.pubkey)) {
     if (!appSession || run.pubkey !== appSession.pubkey.toLowerCase()) {
-      socket.emit('resSubmitChallengeWin', { ok: false, reason: 'pubkey_mismatch' });
+      rejectWin('pubkey_mismatch', run.challengeId);
       return;
     }
     if (hasClaimedChallenge(run.pubkey, run.challengeId)) {
-      socket.emit('resSubmitChallengeWin', { ok: false, reason: 'already_claimed' });
+      rejectWin('already_claimed', run.challengeId);
       return;
     }
   } else if (appSession && hasClaimedChallenge(appSession.pubkey, run.challengeId)) {
-    socket.emit('resSubmitChallengeWin', { ok: false, reason: 'already_claimed' });
+    rejectWin('already_claimed', run.challengeId);
     return;
   }
 
+  trackEvent({
+    event: 'challenge.win.submit',
+    outcome: 'ok',
+    sessionID,
+    runId,
+    challengeId: run.challengeId,
+    pubkeyPrefix: pubkeyPrefix(appSession?.pubkey),
+  });
+
   const rawLog = payload?.inputLog;
   if (!Array.isArray(rawLog)) {
+    trackReject('challenge.win.submit', 'invalid_input_log', {
+      sessionID,
+      runId,
+      challengeId: run.challengeId,
+    });
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'invalid_input_log' });
     return;
   }
@@ -277,6 +336,15 @@ export async function submitChallengeWinHandler(
     console.log(
       `${dateNow()} [CHALLENGE_WIN] replay_failed runId=${runId} challenge=${run.challengeId} replayMs=${replayMs} reason=${replay.reason} debug=${JSON.stringify(replay.debug ?? {})} telemetry=${JSON.stringify(getChallengeTelemetrySnapshot().byChallenge[run.challengeId] ?? {})}`
     );
+    trackEvent({
+      event: 'challenge.win.replay',
+      outcome: 'reject',
+      reason: replay.reason,
+      sessionID,
+      runId,
+      challengeId: run.challengeId,
+      replayMs,
+    });
     socket.emit('resSubmitChallengeWin', { ok: false, reason: replay.reason, debug: replay.debug });
     return;
   }
@@ -285,6 +353,15 @@ export async function submitChallengeWinHandler(
   console.log(
     `${dateNow()} [CHALLENGE_WIN] replay_ok runId=${runId} challenge=${run.challengeId} replayMs=${replayMs} simSteps=${replay.simSteps} tickCount=${replay.tickCount} telemetry=${JSON.stringify(getChallengeTelemetrySnapshot().byChallenge[run.challengeId] ?? {})}`
   );
+  trackEvent({
+    event: 'challenge.win.replay',
+    outcome: 'ok',
+    sessionID,
+    runId,
+    challengeId: run.challengeId,
+    replayMs,
+    meta: { simSteps: replay.simSteps, tickCount: replay.tickCount },
+  });
 
   markRunWon(runId, inputLog, payload?.countdownStartTick ?? 0);
 
@@ -304,11 +381,24 @@ export async function submitChallengeWinHandler(
     bountySats: run.bountySats,
     challengeName: run.config.name,
   });
+  trackEvent({
+    event: 'challenge.win.token',
+    outcome: 'ok',
+    sessionID,
+    runId,
+    challengeId: run.challengeId,
+  });
   } catch (error) {
     console.error(
       `${dateNow()} [CHALLENGE_WIN] handler_error runId=${runId}`,
       error
     );
+    trackEvent({
+      event: 'challenge.win.submit',
+      outcome: 'error',
+      reason: 'server_error',
+      runId,
+    });
     socket.emit('resSubmitChallengeWin', { ok: false, reason: 'server_error' });
   }
 }
@@ -318,92 +408,96 @@ export async function claimChallengeBountyHandler(
   payload: { claimToken?: string; event?: unknown }
 ) {
   const sessionID = socket.data.sessionID as string | undefined;
+  const rejectClaim = (reason: string, ctx: { challengeId?: string; runId?: string } = {}) => {
+    trackReject('challenge.claim', reason, { sessionID, ...ctx });
+    socket.emit('resChallengeClaim', { ok: false, reason });
+  };
   if (!sessionID) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'no_session' });
+    rejectClaim('no_session');
     return;
   }
   const appSession = getAppNostrSession(sessionID);
   if (!appSession) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'no_app_session' });
+    rejectClaim('no_app_session');
     return;
   }
 
   const token = typeof payload?.claimToken === 'string' ? payload.claimToken.trim() : '';
   const claimRec = consumeClaimToken(token);
   if (!claimRec) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'invalid_or_expired_claim_token' });
+    rejectClaim('invalid_or_expired_claim_token');
     return;
   }
   const claimPubkey = appSession.pubkey.toLowerCase();
   if (claimRec.pubkey !== claimPubkey) {
     if (!isAnonymousRunPubkey(claimRec.pubkey)) {
-      socket.emit('resChallengeClaim', { ok: false, reason: 'pubkey_mismatch' });
+      rejectClaim('pubkey_mismatch', { challengeId: claimRec.challengeId, runId: claimRec.runId });
       return;
     }
     const run = getChallengeRun(claimRec.runId);
     if (!run || run.sessionID !== sessionID) {
-      socket.emit('resChallengeClaim', { ok: false, reason: 'session_mismatch' });
+      rejectClaim('session_mismatch', { challengeId: claimRec.challengeId, runId: claimRec.runId });
       return;
     }
   }
 
   const eligibility = await evaluateChallengeEligibility(appSession.pubkey, true);
   if (!eligibility.eligible) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'not_eligible' });
+    rejectClaim('not_eligible', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
 
   if (hasClaimedChallenge(claimPubkey, claimRec.challengeId)) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'already_claimed' });
+    rejectClaim('already_claimed', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
   if (hasClaimedRun(claimRec.runId)) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'run_already_claimed' });
+    rejectClaim('run_already_claimed', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
 
   const ev = payload?.event;
   if (!ev || typeof ev !== 'object') {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'invalid_event' });
+    rejectClaim('invalid_event', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
   if (!verifyEvent(ev as Event)) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'invalid_signature' });
+    rejectClaim('invalid_signature', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
   const event = ev as Event;
   if (event.pubkey.toLowerCase() !== appSession.pubkey) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'event_pubkey_mismatch' });
+    rejectClaim('event_pubkey_mismatch', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
   if (event.kind !== 1) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'invalid_kind' });
+    rejectClaim('invalid_kind', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
   if (event.content !== claimRec.noteContent) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'note_content_mismatch' });
+    rejectClaim('note_content_mismatch', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
   if (!tagsEqual(event.tags as string[][], claimRec.noteTags)) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'note_tags_mismatch' });
+    rejectClaim('note_tags_mismatch', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
 
   const budget = getDailyZapBudgetRemaining();
   if (claimRec.bountySats > budget) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'daily_budget_exceeded' });
+    rejectClaim('daily_budget_exceeded', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
 
   const lud16Check = await verifyUserLud16(appSession.pubkey);
   if (!lud16Check.ok || !lud16Check.lud16) {
-    socket.emit('resChallengeClaim', { ok: false, reason: 'lud16_invalid' });
+    rejectClaim('lud16_invalid', { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
 
   const published = await publishKind1Event(event);
   if (!published.ok) {
-    socket.emit('resChallengeClaim', { ok: false, reason: published.reason });
+    rejectClaim(published.reason, { challengeId: claimRec.challengeId, runId: claimRec.runId });
     return;
   }
 
@@ -445,6 +539,17 @@ export async function claimChallengeBountyHandler(
     `${dateNow()} [CHALLENGE_CLAIM] pubkey=${claimRec.pubkey.slice(0, 12)} challenge=${claimRec.challengeId} event=${published.eventId} zap=${zapResult.ok ? 'ok' : zapResult.reason}`
   );
 
+  trackEvent({
+    event: 'challenge.claim',
+    outcome: 'ok',
+    sessionID,
+    challengeId: claimRec.challengeId,
+    runId: claimRec.runId,
+    pubkeyPrefix: pubkeyPrefix(claimPubkey),
+    amountSats: claimRec.bountySats,
+    meta: { zapPaid: zapResult.ok, zapReason: zapResult.ok ? '' : zapResult.reason },
+  });
+
   socket.emit('resChallengeClaim', {
     ok: true,
     eventId: published.eventId,
@@ -460,22 +565,35 @@ export async function retryChallengeZapHandler(
   payload: { challengeId?: string }
 ) {
   const sessionID = socket.data.sessionID as string | undefined;
-  if (!sessionID) return;
+  const challengeId = typeof payload?.challengeId === 'string' ? payload.challengeId.trim() : '';
+  if (!sessionID) {
+    return;
+  }
   const appSession = getAppNostrSession(sessionID);
   if (!appSession) {
+    trackReject('challenge.zap.retry', 'no_app_session', { sessionID, challengeId });
     socket.emit('resRetryChallengeZap', { ok: false, reason: 'no_app_session' });
     return;
   }
 
-  const challengeId = typeof payload?.challengeId === 'string' ? payload.challengeId.trim() : '';
   const existing = getChallengeClaim(appSession.pubkey, challengeId);
   if (!existing?.kind1EventId || existing.zapPaidAt) {
+    trackReject('challenge.zap.retry', 'nothing_to_retry', {
+      sessionID,
+      challengeId,
+      pubkeyPrefix: pubkeyPrefix(appSession.pubkey),
+    });
     socket.emit('resRetryChallengeZap', { ok: false, reason: 'nothing_to_retry' });
     return;
   }
 
   const lud16Check = await verifyUserLud16(appSession.pubkey);
   if (!lud16Check.ok || !lud16Check.lud16) {
+    trackReject('challenge.zap.retry', 'lud16_invalid', {
+      sessionID,
+      challengeId,
+      pubkeyPrefix: pubkeyPrefix(appSession.pubkey),
+    });
     socket.emit('resRetryChallengeZap', { ok: false, reason: 'lud16_invalid' });
     return;
   }
@@ -499,6 +617,16 @@ export async function retryChallengeZapHandler(
       zapComment,
     });
   }
+
+  trackEvent({
+    event: 'challenge.zap.retry',
+    outcome: zapResult.ok ? 'ok' : 'reject',
+    reason: zapResult.ok ? undefined : zapResult.reason,
+    sessionID,
+    challengeId,
+    pubkeyPrefix: pubkeyPrefix(appSession.pubkey),
+    amountSats: existing.bountySats,
+  });
 
   socket.emit('resRetryChallengeZap', {
     ok: zapResult.ok,

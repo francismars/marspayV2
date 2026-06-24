@@ -1,5 +1,10 @@
 /** In-memory challenge win/loss counters for post-launch tuning. */
 
+import {
+  hydrateChallengeStatsFromDisk,
+  schedulePersistChallengeStats,
+} from '../telemetry/telemetryStore';
+
 export type ChallengeOutcome = 'win' | 'replay_failed';
 
 export type ChallengeTelemetrySnapshot = {
@@ -15,11 +20,12 @@ export type ChallengeTelemetrySnapshot = {
   totalReplayFailed: number;
 };
 
-const stats: ChallengeTelemetrySnapshot = {
-  byChallenge: {},
-  totalWins: 0,
-  totalReplayFailed: 0,
-};
+const stats: ChallengeTelemetrySnapshot =
+  hydrateChallengeStatsFromDisk() ?? {
+    byChallenge: {},
+    totalWins: 0,
+    totalReplayFailed: 0,
+  };
 
 function ensureChallenge(challengeId: string) {
   if (!stats.byChallenge[challengeId]) {
@@ -41,12 +47,13 @@ export function recordChallengeOutcome(params: {
   if (params.outcome === 'win') {
     row.wins += 1;
     stats.totalWins += 1;
-    return;
+  } else {
+    row.replayFailed += 1;
+    stats.totalReplayFailed += 1;
+    const reason = params.replayReason ?? 'unknown';
+    row.replayReasons[reason] = (row.replayReasons[reason] ?? 0) + 1;
   }
-  row.replayFailed += 1;
-  stats.totalReplayFailed += 1;
-  const reason = params.replayReason ?? 'unknown';
-  row.replayReasons[reason] = (row.replayReasons[reason] ?? 0) + 1;
+  schedulePersistChallengeStats(getChallengeTelemetrySnapshot());
 }
 
 export function getChallengeTelemetrySnapshot(): ChallengeTelemetrySnapshot {

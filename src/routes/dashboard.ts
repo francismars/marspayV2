@@ -8,8 +8,31 @@ import {
   getAllkind1IDtoSessionID,
   getAllsessionIDtoKind1s,
 } from '../state/nostrState';
+import { getChallengeTelemetrySnapshot } from '../state/challengeTelemetry';
+import { getFunnelCountersSnapshot } from '../telemetry/funnelCounters';
+import {
+  tailChallengeClaims,
+  tailOnlineArchiveIndex,
+} from '../telemetry/dashboardData';
+import { listOnlineRooms } from '../state/onlineRoomState';
 
 const router = Router();
+
+function summarizeActiveOnlineRooms() {
+  const now = Date.now();
+  return listOnlineRooms().map((room) => {
+    const seatsPaid = room.playersPaid ?? 0;
+    return {
+      roomId: room.roomId,
+      roomCode: room.roomCode,
+      phase: room.phase,
+      buyin: room.buyin,
+      seatsPaid,
+      seatsTotal: room.seatsTotal,
+      ageMs: now - room.createdAt,
+    };
+  });
+}
 
 router.get('/', function (req, res) {
   dotenv.config();
@@ -32,6 +55,13 @@ router.get('/', function (req, res) {
       kind1IDtoSessionID: kind1IDtoSessionID,
       sessionIDtoKind1s: sessionIDtoKind1s,
       IDtoGameInfo: IDtoGameInfo,
+      telemetry: {
+        counters: getFunnelCountersSnapshot(),
+        challenge: getChallengeTelemetrySnapshot(),
+        recentClaims: tailChallengeClaims(20),
+        recentOnline: tailOnlineArchiveIndex(20),
+        activeOnlineRooms: summarizeActiveOnlineRooms(),
+      },
     });
   } else res.status(401).send('Incorrect password.');
 });

@@ -11,6 +11,19 @@ import { deleteLNURLPsFromSession } from '../state/lnurlpState';
 import { BUYINMINPRACTICE } from '../consts/values';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
 
+const GAME_INFO_MISSING_LOG_COOLDOWN_MS = 10 * 60 * 1000;
+const lastGameInfoMissingLogAt = new Map<string, number>();
+
+function logGameInfoMissingOnce(sessionID: string, context: string): void {
+  const now = Date.now();
+  const last = lastGameInfoMissingLogAt.get(sessionID) ?? 0;
+  if (now - last < GAME_INFO_MISSING_LOG_COOLDOWN_MS) {
+    return;
+  }
+  lastGameInfoMissingLogAt.set(sessionID, now);
+  console.warn(`${dateNow()} [${sessionID}] Game info not found (${context}).`);
+}
+
 export function gameInfos(socket: Socket) {
   const sessionID = socket.data.sessionID;
   if (!sessionID) {
@@ -19,7 +32,7 @@ export function gameInfos(socket: Socket) {
   }
   const gameInfo = getGameInfoFromID(sessionID);
   if (!gameInfo) {
-    console.error(`${dateNow()} [${sessionID}] Game info not found.`);
+    logGameInfoMissingOnce(sessionID, 'getDuelInfos');
     return;
   }
   console.log(
@@ -37,7 +50,7 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
   }
   const gameInfo = getGameInfoFromID(sessionID);
   if (!gameInfo) {
-    console.error(`${dateNow()} [${sessionID}] Game info not found.`);
+    logGameInfoMissingOnce(sessionID, 'gameFinished');
     return;
   }
   console.log(

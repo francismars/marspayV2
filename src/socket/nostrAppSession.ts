@@ -10,6 +10,7 @@ import {
   touchAppNostrSession,
   type AppNostrSignerMode,
 } from '../state/nostrAppSessionState';
+import { pubkeyPrefix, trackEvent, trackReject } from '../telemetry/trackEvent';
 
 export type ResAppNostrSessionPayload = {
   ok: boolean;
@@ -76,20 +77,24 @@ export async function confirmAppNostrLinkHandler(
   }
   const ev = payload?.event;
   if (!ev || typeof ev !== 'object') {
+    trackReject('nostr.app.link', 'invalid_event', { sessionID });
     socket.emit('resAppNostrSession', { ok: false, reason: 'invalid_event' });
     return;
   }
   if (!verifyEvent(ev as Event)) {
+    trackReject('nostr.app.link', 'invalid_signature', { sessionID });
     socket.emit('resAppNostrSession', { ok: false, reason: 'invalid_signature' });
     return;
   }
   const event = ev as Event;
   if (event.kind !== 1) {
+    trackReject('nostr.app.link', 'invalid_kind', { sessionID });
     socket.emit('resAppNostrSession', { ok: false, reason: 'invalid_kind' });
     return;
   }
   const pending = peekPendingAppNostrChallenge(sessionID);
   if (!pending || pending.challenge !== event.content.trim()) {
+    trackReject('nostr.app.link', 'challenge_mismatch', { sessionID });
     socket.emit('resAppNostrSession', { ok: false, reason: 'challenge_mismatch' });
     return;
   }
@@ -113,6 +118,13 @@ export async function confirmAppNostrLinkHandler(
       ? payload.signerMode
       : null;
   const { expiresAt } = registerAppNostrSession(sessionID, event.pubkey, profile, signerMode);
+  trackEvent({
+    event: 'nostr.app.link',
+    outcome: 'ok',
+    sessionID,
+    pubkeyPrefix: pubkeyPrefix(event.pubkey),
+    meta: { signerMode: signerMode ?? 'unknown' },
+  });
   socket.emit('resAppNostrSession', {
     ok: true,
     pubkey: event.pubkey.toLowerCase(),

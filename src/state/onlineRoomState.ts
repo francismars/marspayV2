@@ -36,6 +36,7 @@ import {
   readSessionMatchRoundFromArchiveSync,
 } from './onlineRoomArchive';
 import { packReplayForArchive, type OnlineReplayWirePayload } from './onlineReplayCompact';
+import { trackOnlineOk } from '../telemetry/onlineTelemetry';
 import {
   peekOnlineSeatLightningForSession,
   refreshOnlineSeatLightningSocket,
@@ -272,7 +273,7 @@ function roomToFinishedResult(room: OnlineRoom): NonNullable<OnlineRoomListItem[
 
 /**
  * When multiple archive index rows share a `roomId` (per-round match + session), pick the row
- * that represents the final session (payout) or the latest match round ‚Äî not the first round.
+ * that represents the final session (payout) or the latest match round ù not the first round.
  */
 function pickBetterHistoryForRoom(prev: OnlineRoomListItem, next: OnlineRoomListItem): OnlineRoomListItem {
   const prevSession = prev.archiveKind === 'session' ? 1 : 0;
@@ -397,7 +398,7 @@ export function listOnlineRooms(): OnlineRoomListItem[] {
     roomId: room.roomId,
     roomCode: room.roomCode,
     buyin: room.buyin,
-    /** Last completed lobby‚Üíplaying cycle (for replay URL / history). */
+    /** Last completed lobby?playing cycle (for replay URL / history). */
     matchRound: room.matchRound,
     createdAt: room.createdAt,
     finishedAt:
@@ -470,7 +471,7 @@ function tryReclaimPaidSeatOnJoin(
     room.spectators.delete(sessionID);
     roomIdBySession.set(sessionID, roomId);
     logOnlineState(
-      `reclaimed paid seat roomId=${roomId} role=${role} session=${sessionID} pubkey=${seatPk.slice(0, 8)}‚Ä¶`
+      `reclaimed paid seat roomId=${roomId} role=${role} session=${sessionID} pubkey=${seatPk.slice(0, 8)}ù`
     );
     return true;
   }
@@ -663,7 +664,7 @@ export function advanceNostrThreadTip(roomId: string, eventId: string) {
   }
   room.nostrThreadTipEventId = eventId;
   room.updatedAt = Date.now();
-  logOnlineState(`nostr thread tip roomId=${roomId} event=${eventId.slice(0, 12)}‚Ä¶`);
+  logOnlineState(`nostr thread tip roomId=${roomId} event=${eventId.slice(0, 12)}ù`);
 }
 
 export function issueJoinPin(roomId: string, sessionID: string, socketID: string) {
@@ -820,11 +821,11 @@ export function registerNostrLink(
     expiresAt,
     linkPayMethod: opts?.linkPayMethod ?? 'nostr_web',
   });
-  logOnlineState(`registered nostr link roomId=${roomId} session=${sessionID} pubkey=${pk.slice(0, 8)}‚Ä¶`);
+  logOnlineState(`registered nostr link roomId=${roomId} session=${sessionID} pubkey=${pk.slice(0, 8)}ù`);
   return { ok: true, expiresAt };
 }
 
-/** Remove a pre-registered pubkey binding (Nostr link or Lightning‚Üízap ephemeral key). */
+/** Remove a pre-registered pubkey binding (Nostr link or Lightning?zap ephemeral key). */
 export function removeNostrLinkRegistrationForPubkey(
   roomId: string,
   pubkeyHex: string,
@@ -951,7 +952,7 @@ export function formatAnonSeatLabel(hexSource: string): string {
   return hex ? `Anon${hex}` : 'Anonymous';
 }
 
-/** Seat label for online lobby ‚Äî never returns blank (anonymous zaps often have empty comment). */
+/** Seat label for online lobby ù never returns blank (anonymous zaps often have empty comment). */
 export function resolveOnlineSeatDisplayName(params: {
   name?: string | null;
   pubkey?: string;
@@ -1091,6 +1092,12 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
       finishedAt: Date.now(),
       serializedRoom: serializeRoom(room) as Record<string, unknown>,
       replay: packReplayForArchive([...room.replay.frames], room.replay.tickMs, room.replay.blockEvents),
+    });
+    trackOnlineOk('online.game.finished', {
+      roomId: room.roomId,
+      roomCode: room.roomCode,
+      buyin: room.buyin,
+      meta: { matchRound: room.matchRound },
     });
   }
   room.updatedAt = Date.now();
@@ -1622,7 +1629,7 @@ export function settleOnlineRematchPayment(params: {
       return !loserSeat.pubkey && loserSeat.payMethod !== 'lightning';
     }
     if (loserSeat.payMethod === 'lightning') {
-      // Lightning buy-in uses a fresh ephemeral key per payment ‚Äî match session link, not seat pubkey.
+      // Lightning buy-in uses a fresh ephemeral key per payment ù match session link, not seat pubkey.
       return Boolean(
         waitingForLoser &&
           loserSessionId &&

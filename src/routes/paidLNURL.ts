@@ -29,6 +29,8 @@ import deleteLNURLP from '../calls/LNBits/deleteLNURLP';
 import { requestZapInvoiceAndPayForKind1 } from '../calls/NDK/zapKind1ViaLnurlCallback';
 import { resolveOnlineSeatZapContext } from '../calls/nostr/resolveOnlineSeatZapContext';
 import { hexToBytes } from '@noble/hashes/utils';
+import { trackOnlineOk, trackOnlineReject } from '../telemetry/onlineTelemetry';
+import { trackEvent } from '../telemetry/trackEvent';
 import {
   consumeOnlineSeatLightningAfterSuccess,
   getOnlineSeatLightningByLnurlpId,
@@ -79,6 +81,11 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       console.error(
         `${dateNow()} [ONLINE_SEAT_LN] amount too low lnurlp=${reqLNURLP} got=${amountSats} min=${onlineRec.buyin}`
       );
+      trackOnlineReject('online.seat.pay_rejected', 'amount_too_low', {
+        sessionID: onlineRec.sessionID,
+        roomId: onlineRec.roomId,
+        amountSats,
+      });
       res.status(400).send('amount_too_low');
       return;
     }
@@ -191,6 +198,12 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
     console.log(
       `${dateNow()} [ONLINE_SEAT_LN] LN settled; zap invoice paid for kind1=${kind1EventId} session=${onlineRec.sessionID.slice(0, 8)}… (${isRematchPay ? 'rematch — awaiting 9735 on relays' : 'seat on zap event'})`
     );
+    trackOnlineOk('online.seat.paid', {
+      sessionID: onlineRec.sessionID,
+      roomId: onlineRec.roomId,
+      amountSats: zapBuyinSats,
+      meta: { method: 'lightning', rematch: isRematchPay },
+    });
     res.status(200).send('OK');
     return;
   }
@@ -217,6 +230,13 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       res.status(404).send('LNURLp not found for session.');
       return;
     }
+    trackEvent({
+      event: 'deposit.paid',
+      outcome: 'ok',
+      sessionID,
+      amountSats: amount,
+      meta: { gameMode: String(lnurlp.mode) },
+    });
     const playerRole = decidePlayerRole(lnurlp, sessionID);
     if (!playerRole) {
       console.error(`${dateNow()} [${sessionID}] Player role not created.`);
