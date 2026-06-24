@@ -21,6 +21,7 @@ Server checks (cached up to 24h when eligible, 5 min when not; pass `{ refresh: 
 - Kind-3 following count ≥ 100 (latest list via NIP-65 outbox relays + fallback relays)
 - Follows `CHAINDUEL_NOSTR_PUBKEY` (skipped if unset)
 - Account age ≥ 30 days (earliest relay event on outbox + fallback relays)
+- Response includes `claimedChallengeIds` for completed bounties (paid zaps)
 - Valid `lud16` with NIP-57 zap support (`allowsNostr` on LNURL-pay metadata)
 - App Nostr session at claim time
 

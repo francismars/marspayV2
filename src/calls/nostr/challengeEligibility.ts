@@ -8,6 +8,7 @@ import { fetchAccountAge, MIN_ACCOUNT_AGE_DAYS } from './fetchAccountAge';
 import { verifyUserLud16 } from './verifyUserLud16';
 import { fetchNostrAppProfile } from './fetchNostrAppProfile';
 import { fetchAuthorRelayContext } from './fetchAuthorEvents';
+import { listClaimedChallengeIds } from '../../state/challengeState';
 
 export const MIN_FOLLOWING_COUNT = 100;
 
@@ -30,6 +31,7 @@ export type ChallengeEligibilityResult = {
   pubkey: string | null;
   checks: ChallengeEligibilityChecks;
   eligible: boolean;
+  claimedChallengeIds: string[];
 };
 
 type CacheEntry = { result: ChallengeEligibilityResult; expiresAt: number };
@@ -53,6 +55,7 @@ export async function evaluateChallengeEligibility(
       ok: false,
       pubkey: null,
       eligible: false,
+      claimedChallengeIds: [],
       checks: {
         nip05: { pass: false, detail: 'not_signed_in' },
         followingCount: { pass: false, detail: 'not_signed_in' },
@@ -82,7 +85,12 @@ export async function evaluateChallengeEligibility(
       c.checks.followsChainduel.pass &&
       c.checks.accountAge.pass &&
       c.checks.lud16.pass;
-    return { ...c, checks: { ...c.checks, appSession }, eligible };
+    return {
+      ...c,
+      checks: { ...c.checks, appSession },
+      eligible,
+      claimedChallengeIds: listClaimedChallengeIds(hex),
+    };
   }
 
   const relayContext = await fetchAuthorRelayContext(hex);
@@ -153,6 +161,7 @@ export async function evaluateChallengeEligibility(
     pubkey: hex,
     checks,
     eligible,
+    claimedChallengeIds: listClaimedChallengeIds(hex),
   };
 
   const cacheTtl = eligible ? ELIGIBLE_CACHE_TTL_MS : INELIGIBLE_CACHE_TTL_MS;

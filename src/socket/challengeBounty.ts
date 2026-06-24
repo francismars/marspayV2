@@ -112,11 +112,7 @@ export async function requestChallengeRunHandler(
     socket.emit('resChallengeRun', { ok: false, reason: 'no_session' });
     return;
   }
-  if (!checkChallengeRunRateLimit(sessionID)) {
-    trackReject('challenge.run', 'rate_limited', { sessionID, challengeId: challengeIdInput || undefined });
-    socket.emit('resChallengeRun', { ok: false, reason: 'rate_limited' });
-    return;
-  }
+
   const appSession = getAppNostrSession(sessionID);
   if (!appSession?.pubkey) {
     trackReject('challenge.run', 'nostr_sign_in_required', { sessionID, challengeId: challengeIdInput || undefined });
@@ -124,18 +120,44 @@ export async function requestChallengeRunHandler(
     return;
   }
 
+  const challengeId = challengeIdInput;
+  if (!getChallengeById(challengeId)) {
+    trackReject('challenge.run', 'unknown_challenge', {
+      sessionID,
+      challengeId: challengeId || undefined,
+      pubkeyPrefix: pubkeyPrefix(appSession.pubkey),
+    });
+    socket.emit('resChallengeRun', { ok: false, reason: 'unknown_challenge' });
+    return;
+  }
+
+  if (hasClaimedChallenge(appSession.pubkey, challengeId)) {
+    trackReject('challenge.run', 'already_claimed', {
+      sessionID,
+      challengeId,
+      pubkeyPrefix: pubkeyPrefix(appSession.pubkey),
+    });
+    socket.emit('resChallengeRun', { ok: false, reason: 'already_claimed' });
+    return;
+  }
+
+  if (!checkChallengeRunRateLimit(sessionID)) {
+    trackReject('challenge.run', 'rate_limited', { sessionID, challengeId: challengeIdInput || undefined });
+    socket.emit('resChallengeRun', { ok: false, reason: 'rate_limited' });
+    return;
+  }
+
   const eligibility = await evaluateChallengeEligibility(appSession.pubkey, true);
   if (!eligibility.eligible) {
     trackReject('challenge.run', 'not_eligible', {
       sessionID,
-      challengeId: challengeIdInput || undefined,
+      challengeId: challengeId || undefined,
       pubkeyPrefix: pubkeyPrefix(appSession.pubkey),
     });
     socket.emit('resChallengeRun', { ok: false, reason: 'not_eligible' });
     return;
   }
 
-  const challengeId = challengeIdInput;
   const created = createChallengeRun({
     pubkey: appSession.pubkey,
     sessionID,

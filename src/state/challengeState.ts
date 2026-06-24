@@ -225,6 +225,17 @@ export function hasClaimedChallenge(pubkey: string, challengeId: string): boolea
   return Boolean(c?.zapPaidAt);
 }
 
+/** Paid bounty challenge ids for pubkey (for eligibility UI). */
+export function listClaimedChallengeIds(pubkey: string): string[] {
+  const hex = pubkey.toLowerCase();
+  const ids: string[] = [];
+  for (const claim of claimsByKey.values()) {
+    if (claim.pubkey.toLowerCase() !== hex || !claim.zapPaidAt) continue;
+    ids.push(claim.challengeId);
+  }
+  return ids.sort();
+}
+
 export function hasClaimedRun(runId: string): boolean {
   return paidRunIds.has(runId);
 }
