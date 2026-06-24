@@ -1,16 +1,67 @@
 # Telemetry
 
-Structured funnel and ops tracking for marspay. Events emit as JSON lines to stdout (`"type":"track"`) and roll up into `data/telemetry/`.
+Structured funnel and ops tracking for marspay. Events emit as JSON lines to stdout (`"type":"track"`), persist to `data/telemetry/events.jsonl`, and roll up into counters and the admin dashboard.
 
-## Local dev
+## Admin dashboard
+
+After `npm run build`, open:
+
+```
+http://localhost:3001/dashboard
+```
+
+Sign in with `ADMIN_PASSWORD` from `.env` (httpOnly cookie session; no password in URL).
+
+### API endpoints (cookie auth)
+
+| Route | Purpose |
+|-------|---------|
+| `POST /dashboard/api/login` | `{ "password": "…" }` → session cookie |
+| `POST /dashboard/api/logout` | Clear session |
+| `GET /dashboard/api/me` | `{ authenticated: boolean }` |
+| `GET /dashboard/api/overview` | KPI cards |
+| `GET /dashboard/api/funnels` | Challenge, ONLINE, client funnel breakdowns |
+| `GET /dashboard/api/challenges` | Win/replay stats, claims, bounty budget |
+| `GET /dashboard/api/online` | Live rooms + match history |
+| `GET /dashboard/api/activity?limit=100&event=challenge.&outcome=ok` | Recent track events |
+| `GET /dashboard/api/sessions` | Connected sessions |
+| `GET /dashboard/api/debug/raw` | Legacy full in-memory dump (LNURL maps, etc.) |
+
+Legacy: `GET /dashboard?password=…` returns overview JSON with `Deprecation: true` header.
+
+### Local dev
 
 ```bash
+# Terminal 1 — backend
 npm run dev
-# Play a challenge or online match, then:
-grep '"type":"track"' logs/marspay-out.log | jq .
-grep '\[CHALLENGE_START\]' logs/marspay-out.log
-curl 'http://localhost:3001/dashboard?password=YOUR_ADMIN_PASSWORD' | jq .telemetry
+
+# Terminal 2 — admin UI (proxies /dashboard/api to :3001)
+cd admin && npm run dev
 ```
+
+Or build and serve from marspay:
+
+```bash
+npm run build && npm start
+```
+
+### Verify after deploy
+
+```bash
+# Login and overview
+curl -c /tmp/dash.cookie -X POST http://127.0.0.1:3001/dashboard/api/login \
+  -H 'Content-Type: application/json' -d '{"password":"YOUR_ADMIN_PASSWORD"}'
+curl -b /tmp/dash.cookie http://127.0.0.1:3001/dashboard/api/overview | jq .
+
+# Track events in logs and on disk
+grep '"type":"track"' logs/marspay-out.log | tail -5 | jq .
+tail -3 data/telemetry/events.jsonl | jq .
+
+# Or use the verification script
+./scripts/verify-dashboard.sh
+```
+
+**Security:** Restrict `/dashboard` to localhost or VPN in nginx. Do not expose publicly without TLS and a strong `ADMIN_PASSWORD`.
 
 ## Event catalog
 
@@ -76,6 +127,7 @@ Human tags: `[SESSION_CONNECT]`, `[SESSION_DISCONNECT]`, `[NOSTR_SIGNIN]`.
 
 | File | Contents |
 |------|----------|
+| `data/telemetry/events.jsonl` | Append-only track event log (rotates at ~50MB) |
 | `data/telemetry/challenge_stats.json` | Win/replay counters |
 | `data/telemetry/counters.json` | Funnel counter rollup |
 | `data/challenge_claims/claims.jsonl` | Paid bounty audit |

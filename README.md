@@ -89,8 +89,12 @@ Server-validated practice challenges with real Lightning bounties. Full protocol
 
 ### Admin & ops
 
-- `GET /dashboard?password=` — dumps all in-memory state as JSON
+- `GET /dashboard` — React ops dashboard (sign in with `ADMIN_PASSWORD`)
+- `GET /dashboard/api/*` — structured telemetry API (see [docs/TELEMETRY.md](docs/TELEMETRY.md))
+- `GET /dashboard/api/debug/raw` — legacy full in-memory JSON dump
 - Static assets at `GET /public/*`
+
+Build includes the admin UI: `npm run build` (runs `tsc` + `build:admin`).
 
 ## Tech stack
 

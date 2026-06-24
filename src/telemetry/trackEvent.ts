@@ -1,6 +1,7 @@
 import { dateNow } from '../utils/time';
 import type { ChallengeEligibilityResult } from '../calls/nostr/challengeEligibility';
 import { bumpFunnelCounter } from './funnelCounters';
+import { recordTrackEvent } from './eventLog';
 
 export type TrackOutcome = 'ok' | 'reject' | 'error';
 
@@ -67,6 +68,7 @@ export function trackEvent(payload: TrackPayload): void {
     ...payload,
   };
   console.log(JSON.stringify(line));
+  recordTrackEvent(line);
   bumpFunnelCounter({
     event: payload.event,
     outcome: payload.outcome,
