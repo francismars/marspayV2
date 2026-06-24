@@ -12,6 +12,7 @@ import { SESSIONIDLENGHT } from '../consts/values';
 import { Session } from '../types/session';
 import { normalizeIP } from '../utils/ip';
 import { trackEvent } from '../telemetry/trackEvent';
+import { recordSessionConnect } from '../telemetry/trafficAnalytics';
 
 export default async function middleware(
   io: Server,
@@ -49,6 +50,7 @@ export default async function middleware(
       sessionID,
       meta: { reconnect: hadMapping },
     });
+    recordSessionConnect(sessionID, socket);
     return next();
   }
   const emoji = ALLOWEDEMOJIS[Math.floor(Math.random() * ALLOWEDEMOJIS.length)];
@@ -72,6 +74,7 @@ export default async function middleware(
     sessionID: socket.data.sessionID as string,
     meta: { reconnect: false, newSession: true },
   });
+  recordSessionConnect(socket.data.sessionID as string, socket);
   return next();
 }
 

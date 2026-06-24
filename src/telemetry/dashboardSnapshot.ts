@@ -1,13 +1,20 @@
+import { nip19 } from 'nostr-tools';
 import { getAllIDtoSocket } from '../state/sessionState';
 import { getAllsessionIDtoKind1s } from '../state/nostrState';
-import { getAppNostrPubkeyForSession } from '../state/nostrAppSessionState';
+import { getAppNostrSession } from '../state/nostrAppSessionState';
 import { getChallengeTelemetrySnapshot } from '../state/challengeTelemetry';
 import {
   getDailyZapBudgetRemaining,
   listPendingZapClaims,
 } from '../state/challengeState';
 import { loadDailySpendSync } from '../state/challengeClaimStore';
-import { listOnlineRooms, listOnlineHistoryMerged } from '../state/onlineRoomState';
+import {
+  getRoomById,
+  getRoomBySession,
+  listOnlineRooms,
+  listOnlineHistoryMerged,
+} from '../state/onlineRoomState';
+import { onlineLobbyPublicUrl, onlineGamePublicUrl } from '../consts/gamePublicUrl';
 import {
   getFunnelCountersSnapshot,
   parseFunnelCounters,
@@ -15,7 +22,19 @@ import {
   topRejectReasons,
 } from './funnelCounters';
 import { tailChallengeClaims } from './dashboardData';
-import { getRecentEvents, getEventLogByteSize } from './eventLog';
+import {
+  countEventsSince,
+  getEventLogByteSize,
+  getEventsForSession,
+  getLastEventForSession,
+  getRecentEvents,
+  scanEvents,
+  type StoredTrackEvent,
+} from './eventLog';
+import { pubkeyPrefix as toPubkeyPrefix } from './trackEvent';
+import { getTrafficSnapshot } from './trafficAnalytics';
+import type { OnlineSeatState } from '../types/online';
+import { PlayerRole } from '../types/game';
 
 function funnelStep(
   rows: ReturnType<typeof parseFunnelCounters>,
@@ -34,43 +53,155 @@ function funnelStep(
   };
 }
 
+function funnelStepFromEvents(
+  events: StoredTrackEvent[],
+  event: string
+): { ok: number; reject: number; error: number; total: number; passRate: number } {
+  let ok = 0;
+  let reject = 0;
+  let error = 0;
+  for (const e of events) {
+    if (e.event !== event) continue;
+    if (e.outcome === 'ok') ok++;
+    else if (e.outcome === 'reject') reject++;
+    else if (e.outcome === 'error') error++;
+  }
+  const total = ok + reject + error;
+  return {
+    ok,
+    reject,
+    error,
+    total,
+    passRate: total > 0 ? Math.round((ok / total) * 1000) / 10 : 0,
+  };
+}
+
+function topRejectReasonsFromEvents(
+  events: StoredTrackEvent[],
+  event: string,
+  limit = 10
+): Array<{ reason: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const e of events) {
+    if (e.event !== event || e.outcome !== 'reject' || !e.reason) continue;
+    counts.set(e.reason, (counts.get(e.reason) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function truncatePubkey(pubkey: string): string {
-  const hex = pubkey.toLowerCase();
-  if (hex.length <= 16) return hex;
-  return `${hex.slice(0, 8)}…${hex.slice(-4)}`;
+function sinceHoursAgo(hours: number): string {
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}
+
+function seatRoleLabel(role: OnlineSeatState['role']): 'p1' | 'p2' {
+  return role === PlayerRole.Player1 ? 'p1' : 'p2';
+}
+
+function resolveSessionOnlineContext(sessionID: string) {
+  const room = getRoomBySession(sessionID);
+  if (!room) return undefined;
+
+  for (const seat of room.seats.values()) {
+    if (seat.sessionID === sessionID) {
+      return {
+        mode: 'online' as const,
+        roomCode: room.roomCode,
+        roomId: room.roomId,
+        seatRole: seatRoleLabel(seat.role),
+        seatStatus: seat.status,
+      };
+    }
+  }
+  if (room.spectators.has(sessionID)) {
+    return {
+      mode: 'online' as const,
+      roomCode: room.roomCode,
+      roomId: room.roomId,
+      seatRole: undefined,
+      seatStatus: 'spectator',
+    };
+  }
+  return {
+    mode: 'online' as const,
+    roomCode: room.roomCode,
+    roomId: room.roomId,
+  };
+}
+
+function buildIdentity(sessionID: string) {
+  const app = getAppNostrSession(sessionID);
+  if (app) {
+    return {
+      kind: 'nostr' as const,
+      pubkey: app.pubkey,
+      npub: nip19.npubEncode(app.pubkey),
+      name: app.profile.name,
+      picture: app.profile.picture,
+      nip05: app.profile.nip05,
+      lud16: app.profile.lud16,
+      signerMode: app.signerMode,
+      pubkeyPrefix: toPubkeyPrefix(app.pubkey),
+    };
+  }
+  return {
+    kind: 'anon' as const,
+    pubkeyPrefix: undefined,
+  };
+}
+
+function inferModeFromLastEvent(last?: StoredTrackEvent): 'challenge' | 'online' | 'idle' | undefined {
+  if (!last) return 'idle';
+  if (last.event.startsWith('challenge.')) return 'challenge';
+  if (last.event.startsWith('online.')) return 'online';
+  return 'idle';
 }
 
 export function buildOverviewSnapshot() {
   const rows = parseFunnelCounters(getFunnelCountersSnapshot());
   const sessions = getAllIDtoSocket();
-  const activeRooms = listOnlineRooms().filter(
-    (r) => r.phase !== 'finished'
-  );
+  const activeRooms = listOnlineRooms().filter((r) => r.phase !== 'finished');
   const dailySpend = loadDailySpendSync();
   const cap = Math.max(0, Number(process.env.CHALLENGE_BOUNTY_DAILY_CAP_SATS ?? 100_000));
   const spentToday = dailySpend[todayKey()] ?? 0;
   const pendingZaps = listPendingZapClaims();
+  const since24h = sinceHoursAgo(24);
 
   return {
     fetchedAt: new Date().toISOString(),
     connectedSessions: sessions.size,
     activeOnlineRooms: activeRooms.length,
-    challengeRunsToday: sumCounter(rows, 'challenge.run', 'ok'),
+    challengeRunsTotal: sumCounter(rows, 'challenge.run', 'ok'),
+    challengeRuns24h: countEventsSince(since24h, { event: 'challenge.run', outcome: 'ok' }),
+    metricsWindow: {
+      challengeRuns: 'lifetime' as const,
+      challengeRuns24h: '24h' as const,
+      bounty: 'today' as const,
+    },
     bountyPaidTodaySats: spentToday,
     bountyCapSats: cap,
+    bountyCapPct: cap > 0 ? Math.round((spentToday / cap) * 1000) / 10 : 0,
     bountyRemainingSats: getDailyZapBudgetRemaining(),
     pendingZapClaims: pendingZaps.length,
     serverUptimeSec: Math.floor(process.uptime()),
     eventLogBytes: getEventLogByteSize(),
+    traffic: getTrafficSnapshot(),
   };
 }
 
 export function buildFunnelsSnapshot() {
-  const rows = parseFunnelCounters(getFunnelCountersSnapshot());
+  return buildFunnelsSnapshotForWindow('lifetime');
+}
+
+export type FunnelWindow = 'lifetime' | '24h' | '7d';
+
+export function buildFunnelsSnapshotForWindow(window: FunnelWindow) {
   const challengeEvents = [
     'challenge.eligibility',
     'challenge.run',
@@ -82,6 +213,9 @@ export function buildFunnelsSnapshot() {
   const onlineEvents = [
     'online.room.created',
     'online.room.joined',
+    'online.room.joined_code',
+    'online.room.spectate',
+    'online.room.cancelled',
     'online.seat.lightning.requested',
     'online.seat.paid',
     'online.game.started',
@@ -95,28 +229,64 @@ export function buildFunnelsSnapshot() {
     'client.ui.error',
   ];
 
+  if (window === 'lifetime') {
+    const rows = parseFunnelCounters(getFunnelCountersSnapshot());
+    return {
+      fetchedAt: new Date().toISOString(),
+      window,
+      challenge: {
+        steps: Object.fromEntries(challengeEvents.map((e) => [e, funnelStep(rows, e)])),
+        topRejectReasons: {
+          eligibility: topRejectReasons(rows, 'challenge.eligibility'),
+          run: topRejectReasons(rows, 'challenge.run'),
+          winSubmit: topRejectReasons(rows, 'challenge.win.submit'),
+          claim: topRejectReasons(rows, 'challenge.claim'),
+        },
+      },
+      online: {
+        steps: Object.fromEntries(onlineEvents.map((e) => [e, funnelStep(rows, e)])),
+        topRejectReasons: {
+          seatPaid: topRejectReasons(rows, 'online.seat.pay_rejected'),
+          joined: topRejectReasons(rows, 'online.room.joined'),
+          gameStarted: topRejectReasons(rows, 'online.game.started'),
+        },
+      },
+      client: {
+        steps: Object.fromEntries(clientEvents.map((e) => [e, funnelStep(rows, e)])),
+        uiErrors: topRejectReasons(rows, 'client.ui.error'),
+      },
+    };
+  }
+
+  const hours = window === '24h' ? 24 : 168;
+  const sinceTs = sinceHoursAgo(hours);
+  const events = scanEvents(10_000, { sinceTs });
+
   return {
     fetchedAt: new Date().toISOString(),
+    window,
     challenge: {
-      steps: Object.fromEntries(challengeEvents.map((e) => [e, funnelStep(rows, e)])),
+      steps: Object.fromEntries(
+        challengeEvents.map((e) => [e, funnelStepFromEvents(events, e)])
+      ),
       topRejectReasons: {
-        eligibility: topRejectReasons(rows, 'challenge.eligibility'),
-        run: topRejectReasons(rows, 'challenge.run'),
-        winSubmit: topRejectReasons(rows, 'challenge.win.submit'),
-        claim: topRejectReasons(rows, 'challenge.claim'),
+        eligibility: topRejectReasonsFromEvents(events, 'challenge.eligibility'),
+        run: topRejectReasonsFromEvents(events, 'challenge.run'),
+        winSubmit: topRejectReasonsFromEvents(events, 'challenge.win.submit'),
+        claim: topRejectReasonsFromEvents(events, 'challenge.claim'),
       },
     },
     online: {
-      steps: Object.fromEntries(onlineEvents.map((e) => [e, funnelStep(rows, e)])),
+      steps: Object.fromEntries(onlineEvents.map((e) => [e, funnelStepFromEvents(events, e)])),
       topRejectReasons: {
-        seatPaid: topRejectReasons(rows, 'online.seat.pay_rejected'),
-        joined: topRejectReasons(rows, 'online.room.joined'),
-        gameStarted: topRejectReasons(rows, 'online.game.started'),
+        seatPaid: topRejectReasonsFromEvents(events, 'online.seat.pay_rejected'),
+        joined: topRejectReasonsFromEvents(events, 'online.room.joined'),
+        gameStarted: topRejectReasonsFromEvents(events, 'online.game.started'),
       },
     },
     client: {
-      steps: Object.fromEntries(clientEvents.map((e) => [e, funnelStep(rows, e)])),
-      uiErrors: topRejectReasons(rows, 'client.ui.error'),
+      steps: Object.fromEntries(clientEvents.map((e) => [e, funnelStepFromEvents(events, e)])),
+      uiErrors: topRejectReasonsFromEvents(events, 'client.ui.error'),
     },
   };
 }
@@ -127,7 +297,9 @@ export function buildChallengesSnapshot() {
   const cap = Math.max(0, Number(process.env.CHALLENGE_BOUNTY_DAILY_CAP_SATS ?? 100_000));
   const spentToday = dailySpend[todayKey()] ?? 0;
   const pending = listPendingZapClaims().map((c) => ({
-    pubkey: truncatePubkey(c.pubkey),
+    pubkey: c.pubkey,
+    npub: nip19.npubEncode(c.pubkey),
+    pubkeyPrefix: toPubkeyPrefix(c.pubkey),
     challengeId: c.challengeId,
     runId: c.runId,
     bountySats: c.bountySats,
@@ -136,9 +308,11 @@ export function buildChallengesSnapshot() {
 
   const recentClaims = tailChallengeClaims(30).map((row) => {
     const r = row as Record<string, unknown>;
-    const pubkey = typeof r.pubkey === 'string' ? truncatePubkey(r.pubkey) : '?';
+    const pubkeyHex = typeof r.pubkey === 'string' ? r.pubkey : '';
     return {
-      pubkey,
+      pubkey: pubkeyHex,
+      npub: pubkeyHex ? nip19.npubEncode(pubkeyHex) : undefined,
+      pubkeyPrefix: pubkeyHex ? toPubkeyPrefix(pubkeyHex) : undefined,
       challengeId: r.challengeId,
       runId: r.runId,
       bountySats: r.bountySats,
@@ -164,21 +338,46 @@ export function buildChallengesSnapshot() {
   };
 }
 
+function serializeSeat(seat: OnlineSeatState) {
+  return {
+    role: seatRoleLabel(seat.role),
+    sessionID: seat.sessionID,
+    status: seat.status,
+    paidAmount: seat.paidAmount,
+    payMethod: seat.payMethod,
+    name: seat.name,
+    picture: seat.picture,
+    pubkeyPrefix: seat.pubkey ? toPubkeyPrefix(seat.pubkey) : undefined,
+    npub: seat.pubkey ? nip19.npubEncode(seat.pubkey) : undefined,
+    ready: seat.ready,
+    pingMs: seat.pingMs,
+  };
+}
+
 export function buildOnlineSnapshot() {
   const now = Date.now();
-  const live = listOnlineRooms().map((room) => ({
-    roomId: room.roomId,
-    roomCode: room.roomCode,
-    phase: room.phase,
-    buyin: room.buyin,
-    matchRound: room.matchRound,
-    seatsPaid: room.playersPaid,
-    seatsTotal: room.seatsTotal,
-    spectators: room.spectators,
-    ageMs: now - room.createdAt,
-    result: room.result,
-    replay: room.replay,
-  }));
+  const live = listOnlineRooms().map((room) => {
+    const full = getRoomById(room.roomId);
+    const seats = full
+      ? [...full.seats.values()].map(serializeSeat)
+      : [];
+    return {
+      roomId: room.roomId,
+      roomCode: room.roomCode,
+      phase: room.phase,
+      buyin: room.buyin,
+      matchRound: room.matchRound,
+      seatsPaid: room.playersPaid,
+      seatsTotal: room.seatsTotal,
+      spectators: room.spectators,
+      ageMs: now - room.createdAt,
+      result: room.result,
+      replay: room.replay,
+      seats,
+      lobbyUrl: onlineLobbyPublicUrl(room.roomId),
+      gameUrl: room.phase === 'playing' ? onlineGamePublicUrl(room.roomId) : undefined,
+    };
+  });
 
   const history = listOnlineHistoryMerged()
     .filter((r) => r.archived || r.phase === 'finished' || r.phase === 'postgame')
@@ -193,6 +392,7 @@ export function buildOnlineSnapshot() {
       archiveKind: room.archiveKind,
       result: room.result,
       replay: room.replay,
+      lobbyUrl: onlineLobbyPublicUrl(room.roomId),
     }));
 
   return {
@@ -206,11 +406,19 @@ export function buildActivitySnapshot(params?: {
   limit?: number;
   eventPrefix?: string;
   outcome?: 'ok' | 'reject' | 'error';
+  sinceTs?: string;
+  sessionID?: string;
+  pubkeyPrefix?: string;
+  roomCode?: string;
 }) {
   const limit = params?.limit ?? 100;
   const events = getRecentEvents(limit, {
     eventPrefix: params?.eventPrefix,
     outcome: params?.outcome,
+    sinceTs: params?.sinceTs,
+    sessionID: params?.sessionID,
+    pubkeyPrefix: params?.pubkeyPrefix,
+    roomCode: params?.roomCode,
   });
   return {
     fetchedAt: new Date().toISOString(),
@@ -230,27 +438,213 @@ export function buildActivitySnapshot(params?: {
   };
 }
 
-export function buildSessionsSnapshot() {
+export function buildLiveSnapshot() {
   const now = Date.now();
   const sessions = getAllIDtoSocket();
   const kind1Map = getAllsessionIDtoKind1s();
 
   const rows = [...sessions.entries()].map(([sessionID, session]) => {
-    const appPk = getAppNostrPubkeyForSession(sessionID);
+    const identity = buildIdentity(sessionID);
+    const onlineCtx = resolveSessionOnlineContext(sessionID);
+    const last = getLastEventForSession(sessionID);
+    const mode = onlineCtx?.mode ?? inferModeFromLastEvent(last);
+
+    let context: {
+      mode?: 'challenge' | 'online' | 'idle';
+      roomCode?: string;
+      roomId?: string;
+      seatRole?: 'p1' | 'p2';
+      seatStatus?: string;
+      challengeId?: string;
+      lastEvent?: string;
+      lastOutcome?: string;
+      lastEventTs?: string;
+    };
+
+    if (onlineCtx) {
+      context = {
+        ...onlineCtx,
+        mode: 'online',
+        challengeId: last?.challengeId,
+        lastEvent: last?.event,
+        lastOutcome: last?.outcome,
+        lastEventTs: last?.ts,
+      };
+    } else {
+      context = {
+        mode,
+        challengeId: last?.challengeId,
+        roomCode: last?.roomCode,
+        roomId: last?.roomId,
+        lastEvent: last?.event,
+        lastOutcome: last?.outcome,
+        lastEventTs: last?.ts,
+      };
+    }
+
     const kind1s = kind1Map.get(sessionID);
     return {
       sessionID,
+      connectedAtMs: now - (now - session.lastSeen),
       lastSeenMs: now - session.lastSeen,
-      nostrLinked: Boolean(appPk),
-      pubkeyPrefix: appPk ? appPk.slice(0, 12) : undefined,
+      nostrLinked: identity.kind === 'nostr',
+      identity,
+      context,
       kind1Count: kind1s?.length ?? 0,
     };
   });
+
+  const inOnline = rows.filter((r) => r.context.mode === 'online').length;
+  const inChallenge = rows.filter((r) => r.context.mode === 'challenge').length;
 
   return {
     fetchedAt: new Date().toISOString(),
     sessions: rows.sort((a, b) => b.lastSeenMs - a.lastSeenMs),
     total: rows.length,
     nostrLinked: rows.filter((r) => r.nostrLinked).length,
+    inOnline,
+    inChallenge,
+  };
+}
+
+/** Backward-compatible alias. */
+export function buildSessionsSnapshot() {
+  return buildLiveSnapshot();
+}
+
+export function buildLiveSessionDetail(sessionID: string) {
+  const sessions = getAllIDtoSocket();
+  const session = sessions.get(sessionID);
+  if (!session) return null;
+
+  const now = Date.now();
+  const identity = buildIdentity(sessionID);
+  const onlineCtx = resolveSessionOnlineContext(sessionID);
+  const last = getLastEventForSession(sessionID);
+  const recentEvents = getEventsForSession(sessionID, 20);
+
+  return {
+    fetchedAt: new Date().toISOString(),
+    sessionID,
+    lastSeenMs: now - session.lastSeen,
+    identity,
+    context: onlineCtx
+      ? { ...onlineCtx, mode: 'online' as const }
+      : {
+          mode: inferModeFromLastEvent(last),
+          challengeId: last?.challengeId,
+          roomCode: last?.roomCode,
+          roomId: last?.roomId,
+        },
+    recentEvents: recentEvents.map((e) => ({
+      ts: e.ts,
+      event: e.event,
+      outcome: e.outcome,
+      reason: e.reason,
+      challengeId: e.challengeId,
+      roomCode: e.roomCode,
+    })),
+    lobbyUrl: onlineCtx?.roomId ? onlineLobbyPublicUrl(onlineCtx.roomId) : undefined,
+  };
+}
+
+const ATTEMPT_EVENTS = [
+  'challenge.eligibility',
+  'challenge.run',
+  'online.room.joined',
+  'online.seat.paid',
+  'nostr.app.link',
+];
+
+export function buildRecentAttemptsSnapshot(hours = 24) {
+  const sinceTs = sinceHoursAgo(hours);
+  const events = scanEvents(10_000, { sinceTs, events: ATTEMPT_EVENTS });
+  const sessions = getAllIDtoSocket();
+
+  type Bucket = {
+    key: string;
+    pubkeyPrefix?: string;
+    sessionID?: string;
+    identity?: ReturnType<typeof buildIdentity>;
+    lastTs: string;
+    lastEvent: string;
+    lastOutcome: string;
+    lastReason?: string;
+    challengeRuns: number;
+    onlineJoins: number;
+    nostrLinks: number;
+    rejectReasons: Map<string, number>;
+  };
+
+  const buckets = new Map<string, Bucket>();
+
+  for (const e of events) {
+    const key = e.pubkeyPrefix ?? e.sessionID ?? 'unknown';
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      const liveSessionID = e.sessionID && sessions.has(e.sessionID) ? e.sessionID : undefined;
+      bucket = {
+        key,
+        pubkeyPrefix: e.pubkeyPrefix,
+        sessionID: liveSessionID ?? e.sessionID,
+        identity: liveSessionID ? buildIdentity(liveSessionID) : undefined,
+        lastTs: e.ts,
+        lastEvent: e.event,
+        lastOutcome: e.outcome,
+        lastReason: e.reason,
+        challengeRuns: 0,
+        onlineJoins: 0,
+        nostrLinks: 0,
+        rejectReasons: new Map(),
+      };
+      buckets.set(key, bucket);
+    }
+
+    if (e.ts >= bucket.lastTs) {
+      bucket.lastTs = e.ts;
+      bucket.lastEvent = e.event;
+      bucket.lastOutcome = e.outcome;
+      bucket.lastReason = e.reason;
+    }
+
+    if (e.event === 'challenge.run' && e.outcome === 'ok') bucket.challengeRuns++;
+    if (e.event === 'online.room.joined') bucket.onlineJoins++;
+    if (e.event === 'nostr.app.link' && e.outcome === 'ok') bucket.nostrLinks++;
+    if (e.outcome === 'reject' && e.reason) {
+      bucket.rejectReasons.set(e.reason, (bucket.rejectReasons.get(e.reason) ?? 0) + 1);
+    }
+
+    if (e.sessionID && sessions.has(e.sessionID)) {
+      bucket.sessionID = e.sessionID;
+      bucket.identity = buildIdentity(e.sessionID);
+    }
+  }
+
+  const attempts = [...buckets.values()]
+    .map((b) => {
+      const topReject = [...b.rejectReasons.entries()].sort((a, c) => c[1] - a[1])[0];
+      return {
+        key: b.key,
+        pubkeyPrefix: b.pubkeyPrefix,
+        sessionID: b.sessionID,
+        identity: b.identity,
+        lastTs: b.lastTs,
+        lastEvent: b.lastEvent,
+        lastOutcome: b.lastOutcome,
+        lastReason: b.lastReason,
+        challengeRuns: b.challengeRuns,
+        onlineJoins: b.onlineJoins,
+        nostrLinks: b.nostrLinks,
+        topRejectReason: topReject?.[0],
+        topRejectCount: topReject?.[1],
+      };
+    })
+    .sort((a, b) => b.lastTs.localeCompare(a.lastTs));
+
+  return {
+    fetchedAt: new Date().toISOString(),
+    hours,
+    attempts,
+    total: attempts.length,
   };
 }

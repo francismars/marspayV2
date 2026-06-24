@@ -10,6 +10,7 @@ import {
 import type { ChallengesData } from '../lib/api';
 import { formatTs } from '../lib/hooks';
 import { DataTable, KpiCard, Section } from './ui';
+import { NpubLink } from './PlayerIdentityCell';
 
 export function ChallengeTab({ data }: { data: ChallengesData }) {
   const byChallenge = Object.entries(data.stats.byChallenge).map(([id, row]) => ({
@@ -70,6 +71,7 @@ export function ChallengeTab({ data }: { data: ChallengesData }) {
             { key: 'replayFailed', label: 'Replay failed' },
           ]}
           rows={byChallenge}
+          rowKey={(r) => String(r.challengeId)}
           empty="No challenge stats yet"
         />
       </Section>
@@ -82,6 +84,7 @@ export function ChallengeTab({ data }: { data: ChallengesData }) {
             { key: 'count', label: 'Count' },
           ]}
           rows={replayReasonRows}
+          rowKey={(r) => `${r.challengeId}-${r.reason}`}
           empty="No replay failures"
         />
       </Section>
@@ -89,7 +92,12 @@ export function ChallengeTab({ data }: { data: ChallengesData }) {
       <Section title="Pending zap claims">
         <DataTable
           columns={[
-            { key: 'pubkey', label: 'Pubkey' },
+            {
+              key: 'npub',
+              label: 'Player',
+              sortable: false,
+              render: (r) => <NpubLink npub={r.npub as string} />,
+            },
             { key: 'challengeId', label: 'Challenge' },
             { key: 'bountySats', label: 'Sats' },
             {
@@ -99,6 +107,7 @@ export function ChallengeTab({ data }: { data: ChallengesData }) {
             },
           ]}
           rows={data.pendingZaps as unknown as Array<Record<string, unknown>>}
+          rowKey={(r) => `${r.challengeId}-${r.runId}`}
           empty="No pending zaps"
         />
       </Section>
@@ -106,7 +115,12 @@ export function ChallengeTab({ data }: { data: ChallengesData }) {
       <Section title="Recent paid claims">
         <DataTable
           columns={[
-            { key: 'pubkey', label: 'Pubkey' },
+            {
+              key: 'npub',
+              label: 'Player',
+              sortable: false,
+              render: (r) => <NpubLink npub={r.npub as string | undefined} />,
+            },
             { key: 'challengeId', label: 'Challenge' },
             { key: 'bountySats', label: 'Sats' },
             {
@@ -116,6 +130,7 @@ export function ChallengeTab({ data }: { data: ChallengesData }) {
             },
           ]}
           rows={data.recentClaims}
+          rowKey={(r, i) => `${r.challengeId}-${i}`}
           empty="No claims yet"
         />
       </Section>

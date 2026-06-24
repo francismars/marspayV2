@@ -32,6 +32,7 @@ import {
   serializeRoom,
 } from '../../state/onlineRoomState';
 import { trackOnlineOk, trackOnlineReject } from '../../telemetry/onlineTelemetry';
+import { resolveTrackPubkeyPrefix } from '../../telemetry/resolveTrackPubkeyPrefix';
 
 const processedZapEventIDs = new Set<string>();
 
@@ -235,6 +236,7 @@ async function listenToSubscriptions(event: NDKEvent) {
       );
       trackOnlineOk('online.seat.paid', {
         sessionID: consumed.record.sessionID,
+        pubkeyPrefix: resolveTrackPubkeyPrefix(consumed.record.sessionID, room.roomId),
         roomId: room.roomId,
         amountSats: zapAmount,
         meta: { method: 'nostr_zap_pin' },
@@ -285,6 +287,7 @@ async function listenToSubscriptions(event: NDKEvent) {
       );
       trackOnlineOk('online.seat.paid', {
         sessionID: nostrConsumed.record.sessionID,
+        pubkeyPrefix: resolveTrackPubkeyPrefix(nostrConsumed.record.sessionID, room.roomId),
         roomId: room.roomId,
         amountSats: zapAmount,
         meta: { method: 'nostr_link' },

@@ -63,6 +63,7 @@ import {
 } from './challengeBounty';
 import type { AppNostrSignerMode } from '../state/nostrAppSessionState';
 import { trackEvent } from '../telemetry/trackEvent';
+import { recordSessionDisconnect } from '../telemetry/trafficAnalytics';
 import { reportClientEventHandler } from '../telemetry/clientTelemetry';
 
 function guardSocketAsync<T extends unknown[]>(
@@ -376,6 +377,7 @@ export default function registerSocketHandlers(io: Server) {
           sessionID,
           meta: durationMs != null ? { durationMs } : {},
         });
+        recordSessionDisconnect(sessionID);
         leaveRoom(sessionID);
       }
     });

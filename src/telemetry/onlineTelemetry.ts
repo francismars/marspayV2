@@ -2,6 +2,7 @@ import { trackEvent, trackReject } from './trackEvent';
 
 type OnlineTrackCtx = {
   sessionID?: string;
+  pubkeyPrefix?: string;
   roomId?: string;
   roomCode?: string;
   buyin?: number;

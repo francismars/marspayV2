@@ -33,13 +33,30 @@ export type OverviewData = {
   fetchedAt: string;
   connectedSessions: number;
   activeOnlineRooms: number;
-  challengeRunsToday: number;
+  challengeRunsTotal: number;
+  challengeRuns24h: number;
+  metricsWindow: {
+    challengeRuns: 'lifetime';
+    challengeRuns24h: '24h';
+    bounty: 'today';
+  };
   bountyPaidTodaySats: number;
   bountyCapSats: number;
+  bountyCapPct: number;
   bountyRemainingSats: number;
   pendingZapClaims: number;
   serverUptimeSec: number;
   eventLogBytes: number;
+  traffic: {
+    uniqueSessions24h: number;
+    uniqueVisitors24h: number;
+    geoCoveragePct: number;
+    geoWarning: boolean;
+    connectedNowByCountry: Array<{ country: string; count: number }>;
+    topCountries24h: Array<{ country: string; sessions: number; uniqueVisitors: number }>;
+    countrySeries7d: Array<{ day: string; countries: Record<string, number> }>;
+    rollupRetentionNote: string;
+  };
 };
 
 export type FunnelStep = {
@@ -52,6 +69,7 @@ export type FunnelStep = {
 
 export type FunnelsData = {
   fetchedAt: string;
+  window: 'lifetime' | '24h' | '7d';
   challenge: {
     steps: Record<string, FunnelStep>;
     topRejectReasons: Record<string, Array<{ reason: string; count: number }>>;
@@ -64,6 +82,115 @@ export type FunnelsData = {
     steps: Record<string, FunnelStep>;
     uiErrors: Array<{ reason: string; count: number }>;
   };
+};
+
+export type PlayerIdentity = {
+  kind: 'nostr' | 'anon';
+  pubkey?: string;
+  npub?: string;
+  name?: string;
+  picture?: string | null;
+  nip05?: string | null;
+  lud16?: string | null;
+  signerMode?: 'extension' | 'nip46' | 'nsec' | null;
+  pubkeyPrefix?: string;
+};
+
+export type LiveSessionContext = {
+  mode?: 'challenge' | 'online' | 'idle';
+  roomCode?: string;
+  roomId?: string;
+  seatRole?: 'p1' | 'p2';
+  seatStatus?: string;
+  challengeId?: string;
+  lastEvent?: string;
+  lastOutcome?: string;
+  lastEventTs?: string;
+};
+
+export type LiveData = {
+  fetchedAt: string;
+  sessions: Array<{
+    sessionID: string;
+    lastSeenMs: number;
+    nostrLinked: boolean;
+    identity: PlayerIdentity;
+    context: LiveSessionContext;
+    kind1Count: number;
+  }>;
+  total: number;
+  nostrLinked: number;
+  inOnline: number;
+  inChallenge: number;
+};
+
+export type LiveSessionDetail = {
+  fetchedAt: string;
+  sessionID: string;
+  lastSeenMs: number;
+  identity: PlayerIdentity;
+  context: LiveSessionContext;
+  recentEvents: Array<{
+    ts: string;
+    event: string;
+    outcome: string;
+    reason?: string;
+    challengeId?: string;
+    roomCode?: string;
+  }>;
+  lobbyUrl?: string;
+};
+
+export type RecentAttemptsData = {
+  fetchedAt: string;
+  hours: number;
+  attempts: Array<{
+    key: string;
+    pubkeyPrefix?: string;
+    sessionID?: string;
+    identity?: PlayerIdentity;
+    lastTs: string;
+    lastEvent: string;
+    lastOutcome: string;
+    lastReason?: string;
+    challengeRuns: number;
+    onlineJoins: number;
+    nostrLinks: number;
+    topRejectReason?: string;
+    topRejectCount?: number;
+  }>;
+  total: number;
+};
+
+export type OnlineSeat = {
+  role: 'p1' | 'p2';
+  sessionID?: string;
+  status: string;
+  paidAmount?: number;
+  payMethod?: string;
+  name?: string;
+  picture?: string;
+  pubkeyPrefix?: string;
+  npub?: string;
+  ready?: boolean;
+  pingMs?: number;
+};
+
+export type OnlineRoomLive = {
+  roomId: string;
+  roomCode: string;
+  phase: string;
+  buyin: number;
+  matchRound: number;
+  seatsPaid: number;
+  seatsTotal: number;
+  spectators: number;
+  ageMs: number;
+  result?: Record<string, unknown>;
+  replay?: { available?: boolean };
+  seats: OnlineSeat[];
+  lobbyUrl: string;
+  gameUrl?: string;
 };
 
 export type ChallengesData = {
@@ -82,17 +209,28 @@ export type ChallengesData = {
   dailySpendSeries: Array<{ day: string; sats: number }>;
   pendingZaps: Array<{
     pubkey: string;
+    npub: string;
+    pubkeyPrefix?: string;
     challengeId: string;
     runId: string;
     bountySats: number;
     publishedAt: number | null;
   }>;
-  recentClaims: Array<Record<string, unknown>>;
+  recentClaims: Array<{
+    pubkey?: string;
+    npub?: string;
+    pubkeyPrefix?: string;
+    challengeId?: unknown;
+    runId?: unknown;
+    bountySats?: unknown;
+    zapPaidAt?: unknown;
+    publishedAt?: unknown;
+  }>;
 };
 
 export type OnlineData = {
   fetchedAt: string;
-  live: Array<Record<string, unknown>>;
+  live: OnlineRoomLive[];
   history: Array<Record<string, unknown>>;
 };
 
@@ -113,29 +251,87 @@ export type ActivityData = {
   }>;
 };
 
-export type SessionsData = {
-  fetchedAt: string;
-  sessions: Array<{
-    sessionID: string;
-    lastSeenMs: number;
-    nostrLinked: boolean;
-    pubkeyPrefix?: string;
-    kind1Count: number;
-  }>;
-  total: number;
-  nostrLinked: number;
+export type ActivityFilters = {
+  limit?: number;
+  event?: string;
+  outcome?: string;
+  since?: '1h' | '24h' | '7d';
+  sessionID?: string;
+  pubkeyPrefix?: string;
+  roomCode?: string;
 };
 
 export const fetchOverview = () => apiFetch<OverviewData>('/overview');
-export const fetchFunnels = () => apiFetch<FunnelsData>('/funnels');
+
+export const fetchFunnels = (window: 'lifetime' | '24h' | '7d' = 'lifetime') =>
+  apiFetch<FunnelsData>(`/funnels?window=${window}`);
+
 export const fetchChallenges = () => apiFetch<ChallengesData>('/challenges');
 export const fetchOnline = () => apiFetch<OnlineData>('/online');
-export const fetchActivity = (params?: { limit?: number; event?: string; outcome?: string }) => {
+
+export const fetchActivity = (params?: ActivityFilters) => {
   const q = new URLSearchParams();
   if (params?.limit) q.set('limit', String(params.limit));
   if (params?.event) q.set('event', params.event);
   if (params?.outcome) q.set('outcome', params.outcome);
+  if (params?.since) q.set('since', params.since);
+  if (params?.sessionID) q.set('sessionID', params.sessionID);
+  if (params?.pubkeyPrefix) q.set('pubkeyPrefix', params.pubkeyPrefix);
+  if (params?.roomCode) q.set('roomCode', params.roomCode);
   const qs = q.toString();
   return apiFetch<ActivityData>(`/activity${qs ? `?${qs}` : ''}`);
 };
-export const fetchSessions = () => apiFetch<SessionsData>('/sessions');
+
+export const fetchLive = () => apiFetch<LiveData>('/live');
+export const fetchLiveRecent = (hours = 24) =>
+  apiFetch<RecentAttemptsData>(`/live/recent?hours=${hours}`);
+export const fetchLiveSession = (sessionID: string) =>
+  apiFetch<LiveSessionDetail>(`/live/${encodeURIComponent(sessionID)}`);
+
+/** @deprecated Use fetchLive */
+export const fetchSessions = fetchLive;
+
+export function activityExportUrl(params: ActivityFilters, format: 'csv' | 'json'): string {
+  const q = new URLSearchParams();
+  q.set('limit', '200');
+  if (params.event) q.set('event', params.event);
+  if (params.outcome) q.set('outcome', params.outcome);
+  if (params.since) q.set('since', params.since);
+  if (params.sessionID) q.set('sessionID', params.sessionID);
+  if (params.pubkeyPrefix) q.set('pubkeyPrefix', params.pubkeyPrefix);
+  if (params.roomCode) q.set('roomCode', params.roomCode);
+  return `${API_BASE}/activity?${q.toString()}&format=${format}`;
+}
+
+export async function exportActivity(params: ActivityFilters, format: 'csv' | 'json'): Promise<void> {
+  const data = await fetchActivity({ ...params, limit: 200 });
+  if (format === 'json') {
+    const blob = new Blob([JSON.stringify(data.events, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, `activity-${Date.now()}.json`);
+    return;
+  }
+  const headers = ['ts', 'event', 'outcome', 'reason', 'sessionID', 'pubkeyPrefix', 'challengeId', 'roomCode', 'source'];
+  const lines = [
+    headers.join(','),
+    ...data.events.map((e) =>
+      headers
+        .map((h) => {
+          const v = e[h as keyof typeof e];
+          const s = v == null ? '' : String(v);
+          return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+        })
+        .join(',')
+    ),
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  downloadBlob(blob, `activity-${Date.now()}.csv`);
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

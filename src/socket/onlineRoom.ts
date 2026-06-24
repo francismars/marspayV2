@@ -55,6 +55,8 @@ import {
 } from '../state/nostrAppSessionState';
 import { dateNow } from '../utils/time';
 import { maybeTrackOnlinePing, trackOnlineOk, trackOnlineReject } from '../telemetry/onlineTelemetry';
+import { resolveTrackPubkeyPrefix } from '../telemetry/resolveTrackPubkeyPrefix';
+import { trackEvent } from '../telemetry/trackEvent';
 import {
   advanceNostrThreadTip,
   areSeatsFilled,
@@ -271,6 +273,7 @@ export async function createOnlineRoomHandler(
   });
   trackOnlineOk('online.room.created', {
     sessionID,
+    pubkeyPrefix: resolveTrackPubkeyPrefix(sessionID, room.roomId),
     roomId: room.roomId,
     roomCode: room.roomCode,
     buyin: room.buyin,
@@ -354,6 +357,7 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
     logOnline(sessionID, `joinOnlineRoom failed roomId=${payload.roomId} reason=room_not_found`);
     trackOnlineReject('online.room.joined', 'room_not_found', {
       sessionID,
+      pubkeyPrefix: resolveTrackPubkeyPrefix(sessionID, payload.roomId),
       roomId: payload.roomId,
     });
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
@@ -383,6 +387,7 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
   });
   trackOnlineOk('online.room.joined', {
     sessionID,
+    pubkeyPrefix: resolveTrackPubkeyPrefix(sessionID, room.roomId),
     roomId: room.roomId,
     roomCode: room.roomCode,
     buyin: room.buyin,
@@ -609,6 +614,7 @@ export function startOnlineGameHandler(socket: Socket, payload: { roomId: string
     logOnline(sessionID, `startOnlineGame blocked roomId=${payload.roomId} reason=${ready.reason}`);
     trackOnlineReject('online.game.started', ready.reason ?? 'blocked', {
       sessionID,
+      pubkeyPrefix: resolveTrackPubkeyPrefix(sessionID, payload.roomId),
       roomId: payload.roomId,
     });
     socket.emit('onlinePinInvalid', { reason: ready.reason });
@@ -618,6 +624,7 @@ export function startOnlineGameHandler(socket: Socket, payload: { roomId: string
     logOnline(sessionID, `startOnlineGame blocked roomId=${payload.roomId} reason=seats_not_filled`);
     trackOnlineReject('online.game.started', 'seats_not_filled', {
       sessionID,
+      pubkeyPrefix: resolveTrackPubkeyPrefix(sessionID, payload.roomId),
       roomId: payload.roomId,
     });
     socket.emit('onlinePinInvalid', { reason: 'seats_not_filled' });
@@ -629,6 +636,7 @@ export function startOnlineGameHandler(socket: Socket, payload: { roomId: string
   if (ready.started) {
     trackOnlineOk('online.game.started', {
       sessionID,
+      pubkeyPrefix: resolveTrackPubkeyPrefix(sessionID, payload.roomId),
       roomId: payload.roomId,
       roomCode: room.roomCode,
       buyin: room.buyin,
@@ -672,6 +680,7 @@ export function onlineSetReadyHandler(
   if (result.started) {
     trackOnlineOk('online.game.started', {
       sessionID,
+      pubkeyPrefix: resolveTrackPubkeyPrefix(sessionID, payload.roomId),
       roomId: payload.roomId,
       roomCode: room.roomCode,
       buyin: room.buyin,
@@ -1038,32 +1047,53 @@ export async function confirmOnlineNostrLinkHandler(
     return;
   }
   const roomId = payload?.roomId;
+  const room = roomId ? getRoomById(roomId) : undefined;
+  const roomCode = room?.roomCode;
+  const trackCtx = {
+    sessionID,
+    roomId,
+    roomCode,
+    pubkeyPrefix: resolveTrackPubkeyPrefix(sessionID, roomId),
+  };
+
   if (!roomId) {
+    trackEvent({ event: 'online.nostr.link', outcome: 'reject', reason: 'room_not_found', ...trackCtx });
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
   const ev = payload?.event;
   if (!ev || typeof ev !== 'object') {
+    trackEvent({ event: 'online.nostr.link', outcome: 'reject', reason: 'nostr_invalid_event', ...trackCtx });
     socket.emit('onlinePinInvalid', { reason: 'nostr_invalid_event' });
     return;
   }
   if (!verifyEvent(ev as Event)) {
+    trackEvent({ event: 'online.nostr.link', outcome: 'reject', reason: 'nostr_invalid_signature', ...trackCtx });
     socket.emit('onlinePinInvalid', { reason: 'nostr_invalid_signature' });
     return;
   }
   const event = ev as Event;
   if (event.kind !== 1) {
+    trackEvent({ event: 'online.nostr.link', outcome: 'reject', reason: 'nostr_invalid_kind', ...trackCtx });
     socket.emit('onlinePinInvalid', { reason: 'nostr_invalid_kind' });
     return;
   }
   const pending = peekPendingNostrChallenge(sessionID, roomId);
   if (!pending || pending.challenge !== event.content.trim()) {
+    trackEvent({ event: 'online.nostr.link', outcome: 'reject', reason: 'nostr_challenge_mismatch', ...trackCtx });
     socket.emit('onlinePinInvalid', { reason: 'nostr_challenge_mismatch' });
     return;
   }
   clearPendingNostrChallenge(sessionID);
   const reg = registerNostrLink(roomId, sessionID, socket.id, event.pubkey);
   if (!reg.ok) {
+    trackEvent({
+      event: 'online.nostr.link',
+      outcome: 'reject',
+      reason: reg.reason,
+      ...trackCtx,
+      pubkeyPrefix: event.pubkey.slice(0, 12),
+    });
     socket.emit('onlinePinInvalid', { reason: reg.reason });
     return;
   }
@@ -1083,6 +1113,14 @@ export async function confirmOnlineNostrLinkHandler(
       picture: null,
     };
   }
+  trackEvent({
+    event: 'online.nostr.link',
+    outcome: 'ok',
+    sessionID,
+    roomId,
+    roomCode,
+    pubkeyPrefix: event.pubkey.slice(0, 12),
+  });
   socket.emit('resOnlineNostrLinkOk', { expiresAt: reg.expiresAt, profile });
 }
 

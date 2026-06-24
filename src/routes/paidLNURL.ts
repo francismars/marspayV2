@@ -30,6 +30,7 @@ import { requestZapInvoiceAndPayForKind1 } from '../calls/NDK/zapKind1ViaLnurlCa
 import { resolveOnlineSeatZapContext } from '../calls/nostr/resolveOnlineSeatZapContext';
 import { hexToBytes } from '@noble/hashes/utils';
 import { trackOnlineOk, trackOnlineReject } from '../telemetry/onlineTelemetry';
+import { resolveTrackPubkeyPrefix } from '../telemetry/resolveTrackPubkeyPrefix';
 import { trackEvent } from '../telemetry/trackEvent';
 import {
   consumeOnlineSeatLightningAfterSuccess,
@@ -200,6 +201,7 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
     );
     trackOnlineOk('online.seat.paid', {
       sessionID: onlineRec.sessionID,
+      pubkeyPrefix: resolveTrackPubkeyPrefix(onlineRec.sessionID, onlineRec.roomId),
       roomId: onlineRec.roomId,
       amountSats: zapBuyinSats,
       meta: { method: 'lightning', rematch: isRematchPay },

@@ -111,7 +111,14 @@ function parseEventLine(line: string): StoredTrackEvent | null {
 
 function matchesFilter(
   event: StoredTrackEvent,
-  filters?: { eventPrefix?: string; outcome?: TrackOutcome; sinceTs?: string }
+  filters?: {
+    eventPrefix?: string;
+    outcome?: TrackOutcome;
+    sinceTs?: string;
+    sessionID?: string;
+    pubkeyPrefix?: string;
+    roomCode?: string;
+  }
 ): boolean {
   if (filters?.eventPrefix && !event.event.startsWith(filters.eventPrefix.replace(/\*$/, ''))) {
     return false;
@@ -127,7 +134,14 @@ function matchesFilter(
 
 export function tailEventsFromDisk(
   limit: number,
-  filters?: { eventPrefix?: string; outcome?: TrackOutcome; sinceTs?: string }
+  filters?: {
+    eventPrefix?: string;
+    outcome?: TrackOutcome;
+    sinceTs?: string;
+    sessionID?: string;
+    pubkeyPrefix?: string;
+    roomCode?: string;
+  }
 ): StoredTrackEvent[] {
   const filePath = eventsFilePath();
   if (!fs.existsSync(filePath) || limit <= 0) return [];
@@ -138,7 +152,7 @@ export function tailEventsFromDisk(
     for (let i = lines.length - 1; i >= 0 && rows.length < limit; i--) {
       const row = parseEventLine(lines[i]);
       if (!row) continue;
-      if (!matchesFilter(row, filters)) continue;
+      if (!extendedMatchesFilter(row, filters)) continue;
       rows.push(row);
     }
     return rows.reverse();
@@ -149,10 +163,17 @@ export function tailEventsFromDisk(
 
 export function getRecentEvents(
   limit: number,
-  filters?: { eventPrefix?: string; outcome?: TrackOutcome; sinceTs?: string }
+  filters?: {
+    eventPrefix?: string;
+    outcome?: TrackOutcome;
+    sinceTs?: string;
+    sessionID?: string;
+    pubkeyPrefix?: string;
+    roomCode?: string;
+  }
 ): StoredTrackEvent[] {
   const capped = Math.min(Math.max(limit, 1), 200);
-  const fromRing = ringBuffer.filter((e) => matchesFilter(e, filters));
+  const fromRing = ringBuffer.filter((e) => extendedMatchesFilter(e, filters));
   if (fromRing.length >= capped) {
     return fromRing.slice(-capped);
   }
@@ -161,6 +182,107 @@ export function getRecentEvents(
   const ringTs = new Set(fromRing.map((e) => e.ts + e.event + (e.sessionID ?? '')));
   const merged = [
     ...fromDisk.filter((e) => !ringTs.has(e.ts + e.event + (e.sessionID ?? ''))),
+    ...fromRing,
+  ];
+  return merged.slice(-capped);
+}
+
+function extendedMatchesFilter(
+  event: StoredTrackEvent,
+  filters?: {
+    eventPrefix?: string;
+    outcome?: TrackOutcome;
+    sinceTs?: string;
+    sessionID?: string;
+    pubkeyPrefix?: string;
+    roomCode?: string;
+  }
+): boolean {
+  if (!matchesFilter(event, filters)) return false;
+  if (filters?.sessionID && event.sessionID !== filters.sessionID) return false;
+  if (filters?.pubkeyPrefix && event.pubkeyPrefix !== filters.pubkeyPrefix) return false;
+  if (filters?.roomCode && event.roomCode !== filters.roomCode) return false;
+  return true;
+}
+
+const SCAN_CAP = 10_000;
+
+/** Scan ring + jsonl tail (newest first) up to cap lines. */
+export function scanEvents(
+  limit: number,
+  filters?: {
+    eventPrefix?: string;
+    outcome?: TrackOutcome;
+    sinceTs?: string;
+    sessionID?: string;
+    pubkeyPrefix?: string;
+    roomCode?: string;
+    events?: string[];
+  }
+): StoredTrackEvent[] {
+  const capped = Math.min(Math.max(limit, 1), SCAN_CAP);
+  const eventSet = filters?.events ? new Set(filters.events) : undefined;
+  const match = (e: StoredTrackEvent) => {
+    if (!extendedMatchesFilter(e, filters)) return false;
+    if (eventSet && !eventSet.has(e.event)) return false;
+    return true;
+  };
+
+  const fromRing = ringBuffer.filter(match);
+  if (fromRing.length >= capped) {
+    return fromRing.slice(-capped);
+  }
+
+  const filePath = eventsFilePath();
+  if (!fs.existsSync(filePath)) return fromRing;
+
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n').filter(Boolean);
+    const start = Math.max(0, lines.length - SCAN_CAP);
+    const rows: StoredTrackEvent[] = [];
+    const ringKeys = new Set(fromRing.map((e) => e.ts + e.event + (e.sessionID ?? '')));
+
+    for (let i = lines.length - 1; i >= start && rows.length + fromRing.length < capped; i--) {
+      const row = parseEventLine(lines[i]);
+      if (!row || !match(row)) continue;
+      const key = row.ts + row.event + (row.sessionID ?? '');
+      if (ringKeys.has(key)) continue;
+      rows.push(row);
+    }
+    return [...rows.reverse(), ...fromRing].slice(-capped);
+  } catch {
+    return fromRing;
+  }
+}
+
+export function countEventsSince(
+  sinceTs: string,
+  filters?: { event?: string; outcome?: TrackOutcome }
+): number {
+  return scanEvents(SCAN_CAP, {
+    sinceTs,
+    eventPrefix: filters?.event,
+    outcome: filters?.outcome,
+  }).length;
+}
+
+export function getLastEventForSession(sessionID: string): StoredTrackEvent | undefined {
+  for (let i = ringBuffer.length - 1; i >= 0; i--) {
+    if (ringBuffer[i].sessionID === sessionID) return ringBuffer[i];
+  }
+  const fromDisk = tailEventsFromDisk(200, { sessionID });
+  return fromDisk.length > 0 ? fromDisk[fromDisk.length - 1] : undefined;
+}
+
+export function getEventsForSession(sessionID: string, limit: number): StoredTrackEvent[] {
+  const capped = Math.min(Math.max(limit, 1), 200);
+  const fromRing = ringBuffer.filter((e) => e.sessionID === sessionID);
+  if (fromRing.length >= capped) return fromRing.slice(-capped);
+  const fromDisk = tailEventsFromDisk(capped, { sessionID });
+  const ringKeys = new Set(fromRing.map((e) => e.ts + e.event));
+  const merged = [
+    ...fromDisk.filter((e) => !ringKeys.has(e.ts + e.event)),
     ...fromRing,
   ];
   return merged.slice(-capped);

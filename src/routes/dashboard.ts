@@ -19,10 +19,13 @@ import { listOnlineRooms } from '../state/onlineRoomState';
 import {
   buildActivitySnapshot,
   buildChallengesSnapshot,
-  buildFunnelsSnapshot,
+  buildFunnelsSnapshotForWindow,
+  buildLiveSessionDetail,
+  buildLiveSnapshot,
   buildOnlineSnapshot,
   buildOverviewSnapshot,
-  buildSessionsSnapshot,
+  buildRecentAttemptsSnapshot,
+  type FunnelWindow,
 } from '../telemetry/dashboardSnapshot';
 import {
   handleDashboardLogin,
@@ -88,8 +91,12 @@ router.get('/api/overview', requireDashboardAuth, (_req, res) => {
   res.json(buildOverviewSnapshot());
 });
 
-router.get('/api/funnels', requireDashboardAuth, (_req, res) => {
-  res.json(buildFunnelsSnapshot());
+router.get('/api/funnels', requireDashboardAuth, (req, res) => {
+  const window =
+    req.query.window === '24h' || req.query.window === '7d' || req.query.window === 'lifetime'
+      ? (req.query.window as FunnelWindow)
+      : 'lifetime';
+  res.json(buildFunnelsSnapshotForWindow(window));
 });
 
 router.get('/api/challenges', requireDashboardAuth, (_req, res) => {
@@ -108,11 +115,55 @@ router.get('/api/activity', requireDashboardAuth, (req, res) => {
     req.query.outcome === 'ok' || req.query.outcome === 'reject' || req.query.outcome === 'error'
       ? req.query.outcome
       : undefined;
-  res.json(buildActivitySnapshot({ limit, eventPrefix, outcome }));
+  const sessionID =
+    typeof req.query.sessionID === 'string' ? req.query.sessionID : undefined;
+  const pubkeyPrefix =
+    typeof req.query.pubkeyPrefix === 'string' ? req.query.pubkeyPrefix : undefined;
+  const roomCode =
+    typeof req.query.roomCode === 'string' ? req.query.roomCode : undefined;
+  let sinceTs: string | undefined;
+  if (req.query.since === '1h') {
+    sinceTs = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  } else if (req.query.since === '24h') {
+    sinceTs = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  } else if (req.query.since === '7d') {
+    sinceTs = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  } else if (typeof req.query.sinceTs === 'string') {
+    sinceTs = req.query.sinceTs;
+  }
+  res.json(
+    buildActivitySnapshot({
+      limit,
+      eventPrefix,
+      outcome,
+      sinceTs,
+      sessionID,
+      pubkeyPrefix,
+      roomCode,
+    })
+  );
+});
+
+router.get('/api/live', requireDashboardAuth, (_req, res) => {
+  res.json(buildLiveSnapshot());
+});
+
+router.get('/api/live/recent', requireDashboardAuth, (req, res) => {
+  const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 168);
+  res.json(buildRecentAttemptsSnapshot(hours));
+});
+
+router.get('/api/live/:sessionID', requireDashboardAuth, (req, res) => {
+  const detail = buildLiveSessionDetail(req.params.sessionID);
+  if (!detail) {
+    res.status(404).json({ error: 'session_not_connected' });
+    return;
+  }
+  res.json(detail);
 });
 
 router.get('/api/sessions', requireDashboardAuth, (_req, res) => {
-  res.json(buildSessionsSnapshot());
+  res.json(buildLiveSnapshot());
 });
 
 router.get('/api/debug/raw', requireDashboardAuth, (_req, res) => {

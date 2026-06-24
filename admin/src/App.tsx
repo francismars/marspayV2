@@ -4,10 +4,12 @@ import {
   fetchActivity,
   fetchChallenges,
   fetchFunnels,
+  fetchLive,
+  fetchLiveRecent,
   fetchOnline,
   fetchOverview,
-  fetchSessions,
   logout,
+  type ActivityFilters,
 } from './lib/api';
 import { usePolling } from './lib/hooks';
 import { LoginScreen } from './components/LoginScreen';
@@ -16,10 +18,10 @@ import { FunnelsTab } from './components/FunnelsTab';
 import { ChallengeTab } from './components/ChallengeTab';
 import { OnlineTab } from './components/OnlineTab';
 import { ActivityTab } from './components/ActivityTab';
-import { SessionsTab } from './components/SessionsTab';
-import { ErrorBanner } from './components/ui';
+import { LiveTab } from './components/LiveTab';
+import { ErrorBanner, LoadingState } from './components/ui';
 
-type Tab = 'overview' | 'funnels' | 'challenge' | 'online' | 'activity' | 'sessions';
+type Tab = 'overview' | 'funnels' | 'challenge' | 'online' | 'activity' | 'live';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: 'Overview' },
@@ -27,24 +29,103 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'challenge', label: 'Challenge' },
   { id: 'online', label: 'ONLINE' },
   { id: 'activity', label: 'Activity' },
-  { id: 'sessions', label: 'Sessions' },
+  { id: 'live', label: 'Live' },
 ];
+
+function parseTabFromUrl(): Tab {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get('tab');
+  if (raw === 'sessions') return 'live';
+  if (raw && TABS.some((t) => t.id === raw)) return raw as Tab;
+  return 'overview';
+}
+
+function parseActivityFiltersFromUrl(): ActivityFilters {
+  const params = new URLSearchParams(window.location.search);
+  const since = params.get('since');
+  return {
+    event: params.get('event') ?? undefined,
+    outcome: params.get('outcome') ?? undefined,
+    sessionID: params.get('sessionID') ?? undefined,
+    pubkeyPrefix: params.get('pubkeyPrefix') ?? undefined,
+    roomCode: params.get('roomCode') ?? undefined,
+    since:
+      since === '1h' || since === '24h' || since === '7d' ? since : undefined,
+  };
+}
+
+function syncUrl(tab: Tab, extras?: Record<string, string | undefined>) {
+  const params = new URLSearchParams();
+  params.set('tab', tab);
+  if (extras) {
+    for (const [k, v] of Object.entries(extras)) {
+      if (v) params.set(k, v);
+      else params.delete(k);
+    }
+  }
+  window.history.replaceState(null, '', `?${params.toString()}`);
+}
 
 export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(() => parseTabFromUrl());
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [activityFilters, setActivityFilters] = useState<{ event?: string; outcome?: string }>({});
+  const [funnelWindow, setFunnelWindow] = useState<'lifetime' | '24h' | '7d'>('lifetime');
+  const [activityFilters, setActivityFilters] = useState<ActivityFilters>(() =>
+    parseActivityFiltersFromUrl()
+  );
+  const [selectedSession, setSelectedSession] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('session');
+  });
 
   useEffect(() => {
     void checkAuth().then(setAuthed);
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const session = params.get('session');
+    if (session) setSelectedSession(session);
+  }, [tab]);
+
+  const setTabWithUrl = useCallback(
+    (next: Tab, extras?: Record<string, string | undefined>) => {
+      setTab(next);
+      if (next === 'activity') {
+        syncUrl(next, {
+          event: activityFilters.event,
+          outcome: activityFilters.outcome,
+          since: activityFilters.since,
+          sessionID: activityFilters.sessionID,
+          pubkeyPrefix: activityFilters.pubkeyPrefix,
+          roomCode: activityFilters.roomCode,
+          ...extras,
+        });
+      } else if (next === 'live') {
+        syncUrl(next, { session: selectedSession ?? undefined, ...extras });
+      } else {
+        syncUrl(next, extras);
+      }
+    },
+    [activityFilters, selectedSession]
+  );
+
   const overview = usePolling(fetchOverview, authed === true && tab === 'overview' && autoRefresh, 15000);
-  const funnels = usePolling(fetchFunnels, authed === true && tab === 'funnels' && autoRefresh, 15000);
+  const funnelsFetcher = useCallback(() => fetchFunnels(funnelWindow), [funnelWindow]);
+  const funnels = usePolling(
+    funnelsFetcher,
+    authed === true && tab === 'funnels' && autoRefresh,
+    15000
+  );
   const challenges = usePolling(fetchChallenges, authed === true && tab === 'challenge' && autoRefresh, 15000);
   const online = usePolling(fetchOnline, authed === true && tab === 'online' && autoRefresh, 15000);
-  const sessions = usePolling(fetchSessions, authed === true && tab === 'sessions' && autoRefresh, 15000);
+  const live = usePolling(fetchLive, authed === true && tab === 'live' && autoRefresh, 15000);
+  const liveRecent = usePolling(
+    () => fetchLiveRecent(24),
+    authed === true && tab === 'live' && autoRefresh,
+    30000
+  );
 
   const activityFetcher = useCallback(
     () => fetchActivity({ limit: 100, ...activityFilters }),
@@ -59,6 +140,47 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activityFilters, tab, authed]);
 
+  useEffect(() => {
+    if (tab === 'funnels' && authed) {
+      void funnels.refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [funnelWindow, tab, authed]);
+
+  const handleActivityFilterChange = useCallback(
+    (filters: ActivityFilters) => {
+      setActivityFilters(filters);
+      if (tab === 'activity') {
+        syncUrl('activity', {
+          event: filters.event,
+          outcome: filters.outcome,
+          since: filters.since,
+          sessionID: filters.sessionID,
+          pubkeyPrefix: filters.pubkeyPrefix,
+          roomCode: filters.roomCode,
+        });
+      }
+    },
+    [tab]
+  );
+
+  const goToActivityForSession = useCallback(
+    (sessionID: string) => {
+      const filters: ActivityFilters = { sessionID };
+      setActivityFilters(filters);
+      setSelectedSession(null);
+      setTab('activity');
+      syncUrl('activity', { sessionID });
+    },
+    []
+  );
+
+  const goToLiveForSession = useCallback((sessionID: string) => {
+    setSelectedSession(sessionID);
+    setTab('live');
+    syncUrl('live', { session: sessionID });
+  }, []);
+
   const activePoll =
     tab === 'overview'
       ? overview
@@ -70,7 +192,7 @@ export default function App() {
             ? online
             : tab === 'activity'
               ? activity
-              : sessions;
+              : live;
 
   const handleLogout = async () => {
     await logout();
@@ -79,7 +201,9 @@ export default function App() {
 
   if (authed === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-slate-500">Loading…</div>
+      <div className="flex min-h-screen items-center justify-center text-slate-500">
+        <LoadingState />
+      </div>
     );
   }
 
@@ -134,7 +258,7 @@ export default function App() {
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => setTabWithUrl(t.id)}
               className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 tab === t.id
                   ? 'bg-accent/20 text-accent'
@@ -150,21 +274,54 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 py-6">
         {activePoll.error ? <ErrorBanner message={activePoll.error} /> : null}
         {activePoll.loading && !activePoll.data ? (
-          <p className="text-slate-500">Loading…</p>
+          <LoadingState />
         ) : (
           <>
             {tab === 'overview' && overview.data ? (
               <OverviewTab data={overview.data} />
             ) : null}
-            {tab === 'funnels' && funnels.data ? <FunnelsTab data={funnels.data} /> : null}
+            {tab === 'funnels' && funnels.data ? (
+              <FunnelsTab
+                data={funnels.data}
+                window={funnelWindow}
+                onWindowChange={(w) => {
+                  setFunnelWindow(w);
+                  syncUrl('funnels', { window: w });
+                }}
+              />
+            ) : null}
             {tab === 'challenge' && challenges.data ? (
               <ChallengeTab data={challenges.data} />
             ) : null}
-            {tab === 'online' && online.data ? <OnlineTab data={online.data} /> : null}
-            {tab === 'activity' && activity.data ? (
-              <ActivityTab data={activity.data} onFilterChange={setActivityFilters} />
+            {tab === 'online' && online.data ? (
+              <OnlineTab data={online.data} onSeatClick={goToLiveForSession} />
             ) : null}
-            {tab === 'sessions' && sessions.data ? <SessionsTab data={sessions.data} /> : null}
+            {tab === 'activity' && activity.data ? (
+              <ActivityTab
+                data={activity.data}
+                filters={activityFilters}
+                onFilterChange={handleActivityFilterChange}
+                onSessionClick={goToLiveForSession}
+              />
+            ) : null}
+            {tab === 'live' && live.data ? (
+              <LiveTab
+                live={live.data}
+                recent={liveRecent.data}
+                selectedSession={selectedSession}
+                onSelectSession={setSelectedSession}
+                onFilterActivity={(f) => {
+                  const next = { ...activityFilters, ...f };
+                  setActivityFilters(next);
+                  setTab('activity');
+                  syncUrl('activity', {
+                    sessionID: next.sessionID,
+                    pubkeyPrefix: next.pubkeyPrefix,
+                  });
+                }}
+                onViewActivity={goToActivityForSession}
+              />
+            ) : null}
           </>
         )}
       </main>
