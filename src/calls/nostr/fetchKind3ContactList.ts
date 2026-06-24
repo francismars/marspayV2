@@ -1,28 +1,30 @@
 import { SimplePool, type Event } from 'nostr-tools';
-import { NOSTR_RELAYS } from '../../consts/nostrRelays';
+import { type AuthorRelayContext, fetchAuthorRelayContext, pickLatestAuthorEvent } from './fetchAuthorEvents';
 
 function pickLatestKind3(events: Event[], pubkey: string): Event | null {
-  const hex = pubkey.toLowerCase();
-  let best: Event | null = null;
-  for (const ev of events) {
-    if (ev.pubkey?.toLowerCase() !== hex || ev.kind !== 3) continue;
-    if (!best || ev.created_at > best.created_at) best = ev;
-  }
-  return best;
+  return pickLatestAuthorEvent(events, pubkey, 3);
 }
 
-/** Latest kind-3 contact list for pubkey. */
-export async function fetchKind3ContactList(pubkey: string): Promise<Event | null> {
+/**
+ * Latest kind-3 contact list for pubkey.
+ * Uses NIP-65 outbox relays first so we see the user's current list, not a stale
+ * copy left on indexers / relays they no longer write to.
+ */
+export async function fetchKind3ContactList(
+  pubkey: string,
+  options?: { relayContext?: AuthorRelayContext }
+): Promise<Event | null> {
+  const relayContext = options?.relayContext ?? (await fetchAuthorRelayContext(pubkey));
   const pool = new SimplePool();
   try {
-    const events = await pool.querySync(NOSTR_RELAYS, {
+    const events = await pool.querySync(relayContext.relays, {
       kinds: [3],
       authors: [pubkey],
       limit: 25,
     });
     return pickLatestKind3(events, pubkey);
   } finally {
-    pool.close(NOSTR_RELAYS);
+    pool.close(relayContext.relays);
   }
 }
 

@@ -7,6 +7,7 @@ import {
 import { fetchAccountAge, MIN_ACCOUNT_AGE_DAYS } from './fetchAccountAge';
 import { verifyUserLud16 } from './verifyUserLud16';
 import { fetchNostrAppProfile } from './fetchNostrAppProfile';
+import { fetchAuthorRelayContext } from './fetchAuthorEvents';
 
 export const MIN_FOLLOWING_COUNT = 100;
 
@@ -84,10 +85,12 @@ export async function evaluateChallengeEligibility(
     return { ...c, checks: { ...c.checks, appSession }, eligible };
   }
 
+  const relayContext = await fetchAuthorRelayContext(hex);
+
   const [profile, kind3, accountAge, lud16Result] = await Promise.all([
-    fetchNostrAppProfile(hex),
-    fetchKind3ContactList(hex),
-    fetchAccountAge(hex),
+    fetchNostrAppProfile(hex, { relayContext }),
+    fetchKind3ContactList(hex, { relayContext }),
+    fetchAccountAge(hex, { relayContext }),
     verifyUserLud16(hex),
   ]);
 

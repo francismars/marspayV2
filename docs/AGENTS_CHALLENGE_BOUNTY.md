@@ -17,10 +17,10 @@ Practice challenge bounties: server-enforced Nostr eligibility, seeded game repl
 
 Server checks (cached up to 24h when eligible, 5 min when not; pass `{ refresh: true }` to bypass):
 
-- Verified NIP-05
-- Kind-3 following count ≥ 100
+- Verified NIP-05 (latest kind-0 via NIP-65 outbox relays + fallback relays)
+- Kind-3 following count ≥ 100 (latest list via NIP-65 outbox relays + fallback relays)
 - Follows `CHAINDUEL_NOSTR_PUBKEY` (skipped if unset)
-- Account age ≥ 30 days (earliest relay event)
+- Account age ≥ 30 days (earliest relay event on outbox + fallback relays)
 - Valid `lud16` with NIP-57 zap support (`allowsNostr` on LNURL-pay metadata)
 - App Nostr session at claim time
 

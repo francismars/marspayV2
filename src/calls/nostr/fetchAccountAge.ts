@@ -1,5 +1,6 @@
 import { SimplePool } from 'nostr-tools';
-import { NOSTR_RELAYS } from '../../consts/nostrRelays';
+import type { AuthorRelayContext } from './fetchAuthorEvents';
+import { fetchAuthorRelayContext } from './fetchAuthorEvents';
 
 const THIRTY_DAYS_SEC = 30 * 24 * 60 * 60;
 const PAGE_SIZE = 100;
@@ -17,7 +18,11 @@ export type AccountAgeResult = {
  * Paginates backward with `until` — a single limited query only sees recent events
  * and understates account age.
  */
-export async function fetchAccountAge(pubkey: string): Promise<AccountAgeResult> {
+export async function fetchAccountAge(
+  pubkey: string,
+  options?: { relayContext?: AuthorRelayContext }
+): Promise<AccountAgeResult> {
+  const relayContext = options?.relayContext ?? (await fetchAuthorRelayContext(pubkey));
   const pool = new SimplePool();
   const now = Math.floor(Date.now() / 1000);
   const hex = pubkey.toLowerCase();
@@ -26,7 +31,7 @@ export async function fetchAccountAge(pubkey: string): Promise<AccountAgeResult>
     let earliest: number | null = null;
 
     for (let page = 0; page < MAX_PAGES; page++) {
-      const events = await pool.querySync(NOSTR_RELAYS, {
+      const events = await pool.querySync(relayContext.relays, {
         authors: [hex],
         until,
         limit: PAGE_SIZE,
@@ -58,7 +63,7 @@ export async function fetchAccountAge(pubkey: string): Promise<AccountAgeResult>
       meetsMinimum: ageSec >= THIRTY_DAYS_SEC,
     };
   } finally {
-    pool.close(NOSTR_RELAYS);
+    pool.close(relayContext.relays);
   }
 }
 
