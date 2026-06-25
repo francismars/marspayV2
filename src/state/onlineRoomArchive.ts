@@ -455,10 +455,42 @@ export function loadSerializedRoomFromArchiveSync(
   if (legacy) {
     return legacy;
   }
+
+  const latestRound = findLatestArchivedMatchRoundSync(roomId);
+  if (latestRound != null && latestRound >= 1) {
+    const fromLatestMatch = tryLoadSerializedFromFile(
+      path.join(archiveDir(), matchFileName(roomId, latestRound))
+    );
+    if (fromLatestMatch) {
+      return fromLatestMatch;
+    }
+  }
   return undefined;
 }
 
-const MAX_LIST = 400;
+export function findLatestArchivedMatchRoundSync(roomId: string): number | undefined {
+  const fromIndex = listArchivedMatchRoundsForRoomSync(roomId);
+  const indexMax =
+    fromIndex.length > 0 ? fromIndex[fromIndex.length - 1].matchRound : 0;
+
+  const dir = archiveDir();
+  let diskMax = 0;
+  if (fs.existsSync(dir)) {
+    const prefix = `${roomId}-r`;
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.startsWith(prefix) || !name.endsWith('.json')) {
+        continue;
+      }
+      const round = Number(name.slice(prefix.length, -'.json'.length));
+      if (Number.isFinite(round) && round > diskMax) {
+        diskMax = round;
+      }
+    }
+  }
+
+  const latest = Math.max(indexMax, diskMax);
+  return latest >= 1 ? latest : undefined;
+}
 
 /**
  * All completed match rows for a room from `index.jsonl` (per-round archives from DoN sessions).
@@ -510,6 +542,8 @@ export function listArchivedMatchRoundsForRoomSync(roomId: string): OnlineMatchR
   }
 }
 
+const MAX_LIST = 400;
+
 export function listArchivedOnlineRoomsSync(): OnlineArchivedListItem[] {
   const indexPath = path.join(archiveDir(), INDEX_FILE);
   if (!fs.existsSync(indexPath)) {
@@ -557,89 +591,139 @@ type ArchivedSeat = {
   lnAddress?: string;
 };
 
-export function getOnlinePostGameFromArchive(roomId: string) {
-  const sessionPath = path.join(archiveDir(), sessionFileName(roomId));
-  const legacyPath = path.join(archiveDir(), legacyRoomFileName(roomId));
-  const raw = fs.existsSync(sessionPath)
-    ? fs.readFileSync(sessionPath, 'utf8')
-    : fs.existsSync(legacyPath)
-      ? fs.readFileSync(legacyPath, 'utf8')
-      : null;
-  if (!raw) {
-    return undefined;
-  }
-  try {
-    const parsed = JSON.parse(raw) as OnlineRoomArchiveFile;
-    if (parsed.version !== 1 || !parsed.serializedRoom) {
-      return undefined;
-    }
-    const sr = parsed.serializedRoom as {
+function postGameInfoFromSerializedRoom(
+  serialized: Record<string, unknown>
+):
+  | {
       roomId: string;
-      phase?: string;
-      seats?: Record<string, ArchivedSeat>;
-      snapshot?: { state?: { score?: number[] } };
-      postGame?: {
-        p1Picture?: string;
-        p2Picture?: string;
-        winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
-        winnerSessionID?: string;
-        winnerName: string;
-        winnerPicture?: string;
-        winnerPoints: number;
-        totalPrize: number;
-        lnurlw?: string;
-        payoutMethod?: 'withdraw_qr' | 'nostr_zap';
-        payoutTarget?: string;
-        rematchRequested?: boolean;
-        rematchRequiredAmount?: number;
-        rematchEventId?: string;
-        rematchNote1?: string;
-        rematchWaitingForSessionID?: string;
-        doubleOrNothingVotes?: number;
-      };
-    };
-    if (sr.phase !== 'finished' || !sr.postGame) {
-      return undefined;
+      phase: 'finished';
+      p1Name: string;
+      p2Name: string;
+      p1Picture?: string;
+      p2Picture?: string;
+      p1SessionID?: string;
+      p2SessionID?: string;
+      p1SocketID?: string;
+      p2SocketID?: string;
+      p1Points: number;
+      p2Points: number;
+      winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
+      winnerSessionID?: string;
+      winnerName: string;
+      winnerPicture?: string;
+      winnerPoints: number;
+      totalPrize: number;
+      lnurlw?: string;
+      payoutMethod?: 'withdraw_qr' | 'nostr_zap';
+      payoutTarget?: string;
+      rematchRequested?: boolean;
+      rematchRequiredAmount?: number;
+      rematchEventId?: string;
+      rematchNote1?: string;
+      rematchWaitingForSessionID?: string;
+      winnerLnAddress?: string;
+      doubleOrNothingVotes: number;
     }
-    const seats = sr.seats ?? {};
-    const p1 = seats[PlayerRole.Player1];
-    const p2 = seats[PlayerRole.Player2];
-    const score = sr.snapshot?.state?.score ?? [0, 0];
-    const pg = sr.postGame;
-    return {
-      roomId: sr.roomId,
-      phase: 'finished' as const,
-      p1Name: p1?.name ?? 'Player 1',
-      p2Name: p2?.name ?? 'Player 2',
-      p1Picture: p1?.picture ?? pg.p1Picture,
-      p2Picture: p2?.picture ?? pg.p2Picture,
-      p1SessionID: p1?.sessionID,
-      p2SessionID: p2?.sessionID,
-      p1SocketID: p1?.socketID,
-      p2SocketID: p2?.socketID,
-      p1Points: score[0] ?? 0,
-      p2Points: score[1] ?? 0,
-      winnerRole: pg.winnerRole,
-      winnerSessionID: pg.winnerSessionID,
-      winnerName: pg.winnerName,
-      winnerPicture: pg.winnerPicture,
-      winnerPoints: pg.winnerPoints,
-      totalPrize: pg.totalPrize,
-      lnurlw: pg.lnurlw,
-      payoutMethod: pg.payoutMethod,
-      payoutTarget: pg.payoutTarget,
-      rematchRequested: pg.rematchRequested,
-      rematchRequiredAmount: pg.rematchRequiredAmount,
-      rematchEventId: pg.rematchEventId,
-      rematchNote1: pg.rematchNote1,
-      rematchWaitingForSessionID: pg.rematchWaitingForSessionID,
-      winnerLnAddress:
-        pg.winnerRole != null ? seats[pg.winnerRole]?.lnAddress : undefined,
-      doubleOrNothingVotes: pg.doubleOrNothingVotes ?? 0,
+  | undefined {
+  const sr = serialized as {
+    roomId: string;
+    phase?: string;
+    seats?: Record<string, ArchivedSeat>;
+    snapshot?: { state?: { score?: number[] } };
+    postGame?: {
+      p1Picture?: string;
+      p2Picture?: string;
+      winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
+      winnerSessionID?: string;
+      winnerName: string;
+      winnerPicture?: string;
+      winnerPoints: number;
+      totalPrize: number;
+      lnurlw?: string;
+      payoutMethod?: 'withdraw_qr' | 'nostr_zap';
+      payoutTarget?: string;
+      rematchRequested?: boolean;
+      rematchRequiredAmount?: number;
+      rematchEventId?: string;
+      rematchNote1?: string;
+      rematchWaitingForSessionID?: string;
+      doubleOrNothingVotes?: number;
     };
-  } catch {
+    result?: {
+      winnerName?: string;
+      p1Name?: string;
+      p2Name?: string;
+      p1Score?: number;
+      p2Score?: number;
+      netPrize?: number;
+      winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
+      p1Picture?: string;
+      p2Picture?: string;
+      winnerPicture?: string;
+    };
+  };
+  if (sr.phase !== 'finished' && sr.phase !== 'postgame') {
     return undefined;
   }
+
+  const seats = sr.seats ?? {};
+  const p1 = seats[PlayerRole.Player1];
+  const p2 = seats[PlayerRole.Player2];
+  const score = sr.snapshot?.state?.score;
+  const pg = sr.postGame;
+  const result = sr.result;
+
+  if (!pg && !result) {
+    return undefined;
+  }
+
+  const p1Points = score?.[0] ?? result?.p1Score ?? 0;
+  const p2Points = score?.[1] ?? result?.p2Score ?? 0;
+  const winnerName = pg?.winnerName ?? result?.winnerName ?? 'Winner';
+  const winnerPoints =
+    pg?.winnerPoints ??
+    Math.max(p1Points, p2Points, result?.netPrize ?? 0);
+  const totalPrize = pg?.totalPrize ?? p1Points + p2Points;
+
+  return {
+    roomId: sr.roomId,
+    phase: 'finished',
+    p1Name: p1?.name ?? result?.p1Name ?? 'Player 1',
+    p2Name: p2?.name ?? result?.p2Name ?? 'Player 2',
+    p1Picture: p1?.picture ?? pg?.p1Picture ?? result?.p1Picture,
+    p2Picture: p2?.picture ?? pg?.p2Picture ?? result?.p2Picture,
+    p1SessionID: p1?.sessionID,
+    p2SessionID: p2?.sessionID,
+    p1SocketID: p1?.socketID,
+    p2SocketID: p2?.socketID,
+    p1Points,
+    p2Points,
+    winnerRole: pg?.winnerRole ?? result?.winnerRole,
+    winnerSessionID: pg?.winnerSessionID,
+    winnerName,
+    winnerPicture: pg?.winnerPicture ?? result?.winnerPicture,
+    winnerPoints,
+    totalPrize,
+    lnurlw: pg?.lnurlw,
+    payoutMethod: pg?.payoutMethod,
+    payoutTarget: pg?.payoutTarget,
+    rematchRequested: pg?.rematchRequested,
+    rematchRequiredAmount: pg?.rematchRequiredAmount,
+    rematchEventId: pg?.rematchEventId,
+    rematchNote1: pg?.rematchNote1,
+    rematchWaitingForSessionID: pg?.rematchWaitingForSessionID,
+    winnerLnAddress:
+      pg?.winnerRole != null ? seats[pg.winnerRole]?.lnAddress : undefined,
+    doubleOrNothingVotes: pg?.doubleOrNothingVotes ?? 0,
+  };
+}
+
+export function getOnlinePostGameFromArchive(roomId: string) {
+  const serialized = loadSerializedRoomFromArchiveSync(roomId);
+  if (!serialized) {
+    return undefined;
+  }
+  return postGameInfoFromSerializedRoom(serialized);
 }
 
 /** Resolve a finished/archived room by human code (live rooms are not included). */
@@ -661,18 +745,57 @@ export function resolveArchivedRoomByCodeSync(roomCode: string):
     return undefined;
   }
   matches.sort((a, b) => b.finishedAt - a.finishedAt);
-  const roomId = matches[0].roomId;
-  const serialized = loadSerializedRoomFromArchiveSync(roomId);
+  const best = matches[0];
+  const roomId = best.roomId;
+  let serialized =
+    best.matchRound != null && best.matchRound >= 1
+      ? loadSerializedRoomFromArchiveSync(roomId, best.matchRound)
+      : undefined;
+  if (!serialized) {
+    serialized = loadSerializedRoomFromArchiveSync(roomId);
+  }
   if (!serialized) {
     return undefined;
   }
   const wireCode =
     typeof serialized.roomCode === 'string'
       ? serialized.roomCode.trim().toUpperCase()
-      : matches[0].roomCode.trim().toUpperCase();
+      : best.roomCode.trim().toUpperCase();
   const phase = serialized.phase;
   if (phase !== 'postgame' && phase !== 'finished') {
     return undefined;
   }
+  return { roomId, roomCode: wireCode, serialized };
+}
+
+/** Resolve archived room by id (optional match round from history list). */
+export function resolveArchivedRoomByIdSync(
+  roomId: string,
+  matchRound?: number
+):
+  | {
+      roomId: string;
+      roomCode: string;
+      serialized: Record<string, unknown>;
+    }
+  | undefined {
+  let serialized =
+    matchRound != null && matchRound >= 1
+      ? loadSerializedRoomFromArchiveSync(roomId, matchRound)
+      : undefined;
+  if (!serialized) {
+    serialized = loadSerializedRoomFromArchiveSync(roomId);
+  }
+  if (!serialized) {
+    return undefined;
+  }
+  const phase = serialized.phase;
+  if (phase !== 'postgame' && phase !== 'finished') {
+    return undefined;
+  }
+  const wireCode =
+    typeof serialized.roomCode === 'string'
+      ? serialized.roomCode.trim().toUpperCase()
+      : roomId;
   return { roomId, roomCode: wireCode, serialized };
 }

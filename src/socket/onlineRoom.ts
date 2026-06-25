@@ -41,8 +41,8 @@ import { setIDToLNURLW, setLNURLWToID } from '../state/lnurlwState';
 import {
   archivedRowToOnlineRoomListItem,
   listArchivedOnlineRoomsSync,
-  loadSerializedRoomFromArchiveSync,
   resolveArchivedRoomByCodeSync,
+  resolveArchivedRoomByIdSync,
 } from '../state/onlineRoomArchive';
 import {
   peekOnlineSeatLightningForSession,
@@ -543,13 +543,13 @@ export function getOnlineRoomStateHandler(
     socket.emit('onlineRoomUpdated', serializeRoom(room, viewer));
     return;
   }
-  const archived = loadSerializedRoomFromArchiveSync(payload.roomId, payload.matchRound);
+  const archived = resolveArchivedRoomByIdSync(payload.roomId, payload.matchRound);
   if (archived) {
     logOnline(
       sessionID,
-      `getOnlineRoomState from archive roomId=${payload.roomId} matchRound=${payload.matchRound ?? 'n/a'}`
+      `getOnlineRoomState from archive roomId=${payload.roomId} matchRound=${payload.matchRound ?? 'n/a'} code=${archived.roomCode}`
     );
-    socket.emit('onlineRoomUpdated', redactSerializedRoomForViewer(archived, viewer));
+    socket.emit('onlineRoomUpdated', redactSerializedRoomForViewer(archived.serialized, viewer));
     return;
   }
   logOnline(sessionID, `getOnlineRoomState failed roomId=${payload.roomId} reason=room_not_found`);
