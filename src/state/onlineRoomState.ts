@@ -273,7 +273,7 @@ function roomToFinishedResult(room: OnlineRoom): NonNullable<OnlineRoomListItem[
 
 /**
  * When multiple archive index rows share a `roomId` (per-round match + session), pick the row
- * that represents the final session (payout) or the latest match round ù not the first round.
+ * that represents the final session (payout) or the latest match round ? not the first round.
  */
 function pickBetterHistoryForRoom(prev: OnlineRoomListItem, next: OnlineRoomListItem): OnlineRoomListItem {
   const prevSession = prev.archiveKind === 'session' ? 1 : 0;
@@ -471,7 +471,7 @@ function tryReclaimPaidSeatOnJoin(
     room.spectators.delete(sessionID);
     roomIdBySession.set(sessionID, roomId);
     logOnlineState(
-      `reclaimed paid seat roomId=${roomId} role=${role} session=${sessionID} pubkey=${seatPk.slice(0, 8)}ù`
+      `reclaimed paid seat roomId=${roomId} role=${role} session=${sessionID} pubkey=${seatPk.slice(0, 8)}?`
     );
     return true;
   }
@@ -511,6 +511,9 @@ export function joinRoom(
   refreshNostrLinkSocket(roomId, sessionID, socketID);
   refreshOnlineSeatLightningSocket(sessionID, socketID);
   logOnlineState(`join roomId=${roomId} session=${sessionID} socket=${socketID}`);
+  if (room.phase === 'postgame' || room.phase === 'finished') {
+    ensurePostGameState(room);
+  }
   const matchStarted = maybeStartReadyMatch(room);
   return { room, matchStarted };
 }
@@ -664,7 +667,7 @@ export function advanceNostrThreadTip(roomId: string, eventId: string) {
   }
   room.nostrThreadTipEventId = eventId;
   room.updatedAt = Date.now();
-  logOnlineState(`nostr thread tip roomId=${roomId} event=${eventId.slice(0, 12)}ù`);
+  logOnlineState(`nostr thread tip roomId=${roomId} event=${eventId.slice(0, 12)}?`);
 }
 
 export function issueJoinPin(roomId: string, sessionID: string, socketID: string) {
@@ -821,7 +824,7 @@ export function registerNostrLink(
     expiresAt,
     linkPayMethod: opts?.linkPayMethod ?? 'nostr_web',
   });
-  logOnlineState(`registered nostr link roomId=${roomId} session=${sessionID} pubkey=${pk.slice(0, 8)}ù`);
+  logOnlineState(`registered nostr link roomId=${roomId} session=${sessionID} pubkey=${pk.slice(0, 8)}?`);
   return { ok: true, expiresAt };
 }
 
@@ -952,7 +955,7 @@ export function formatAnonSeatLabel(hexSource: string): string {
   return hex ? `Anon${hex}` : 'Anonymous';
 }
 
-/** Seat label for online lobby ù never returns blank (anonymous zaps often have empty comment). */
+/** Seat label for online lobby ? never returns blank (anonymous zaps often have empty comment). */
 export function resolveOnlineSeatDisplayName(params: {
   name?: string | null;
   pubkey?: string;
@@ -1290,25 +1293,33 @@ export type OnlineRoomViewer = {
   socketID?: string;
 };
 
-/** True when the viewer is the match winner (session id or live winner seat socket). */
+/** True when the viewer is the match winner (recorded id, live seat session, or live seat socket). */
 export function isOnlineRoomWinnerViewer(
   room: Pick<OnlineRoom, 'postGame' | 'seats'>,
   viewer?: OnlineRoomViewer
 ): boolean {
-  if (!viewer?.sessionID) {
+  if (!viewer?.sessionID && !viewer?.socketID) {
     return false;
   }
-  if (room.postGame.winnerSessionID && room.postGame.winnerSessionID === viewer.sessionID) {
+  if (
+    viewer.sessionID &&
+    room.postGame.winnerSessionID &&
+    room.postGame.winnerSessionID === viewer.sessionID
+  ) {
     return true;
   }
   const winnerRole = room.postGame.winnerRole;
-  if (!winnerRole || !viewer.socketID) {
+  if (!winnerRole) {
     return false;
   }
   const winnerSeat = room.seats.get(winnerRole);
-  return Boolean(
-    winnerSeat?.sessionID === viewer.sessionID && winnerSeat.socketID === viewer.socketID
-  );
+  if (!winnerSeat || winnerSeat.status !== 'paid') {
+    return false;
+  }
+  if (viewer.socketID && winnerSeat.socketID === viewer.socketID) {
+    return true;
+  }
+  return Boolean(viewer.sessionID && winnerSeat.sessionID === viewer.sessionID);
 }
 
 function postGameIncludesWithdrawLink(
@@ -1411,13 +1422,19 @@ function getOnlinePostGameInternal(roomId: string) {
   const room = roomById.get(roomId);
   if (room && (room.phase === 'postgame' || room.phase === 'finished')) {
     ensurePostGameState(room);
+    const p1Seat = room.seats.get(PlayerRole.Player1);
+    const p2Seat = room.seats.get(PlayerRole.Player2);
     return {
       roomId: room.roomId,
       phase: room.phase,
-      p1Name: room.seats.get(PlayerRole.Player1)?.name ?? 'Player 1',
-      p2Name: room.seats.get(PlayerRole.Player2)?.name ?? 'Player 2',
-      p1Picture: room.seats.get(PlayerRole.Player1)?.picture ?? room.postGame.p1Picture,
-      p2Picture: room.seats.get(PlayerRole.Player2)?.picture ?? room.postGame.p2Picture,
+      p1Name: p1Seat?.name ?? 'Player 1',
+      p2Name: p2Seat?.name ?? 'Player 2',
+      p1Picture: p1Seat?.picture ?? room.postGame.p1Picture,
+      p2Picture: p2Seat?.picture ?? room.postGame.p2Picture,
+      p1SessionID: p1Seat?.sessionID,
+      p2SessionID: p2Seat?.sessionID,
+      p1SocketID: p1Seat?.socketID,
+      p2SocketID: p2Seat?.socketID,
       p1Points: room.snapshot.state.score[0],
       p2Points: room.snapshot.state.score[1],
       winnerRole: room.postGame.winnerRole,
@@ -1629,7 +1646,7 @@ export function settleOnlineRematchPayment(params: {
       return !loserSeat.pubkey && loserSeat.payMethod !== 'lightning';
     }
     if (loserSeat.payMethod === 'lightning') {
-      // Lightning buy-in uses a fresh ephemeral key per payment ù match session link, not seat pubkey.
+      // Lightning buy-in uses a fresh ephemeral key per payment ? match session link, not seat pubkey.
       return Boolean(
         waitingForLoser &&
           loserSessionId &&

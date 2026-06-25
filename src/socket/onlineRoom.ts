@@ -70,6 +70,7 @@ import {
   getRoomById,
   getRoomBySession,
   hasAnyPaidSeat,
+  isOnlineRoomWinnerViewer,
   isPaidSeatSession,
   isRematchLoserSession,
   issueJoinPin,
@@ -750,11 +751,7 @@ export async function createOnlineWithdrawalHandler(socket: Socket, payload: { r
   const viewer = { sessionID, socketID: socket.id };
   const info = getOnlinePostGame(payload.roomId, viewer);
   const room = getRoomById(payload.roomId);
-  const winnerSeat =
-    room && info?.winnerRole ? room.seats.get(info.winnerRole) : undefined;
-  const isWinnerSession = Boolean(info?.winnerSessionID && info.winnerSessionID === sessionID);
-  const isWinnerSocket = Boolean(winnerSeat?.socketID && winnerSeat.socketID === socket.id);
-  if (!info || (!isWinnerSession && !isWinnerSocket)) {
+  if (!info || !room || !isOnlineRoomWinnerViewer(room, viewer)) {
     logOnline(sessionID, `createOnlineWithdrawal denied roomId=${payload.roomId}`);
     trackOnlineReject('online.payout.withdrawal', 'only_winner_can_withdraw', {
       sessionID,
@@ -818,11 +815,7 @@ export async function createOnlineNostrPayoutHandler(socket: Socket, payload: { 
   const viewer = { sessionID, socketID: socket.id };
   const info = getOnlinePostGame(payload.roomId, viewer);
   const room = getRoomById(payload.roomId);
-  const winnerSeat =
-    room && info?.winnerRole ? room.seats.get(info.winnerRole) : undefined;
-  const isWinnerSession = Boolean(info?.winnerSessionID && info.winnerSessionID === sessionID);
-  const isWinnerSocket = Boolean(winnerSeat?.socketID && winnerSeat.socketID === socket.id);
-  if (!info || (!isWinnerSession && !isWinnerSocket)) {
+  if (!info || !room || !isOnlineRoomWinnerViewer(room, viewer)) {
     logOnline(sessionID, `createOnlineNostrPayout denied roomId=${payload.roomId}`);
     trackOnlineReject('online.payout.nostr', 'only_winner_can_withdraw', {
       sessionID,

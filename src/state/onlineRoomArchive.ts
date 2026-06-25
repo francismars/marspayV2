@@ -553,6 +553,7 @@ type ArchivedSeat = {
   name?: string;
   picture?: string;
   sessionID?: string;
+  socketID?: string;
   lnAddress?: string;
 };
 
@@ -614,6 +615,8 @@ export function getOnlinePostGameFromArchive(roomId: string) {
       p2Picture: p2?.picture ?? pg.p2Picture,
       p1SessionID: p1?.sessionID,
       p2SessionID: p2?.sessionID,
+      p1SocketID: p1?.socketID,
+      p2SocketID: p2?.socketID,
       p1Points: score[0] ?? 0,
       p2Points: score[1] ?? 0,
       winnerRole: pg.winnerRole,
