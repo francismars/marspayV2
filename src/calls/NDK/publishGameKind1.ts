@@ -1,7 +1,7 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools';
 import { ALLOWEDEMOJIS } from '../../consts/emojis';
-import { onlineLobbyPublicUrl } from '../../consts/gamePublicUrl';
+import { onlineRoomPublicUrl, onlineRoomPublicUrlFromRoomId } from '../../consts/gamePublicUrl';
 import { BUYINMAX, BUYINMIN, ONLINE_BUYIN_DEFAULT } from '../../consts/values';
 import { getGameInfoFromID } from '../../state/gameState';
 import { appendKind1toSessionID, getKind1sfromSessionID, setKind1IDtoSessionID } from '../../state/nostrState';
@@ -133,7 +133,12 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
       `First 2 valid zaps get Player 1 and Player 2.`,
     ];
     if (opts.roomId) {
-      lines.push('', `Join / spectate: ${onlineLobbyPublicUrl(opts.roomId)}`);
+      const joinUrl = opts.roomCode
+        ? onlineRoomPublicUrl(opts.roomCode)
+        : onlineRoomPublicUrlFromRoomId(opts.roomId);
+      if (joinUrl) {
+        lines.push('', `Join / spectate: ${joinUrl}`);
+      }
     }
     ndkEvent.content = lines.join('\n');
   } else if (!winnerLength) {

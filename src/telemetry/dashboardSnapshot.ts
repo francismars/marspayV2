@@ -14,7 +14,7 @@ import {
   listOnlineRooms,
   listOnlineHistoryMerged,
 } from '../state/onlineRoomState';
-import { onlineLobbyPublicUrl, onlineGamePublicUrl } from '../consts/gamePublicUrl';
+import { onlineRoomPublicUrl, onlineRoomPublicUrlFromRoomId } from '../consts/gamePublicUrl';
 import {
   getFunnelCountersSnapshot,
   parseFunnelCounters,
@@ -374,8 +374,7 @@ export function buildOnlineSnapshot() {
       result: room.result,
       replay: room.replay,
       seats,
-      lobbyUrl: onlineLobbyPublicUrl(room.roomId),
-      gameUrl: room.phase === 'playing' ? onlineGamePublicUrl(room.roomId) : undefined,
+      roomUrl: onlineRoomPublicUrl(room.roomCode),
     };
   });
 
@@ -392,7 +391,7 @@ export function buildOnlineSnapshot() {
       archiveKind: room.archiveKind,
       result: room.result,
       replay: room.replay,
-      lobbyUrl: onlineLobbyPublicUrl(room.roomId),
+      roomUrl: onlineRoomPublicUrl(room.roomCode),
     }));
 
   return {
@@ -544,7 +543,11 @@ export function buildLiveSessionDetail(sessionID: string) {
       challengeId: e.challengeId,
       roomCode: e.roomCode,
     })),
-    lobbyUrl: onlineCtx?.roomId ? onlineLobbyPublicUrl(onlineCtx.roomId) : undefined,
+    roomUrl: onlineCtx?.roomCode
+      ? onlineRoomPublicUrl(onlineCtx.roomCode)
+      : onlineCtx?.roomId
+        ? (onlineRoomPublicUrlFromRoomId(onlineCtx.roomId) ?? undefined)
+        : undefined,
   };
 }
 

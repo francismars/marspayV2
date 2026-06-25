@@ -39,6 +39,8 @@ import {
   cancelOnlineSeatLightningHandler,
   roomInputHandler,
   spectateOnlineRoomHandler,
+  spectateOnlineRoomByCodeHandler,
+  onlineConfirmStartHandler,
   startOnlineGameHandler,
   startOnlineLoop,
   pingLatencyHandler,
@@ -283,6 +285,12 @@ export default function registerSocketHandlers(io: Server) {
     });
     socket.on('spectateOnlineRoom', (payload: { roomId: string }) => {
       spectateOnlineRoomHandler(socket, payload);
+    });
+    socket.on('spectateOnlineRoomByCode', (payload: { roomCode: string }) => {
+      spectateOnlineRoomByCodeHandler(socket, payload);
+    });
+    socket.on('onlineConfirmStart', (payload: { roomId: string }) => {
+      onlineConfirmStartHandler(socket, payload);
     });
     socket.on('leaveOnlineRoom', (payload?: { roomId?: string }) => {
       leaveOnlineRoomHandler(socket, payload);

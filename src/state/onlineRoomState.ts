@@ -514,7 +514,7 @@ export function joinRoom(
   if (room.phase === 'postgame' || room.phase === 'finished') {
     ensurePostGameState(room);
   }
-  const matchStarted = maybeStartReadyMatch(room);
+  const matchStarted = maybeStartPaidMatch(room);
   return { room, matchStarted };
 }
 
@@ -1028,6 +1028,7 @@ export function seatPaidPlayer(params: {
     paidAmount: params.amount,
     paidAt: now,
     ready: false,
+    startConfirmed: false,
     disconnectedAt: undefined,
     name: displayName,
     picture: params.picture,
@@ -1054,7 +1055,8 @@ export function seatPaidPlayer(params: {
   logOnlineState(
     `seat assigned roomId=${params.roomId} session=${params.sessionID} role=${openSeat} amount=${params.amount}`
   );
-  return { ok: true as const, role: openSeat, room };
+  const matchStarted = maybeStartPaidMatch(room);
+  return { ok: true as const, role: openSeat, room, matchStarted };
 }
 
 export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
@@ -1072,12 +1074,15 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
     room.matchRound += 1;
   }
   if (phase === 'playing') {
-    startOnlineCountdown(room.snapshot.state);
     room.postGame.doubleOrNothingVotes.clear();
     room.postGame.settledAt = undefined;
     for (const [role, seat] of room.seats.entries()) {
       if (seat.status === 'paid') {
-        room.seats.set(role, { ...seat, ready: false });
+        room.seats.set(role, {
+          ...seat,
+          ready: false,
+          startConfirmed: false,
+        });
       }
     }
     resetReplay(room);
@@ -1154,8 +1159,7 @@ export function setSeatReady(roomId: string, sessionID: string, ready: boolean) 
   const seat = room.seats.get(seatRole)!;
   room.seats.set(seatRole, { ...seat, ready, disconnectedAt: undefined });
   room.updatedAt = Date.now();
-  const started = maybeStartReadyMatch(room);
-  return { ok: true as const, started };
+  return { ok: true as const, started: false };
 }
 
 export function markOnlineRoomSettledBySession(sessionID: string) {
@@ -1204,6 +1208,38 @@ export function updateRoomInput(roomId: string, sessionID: string, payload: Onli
   applyOnlineInputsToState(room);
 }
 
+export function confirmOnlineStart(roomId: string, sessionID: string) {
+  const room = roomById.get(roomId);
+  if (!room || room.phase !== 'playing') {
+    return { ok: false as const, reason: 'room_not_playing' };
+  }
+  const state = room.snapshot.state;
+  if (state.gameStarted || state.countdownStart) {
+    return { ok: false as const, reason: 'already_started' };
+  }
+  let seatRole: PlayerRole.Player1 | PlayerRole.Player2 | undefined;
+  for (const [role, seat] of room.seats.entries()) {
+    if (seat.status === 'paid' && seat.sessionID === sessionID) {
+      seatRole = role;
+      break;
+    }
+  }
+  if (!seatRole) {
+    return { ok: false as const, reason: 'not_paid_player' };
+  }
+  const seat = room.seats.get(seatRole)!;
+  if (seat.startConfirmed) {
+    return { ok: true as const, countdownStarted: Boolean(state.countdownStart) };
+  }
+  room.seats.set(seatRole, { ...seat, startConfirmed: true, disconnectedAt: undefined });
+  room.updatedAt = Date.now();
+  const countdownStarted = maybeStartOnlineCountdown(room);
+  logOnlineState(
+    `arena start confirmed roomId=${roomId} session=${sessionID} countdownStarted=${countdownStarted}`
+  );
+  return { ok: true as const, countdownStarted };
+}
+
 /**
  * Held keys + latched direction + pending tap (see `onlineInput.ts`).
  * Called on every `roomInput` and each sim tick.
@@ -1220,7 +1256,7 @@ export function applyOnlineInputsToState(room: OnlineRoom): void {
 
   const state = room.snapshot.state;
   if (!state.gameStarted && !state.countdownStart) {
-    startOnlineCountdown(state);
+    // Pre-start: steering only (facing); countdown waits for mutual arena confirm.
   }
 
   const p1Input = room.inputBySession.get(p1.sessionID);
@@ -1669,12 +1705,14 @@ export function settleOnlineRematchPayment(params: {
     ...winnerSeat,
     paidAmount: requiredAmount,
     ready: false,
+    startConfirmed: false,
     disconnectedAt: undefined,
   });
   room.seats.set(loserRole, {
     ...loserSeat,
     paidAmount: requiredAmount,
     ready: false,
+    startConfirmed: false,
     disconnectedAt: undefined,
   });
   resetRoomToLobby(room);
@@ -1907,25 +1945,20 @@ function resetRoomToLobby(room: OnlineRoom) {
   logOnlineState(`double-or-nothing agreed; reset to lobby roomId=${room.roomId}`);
 }
 
-function maybeStartReadyMatch(room: OnlineRoom) {
+function maybeStartPaidMatch(room: OnlineRoom) {
   const p1 = room.seats.get(PlayerRole.Player1);
   const p2 = room.seats.get(PlayerRole.Player2);
-  const bothReady =
+  const bothPaid =
     p1?.status === 'paid' &&
     p2?.status === 'paid' &&
-    p1.ready === true &&
-    p2.ready === true &&
     !!p1.sessionID &&
     !!p2.sessionID &&
     room.members.has(p1.sessionID) &&
     room.members.has(p2.sessionID);
-  if (!bothReady) {
+  if (!bothPaid) {
     const blockers: string[] = [];
     if (p1?.status !== 'paid' || p2?.status !== 'paid') {
       blockers.push('seats_not_paid');
-    }
-    if (p1?.ready !== true || p2?.ready !== true) {
-      blockers.push('not_both_ready');
     }
     if (!p1?.sessionID || !p2?.sessionID) {
       blockers.push('missing_session');
@@ -1936,13 +1969,40 @@ function maybeStartReadyMatch(room: OnlineRoom) {
     if (p2?.sessionID && !room.members.has(p2.sessionID)) {
       blockers.push('p2_not_in_room');
     }
-    logOnlineState(
-      `maybeStartReadyMatch blocked roomId=${room.roomId} reasons=${blockers.join(',') || 'unknown'}`
-    );
+    if (room.phase !== 'lobby') {
+      blockers.push('not_lobby');
+    }
+    if (blockers.length > 0) {
+      logOnlineState(
+        `maybeStartPaidMatch blocked roomId=${room.roomId} reasons=${blockers.join(',')}`
+      );
+    }
+    return false;
+  }
+  if (room.phase !== 'lobby') {
     return false;
   }
   setRoomPhase(room.roomId, 'playing');
   return true;
+}
+
+function maybeStartOnlineCountdown(room: OnlineRoom): boolean {
+  const p1 = room.seats.get(PlayerRole.Player1);
+  const p2 = room.seats.get(PlayerRole.Player2);
+  const state = room.snapshot.state;
+  if (state.gameStarted || state.countdownStart) {
+    return Boolean(state.countdownStart || state.gameStarted);
+  }
+  if (
+    p1?.status === 'paid' &&
+    p2?.status === 'paid' &&
+    p1.startConfirmed &&
+    p2.startConfirmed
+  ) {
+    startOnlineCountdown(state);
+    return true;
+  }
+  return false;
 }
 
 function cloneSnapshot(snapshot: OnlineRoom['snapshot']): OnlineRoom['snapshot'] {

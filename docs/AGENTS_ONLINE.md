@@ -82,7 +82,9 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 
 `OnlineRoomState.phase` / snapshot phase:
 
-`lobby` → `playing` → `finished` → (optional) reset to `lobby` after double-or-nothing + rematch zap; or `cancelled` if host cancels with no paid seats.
+`lobby` → `playing` → `postgame` → `finished` → (optional) reset to `lobby` after double-or-nothing + rematch zap; or `cancelled` if host cancels with no paid seats.
+
+**Canonical client URL:** `https://game.chainduel.net/online/r/{roomCode}` — one link for players and spectators.
 
 ---
 
@@ -90,17 +92,17 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 
 1. **Connect** with Socket.IO; receive `session` with `sessionID` ([`AGENTS.md`](./AGENTS.md)).
 2. **Host:** `createOnlineRoom` → `resCreateOnlineRoom` with `roomId`, `roomCode`, `joinPin`, `pinExpiresAt`, `room`, optional `nostrMeta` (after async Kind1 publish).
-3. **Guest:** `joinOnlineRoomByCode` `{ roomCode }` or `joinOnlineRoom` `{ roomId }` → `resJoinOnlineRoom` (same shape as create response).
-4. **Spectator:** `spectateOnlineRoom` `{ roomId }` (no dedicated response; room state via `onlineRoomUpdated`).
-5. **Kind1 / Nostr id** — To zap the **Kind1** note you need its **event id**. It is **not** only implied by “zap the note” in prose:
+3. **Guest / spectator:** `joinOnlineRoomByCode` `{ roomCode }` or `spectateOnlineRoomByCode` `{ roomCode }` when seats are full or match is live. Legacy `joinOnlineRoom` / `spectateOnlineRoom` by `roomId` still work.
+4. **Kind1 / Nostr id** — To zap the **Kind1** note you need its **event id**. It is **not** only implied by “zap the note” in prose:
    - **`resCreateOnlineRoom`** / **`resJoinOnlineRoom`** include a **`room`** object; use **`room.kind1EventId`** as the Kind1 event id once the Kind1 exists.
    - **`nostrMeta`** (includes `min` buy-in, etc.) may appear at the **top level** of the response **or** under **`room.nostrMeta`** — agents should check **both** (server shape can vary).
-6. **Buy seat:** Zap the published Kind1 (amount ≥ `nostrMeta.min` / Kind1 `min`) with the **join PIN** in the zap **content** (see [PIN & zap](#join-pin--nostr-zap-seat-claim)). Prefer sending **only** the 4-digit PIN as the comment (see [Battle-tested notes](#battle-tested-notes)).
-7. **Seat assignment is asynchronous:** After you pay, the server processes the zap **before** emitting `onlineSeatAssigned`. **Do not** send `onlineSetReady` until you have received **`onlineSeatAssigned`** for your seat. A safe pattern: set a flag on `onlineSeatAssigned`, then send ready on the next `onlineRoomUpdated` where `phase === 'lobby'` and your seat is confirmed paid.
-8. **Ready:** Each seated player sends `onlineSetReady` `{ roomId, ready: true }` (or `startOnlineGame` which forces `ready: true` for caller only). **Guard** repeated sends — `onlineRoomUpdated` fires very often in lobby (see [Battle-tested notes](#battle-tested-notes)). When **both** paid seats are `ready` and both `sessionID`s are present in `members`, phase becomes **`playing`** → `onlineRoomUpdated`.
-9. **Play:** While `phase === 'playing'`, paid players send `roomInput` at **~80–100 ms** intervals (≈ server tick rate; see [Input loop](#input-and-simulation)). Server broadcasts **`onlineRoomSnapshot`** every tick to the room.
-10. **Finish:** Phase `finished` → `onlineRoomUpdated`; list rows gain `result` / `replay` metadata; Nostr reply may be published by server.
-11. **Post-game:** Follow the **sequential** flow in [Battle-tested notes](#battle-tested-notes) (`getOnlinePostGame` → withdrawal / Nostr payout → redeem).
+5. **Buy seat:** Zap the published Kind1 (amount ≥ `nostrMeta.min` / Kind1 `min`) with the **join PIN** in the zap **content** (see [PIN & zap](#join-pin--nostr-zap-seat-claim)). Prefer sending **only** the 4-digit PIN as the comment (see [Battle-tested notes](#battle-tested-notes)).
+6. **Seat assignment is asynchronous:** After you pay, the server processes the zap **before** emitting `onlineSeatAssigned`. Wait for **`onlineSeatAssigned`** or a paid seat on **`onlineRoomUpdated`** before assuming you are seated.
+7. **Match admission (automatic):** When **both** seats are `paid` and both `sessionID`s are in `room.members`, phase becomes **`playing`** immediately (`maybeStartPaidMatch`). No lobby “ready” step.
+8. **Arena start (mutual confirm):** While `phase === 'playing'` and `gameStarted === false`, each paid player sends **`onlineConfirmStart`** `{ roomId }` (client: Space/Enter on the arena). Server sets `seat.startConfirmed`; when **both** are true, **`startOnlineCountdown`** runs, then **`gameStarted`** after the 3-2-1 ticks.
+9. **Play:** While `phase === 'playing'` and `gameStarted`, paid players send `roomInput` at **~80–100 ms** intervals. Server broadcasts **`onlineRoomSnapshot`** every tick.
+10. **Finish:** Phase `postgame` → `onlineRoomUpdated`; all viewers on the room URL see results. Nostr reply may be published by server.
+11. **Post-game:** `getOnlinePostGame` → withdrawal / Nostr payout / double-or-nothing (see [Battle-tested notes](#battle-tested-notes)).
 
 ---
 
@@ -113,12 +115,14 @@ This is what the server actually simulates (`src/game/onlineEngine.ts`). Clients
 | `joinOnlineRoom` | `{ roomId: string }` | |
 | `joinOnlineRoomByCode` | `{ roomCode: string }` | Code matched uppercase |
 | `spectateOnlineRoom` | `{ roomId: string }` | |
+| `spectateOnlineRoomByCode` | `{ roomCode: string }` | Preferred for live spectators |
+| `onlineConfirmStart` | `{ roomId: string }` | Arena pre-start; both paid players must confirm before countdown |
 | `leaveOnlineRoom` | `{ roomId?: string }` | If `roomId` given, leaves that socket.io room; always runs `leaveRoom(sessionID, { releaseSeat: true })` |
 | `cancelOnlineRoom` | `{ roomId: string }` | Member only; **fails** if any seat is `paid` (`room_has_paid_seats`) |
 | `getOnlineRoomState` | `{ roomId: string }` | Pushes `onlineRoomUpdated` to caller |
 | `roomInput` | `{ roomId, input: { up?, down?, left?, right? } }` | **Only** while `playing`; caller must be paid player (by `sessionID` or `socket.id`) |
-| `startOnlineGame` | `{ roomId: string }` | Sets caller’s seat `ready: true`; may start match; may emit `onlinePinInvalid` |
-| `onlineSetReady` | `{ roomId: string; ready: boolean }` | Lobby only |
+| `startOnlineGame` | `{ roomId: string }` | **Deprecated** — no longer starts matches; use `onlineConfirmStart` in arena |
+| `onlineSetReady` | `{ roomId: string; ready: boolean }` | **Deprecated** — admission is automatic when both seats paid |
 | `getOnlinePostGame` | `{ roomId: string }` | Re-joins room + updates socket mapping |
 | `createOnlineWithdrawal` | `{ roomId: string }` | Winner only; LNURLw flow |
 | `createOnlineNostrPayout` | `{ roomId: string }` | Winner only; needs `winnerLnAddress` on postgame |
@@ -245,16 +249,11 @@ For several zap failures, `subscribeEvent.ts` emits `onlinePinInvalid` to `getSo
 
 ## Match start conditions
 
-`maybeStartReadyMatch` requires:
+**Admission (`maybeStartPaidMatch`):** when `phase === 'lobby'`, both seats `status === 'paid'`, both `sessionID`s set, and both in `room.members` → phase becomes **`playing`** (pregame arena).
 
-- `phase === 'lobby'`
-- Both seats `status === 'paid'`
-- Both seats `ready === true`
-- Both `sessionID`s set and both present in `room.members`
+**Countdown (`maybeStartOnlineCountdown`):** when `phase === 'playing'`, both paid seats have `startConfirmed === true` → `startOnlineCountdown` → after 3-2-1 ticks, `gameStarted === true`.
 
-If one player **disconnects** between paying and readying, the match **won’t** start until **both** are back in `members` and both ready again — monitor `onlineRoomUpdated` for membership changes and be prepared to **re-send** `onlineSetReady` after reconnect.
-
-`startOnlineGame` sets the caller ready then checks `areSeatsFilled`; if not filled, emits `seats_not_filled` but **still** broadcasts `onlineRoomUpdated`.
+If one player **disconnects** between paying and admission, the match **won’t** enter `playing` until **both** are back in `members`. After admission, each player must **`onlineConfirmStart`** on the arena (Space/Enter).
 
 ---
 
@@ -305,12 +304,9 @@ These come from end-to-end agent runs (including Python bots). Use them to avoid
 
 **Items 1–2 elsewhere:** **NWC + NIP-57 seat payment** is documented under [Autonomy vs external systems](./AGENTS.md#autonomy-vs-external-systems) in **`AGENTS.md`**. **Where to find `kind1EventId` / `nostrMeta`** is in the [Happy path](#happy-path-two-players--optional-spectators) steps 5–6.
 
-### 3. Seat purchase is asynchronous — do not send ready early
+### 3. Seat purchase is asynchronous
 
-After you pay the zap and obtain a preimage, the server still processes the zap **asynchronously** before emitting **`onlineSeatAssigned`**.
-
-- **Do not** emit **`onlineSetReady`** until **`onlineSeatAssigned`** has been received for your session.
-- **Safe pattern:** set a flag on `onlineSeatAssigned`, then send ready on the next **`onlineRoomUpdated`** with `phase === 'lobby'` once your seat shows `paid`.
+After you pay the zap, the server processes it **asynchronously** before emitting **`onlineSeatAssigned`**. Wait for a paid seat on **`onlineRoomUpdated`** before assuming you are seated. When both seats are paid, the room enters **`playing`** automatically — then use **`onlineConfirmStart`** on the arena.
 
 ### 4. Double-payment prevention on reconnect
 
@@ -327,9 +323,9 @@ pseudo:
 
 See [Input and simulation](#input-and-simulation): align with the **100 ms** server tick; **~90 ms** is a practical default.
 
-### 6. `onlineRoomUpdated` fires very often in lobby — guard ready
+### 6. `onlineRoomUpdated` fires often — debounce UI actions
 
-During lobby, **`onlineRoomUpdated`** emits on **membership / seat** changes (many times per second). Track whether you have **already** sent **`onlineSetReady`** with a **boolean** (e.g. `readySent`) and **do not** spam the server; idempotent re-sends may still be noisy.
+During lobby, **`onlineRoomUpdated`** emits on membership / seat changes. Debounce local UI that reacts to every update.
 
 ### 7. `onlineRoomSnapshot` wrapping
 
@@ -339,9 +335,9 @@ Handlers receive **`{ roomId, snapshot }`**. Read **`snapshot.state`** for autho
 
 The server extracts the PIN as the **first 4-digit substring** in zap content. **Safest:** send **only** the four digits (see [Zap comment parsing](#join-pin--nostr-zap-seat-claim) above).
 
-### 9. Ready requires both players present in `members`
+### 9. Admission requires both players in `members`
 
-`maybeStartReadyMatch` needs both seats paid, both ready, and **both** `sessionID`s in **`room.members`**. A disconnect between pay and ready breaks the chain — watch **`onlineRoomUpdated`** and **re-ready** after reconnect if needed.
+`maybeStartPaidMatch` needs both seats paid and **both** `sessionID`s in **`room.members`**. A disconnect after pay but before admission blocks the arena until both reconnect.
 
 ### 10. Post-game flow is sequential
 

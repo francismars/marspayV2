@@ -32,7 +32,7 @@ import getLNURLCallback from '../calls/LNAddress/getLNURLCallback';
 import getInvoiceFromCallback from '../calls/LNAddress/getInvoiceFromCallback';
 import payInvoice from '../calls/LNBits/payInvoice';
 import { P2PMAXWITHDRAWALS } from '../consts/values';
-import { onlineGamePublicUrl, onlineLobbyPublicUrl } from '../consts/gamePublicUrl';
+import { onlineRoomPublicUrl } from '../consts/gamePublicUrl';
 import { GameMode, PlayerRole } from '../types/game';
 import type { OnlineRoomListItem } from '../types/online';
 import { io } from '../server';
@@ -60,6 +60,7 @@ import { trackEvent } from '../telemetry/trackEvent';
 import {
   advanceNostrThreadTip,
   areSeatsFilled,
+  confirmOnlineStart,
   createOnlineRoom,
   deleteRoom,
   getOnlineReplay,
@@ -205,18 +206,16 @@ function publishOnlineMatchStarted(roomId: string, sessionID: string) {
   }
   const mentions = getSeatMentions(room.roomId);
   const vsLine = `${formatOnlinePlayerNostrLabel(mentions[0] ?? { name: 'Player 1' })} vs ${formatOnlinePlayerNostrLabel(mentions[1] ?? { name: 'Player 2' })}`;
-  const lobbyUrl = onlineLobbyPublicUrl(room.roomId);
-  const gameUrl = onlineGamePublicUrl(room.roomId);
+  const roomUrl = onlineRoomPublicUrl(room.roomCode);
   void publishOnlineThreadReply(
     room,
     sessionID,
     [
       `ONLINE MATCH STARTED · room ${room.roomCode}`,
       vsLine,
-      'Spectators can now watch live.',
+      'Spectators can watch live — same link for players and viewers.',
       '',
-      `Watch live: ${gameUrl}`,
-      `Lobby: ${lobbyUrl}`,
+      `Watch & play: ${roomUrl}`,
     ].join('\n'),
     mentions
   );
@@ -448,6 +447,53 @@ export function spectateOnlineRoomHandler(socket: Socket, payload: { roomId: str
     roomCode: room.roomCode,
     buyin: room.buyin,
   });
+}
+
+export function spectateOnlineRoomByCodeHandler(
+  socket: Socket,
+  payload: { roomCode: string }
+) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  const room = getRoomByCode(payload.roomCode);
+  if (!room) {
+    logOnline(sessionID, `spectateOnlineRoomByCode failed code=${payload.roomCode}`);
+    trackOnlineReject('online.room.spectate', 'room_not_found', {
+      sessionID,
+      roomCode: payload.roomCode,
+    });
+    socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
+    return;
+  }
+  spectateOnlineRoomHandler(socket, { roomId: room.roomId });
+}
+
+export function onlineConfirmStartHandler(socket: Socket, payload: { roomId: string }) {
+  const sessionID = socket.data.sessionID as string | undefined;
+  if (!sessionID) {
+    return;
+  }
+  const result = confirmOnlineStart(payload.roomId, sessionID);
+  if (!result.ok) {
+    logOnline(
+      sessionID,
+      `onlineConfirmStart denied roomId=${payload.roomId} reason=${result.reason}`
+    );
+    trackOnlineReject('online.arena.confirm', result.reason ?? 'denied', {
+      sessionID,
+      roomId: payload.roomId,
+    });
+    socket.emit('onlinePinInvalid', { reason: result.reason });
+    return;
+  }
+  trackOnlineOk('online.arena.confirm', {
+    sessionID,
+    roomId: payload.roomId,
+    meta: { countdownStarted: result.countdownStarted },
+  });
+  const room = getRoomById(payload.roomId);
+  if (room) {
+    io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
+  }
 }
 
 export function getOnlineRoomStateHandler(
@@ -925,7 +971,7 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
         name: loserSeat?.name ?? 'the losing player',
         payMethod: loserSeat?.payMethod,
       });
-      const lobbyUrl = onlineLobbyPublicUrl(room.roomId);
+      const roomUrl = onlineRoomPublicUrl(room.roomCode);
       void (async () => {
         try {
           await publishOnlineThreadReply(
@@ -936,7 +982,7 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
               'Both players agreed to a rematch.',
               `Waiting for ${loserLabel} to pay ${requiredAmount} sats.`,
               '',
-              `Join / spectate: ${lobbyUrl}`,
+              `Join / spectate: ${roomUrl}`,
             ].join('\n'),
             mentions
           );

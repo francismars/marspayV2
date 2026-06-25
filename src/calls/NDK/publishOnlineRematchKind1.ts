@@ -1,6 +1,6 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools';
-import { onlineLobbyPublicUrl } from '../../consts/gamePublicUrl';
+import { onlineRoomPublicUrl } from '../../consts/gamePublicUrl';
 import { appendKind1toSessionID, setKind1IDtoSessionID } from '../../state/nostrState';
 import { GameMode } from '../../types/game';
 import { dateNow } from '../../utils/time';
@@ -50,12 +50,12 @@ export async function publishOnlineRematchKind1(opts: PublishOnlineRematchKind1O
     ? `nostr:${nip19.npubEncode(opts.loserPubkey!)}`
     : opts.loserName?.trim() || 'the losing player';
   const roomCode = opts.roomCode.trim().toUpperCase() || 'N/A';
-  const lobbyUrl = onlineLobbyPublicUrl(opts.roomId);
+  const roomUrl = onlineRoomPublicUrl(roomCode);
   ndkEvent.content = [
     `ONLINE REMATCH · room ${roomCode}`,
     `Waiting for ${loserLabel} to zap exactly ${opts.amount} sats to continue.`,
     '',
-    `Join / spectate: ${lobbyUrl}`,
+    `Join / spectate: ${roomUrl}`,
   ].join('\n');
   await ndkEvent.publish();
   setKind1IDtoSessionID(ndkEvent.id, opts.sessionID);

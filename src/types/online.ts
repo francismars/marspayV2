@@ -26,6 +26,8 @@ export interface OnlineSeatState {
   lnAddress?: string;
   /** How this seat was paid: lightning invoice, web sign-in zap, or external app + PIN. */
   payMethod?: 'lightning' | 'nostr_web' | 'nostr_app';
+  /** Arena pre-start: player pressed confirm on canvas. */
+  startConfirmed?: boolean;
   /** Last RTT (ms) reported by that seat's client; broadcast via `onlineRoomUpdated`. */
   pingMs?: number;
 }
