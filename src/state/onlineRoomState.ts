@@ -406,6 +406,7 @@ export function listOnlineRooms(): OnlineRoomListItem[] {
         ? room.postGame.settledAt ?? room.updatedAt
         : undefined,
     phase: room.phase,
+    rematchRequested: room.postGame.rematchRequested || undefined,
     playersPaid: [...room.seats.values()].filter((seat) => seat.status === 'paid').length,
     seatsTotal: 2,
     spectators: room.spectators.size,

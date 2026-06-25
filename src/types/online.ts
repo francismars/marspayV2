@@ -126,6 +126,8 @@ export interface OnlineRoomListItem {
   playersPaid: number;
   seatsTotal: number;
   spectators: number;
+  /** Double-or-nothing rematch in progress (phase may still be postgame). */
+  rematchRequested?: boolean;
   /** True when loaded from `data/online_archive/` (not live memory). */
   archived?: boolean;
   /** Which match in a multi-game room (double-or-nothing); from per-match archive rows. */
