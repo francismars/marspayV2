@@ -85,6 +85,7 @@ import {
   listOnlineHistoryMerged,
   listOnlineRooms,
   redactSerializedRoomForViewer,
+  markOnlineRematchPending,
   serializeRoom,
   setSeatReady,
   setRoomNostrMeta,
@@ -964,7 +965,15 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
       const loserRole =
         winnerRole === PlayerRole.Player1 ? PlayerRole.Player2 : PlayerRole.Player1;
       const loserSeat = loserRole ? room.seats.get(loserRole) : undefined;
-      const requiredAmount = Math.max(1, Math.floor(room.postGame.winnerPoints * ONLINE_PAYOUT_MULTIPLIER));
+      const requiredAmount = Math.max(
+        1,
+        Math.floor(room.postGame.winnerPoints * ONLINE_PAYOUT_MULTIPLIER)
+      );
+      markOnlineRematchPending({
+        roomId: room.roomId,
+        requiredAmount,
+        waitingForSessionID: loserSeat?.sessionID,
+      });
       const mentions = getSeatMentions(room.roomId);
       const loserLabel = formatOnlinePlayerNostrLabel({
         pubkey: loserSeat?.payMethod === 'lightning' ? undefined : loserSeat?.pubkey,
@@ -1027,7 +1036,10 @@ export function onlineDoubleOrNothingHandler(socket: Socket, payload: { roomId: 
         }
       })();
     }
-    io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(room));
+    const live = getRoomById(payload.roomId);
+    if (live) {
+      io.to(live.roomId).emit('onlineRoomUpdated', serializeRoom(live));
+    }
     broadcastOnlineRoomLists();
   }
 }

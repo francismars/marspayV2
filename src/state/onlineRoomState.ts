@@ -1598,6 +1598,30 @@ export function setOnlinePostGameNostrPayout(roomId: string, lnAddress: string) 
   }
 }
 
+export function markOnlineRematchPending(params: {
+  roomId: string;
+  requiredAmount: number;
+  waitingForSessionID?: string;
+}): boolean {
+  const room = roomById.get(params.roomId);
+  if (!room || room.phase !== 'postgame') {
+    return false;
+  }
+  room.postGame.rematchRequested = true;
+  room.postGame.rematchRequiredAmount = params.requiredAmount;
+  room.postGame.rematchWaitingForSessionID = params.waitingForSessionID;
+  room.postGame.rematchEventId = undefined;
+  room.postGame.rematchNote1 = undefined;
+  room.postGame.lnurlw = undefined;
+  room.postGame.payoutMethod = undefined;
+  room.postGame.payoutTarget = undefined;
+  room.updatedAt = Date.now();
+  logOnlineState(
+    `rematch pending roomId=${params.roomId} amount=${params.requiredAmount} waiting=${params.waitingForSessionID ?? 'none'}`
+  );
+  return true;
+}
+
 export function setOnlineRematchRequested(params: {
   roomId: string;
   requiredAmount: number;
