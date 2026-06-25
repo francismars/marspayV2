@@ -42,6 +42,7 @@ import {
   archivedRowToOnlineRoomListItem,
   listArchivedOnlineRoomsSync,
   loadSerializedRoomFromArchiveSync,
+  resolveArchivedRoomByCodeSync,
 } from '../state/onlineRoomArchive';
 import {
   peekOnlineSeatLightningForSession,
@@ -397,24 +398,49 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
 
 export function joinOnlineRoomByCodeHandler(socket: Socket, payload: { roomCode: string }) {
   const sessionID = socket.data.sessionID as string | undefined;
-  logOnline(sessionID, `joinOnlineRoomByCode requested code=${payload.roomCode}`);
-  const room = getRoomByCode(payload.roomCode);
-  if (!room) {
-    logOnline(sessionID, `joinOnlineRoomByCode failed code=${payload.roomCode} reason=room_not_found`);
+  const roomCode = payload.roomCode.trim().toUpperCase();
+  logOnline(sessionID, `joinOnlineRoomByCode requested code=${roomCode}`);
+  const room = getRoomByCode(roomCode);
+  if (room) {
+    trackOnlineOk('online.room.joined_code', {
+      sessionID,
+      roomId: room.roomId,
+      roomCode: room.roomCode,
+      buyin: room.buyin,
+    });
+    joinOnlineRoomHandler(socket, { roomId: room.roomId });
+    return;
+  }
+
+  const archived = resolveArchivedRoomByCodeSync(roomCode);
+  if (!archived) {
+    logOnline(sessionID, `joinOnlineRoomByCode failed code=${roomCode} reason=room_not_found`);
     trackOnlineReject('online.room.joined_code', 'room_not_found', {
       sessionID,
-      roomCode: payload.roomCode,
+      roomCode,
     });
     socket.emit('onlinePinInvalid', { reason: 'room_not_found' });
     return;
   }
+
+  const viewer = { sessionID, socketID: socket.id };
+  const roomState = redactSerializedRoomForViewer(archived.serialized, viewer);
+  logOnline(
+    sessionID,
+    `joinOnlineRoomByCode archive code=${roomCode} roomId=${archived.roomId} phase=${String(roomState.phase)}`
+  );
   trackOnlineOk('online.room.joined_code', {
     sessionID,
-    roomId: room.roomId,
-    roomCode: room.roomCode,
-    buyin: room.buyin,
+    roomId: archived.roomId,
+    roomCode: archived.roomCode,
   });
-  joinOnlineRoomHandler(socket, { roomId: room.roomId });
+  socket.emit('resJoinOnlineRoom', {
+    roomId: archived.roomId,
+    roomCode: archived.roomCode,
+    joinPin: '',
+    pinExpiresAt: Date.now(),
+    room: roomState,
+  });
 }
 
 export function spectateOnlineRoomHandler(socket: Socket, payload: { roomId: string }) {

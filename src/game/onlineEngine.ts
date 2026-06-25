@@ -173,10 +173,11 @@ export function tryApplyOnlineWantedDirection(
   return snake.dirWanted === dir;
 }
 
-export function stepOnlineGame(state: OnlineAuthoritativeState): void {
+export function stepOnlineGame(state: OnlineAuthoritativeState): PlayerId[] {
+  const respawned: PlayerId[] = [];
   if (state.gameStarted && !state.gameEnded) {
     movePlayers(state);
-    checkCollisions(state);
+    checkCollisions(state, respawned);
     captureCoinbase(state);
     if (state.score[0] <= 0 || state.score[1] <= 0) {
       state.gameEnded = true;
@@ -203,6 +204,7 @@ export function stepOnlineGame(state: OnlineAuthoritativeState): void {
       alpha: change.alpha - 0.1 / 6,
     }))
     .filter((change) => change.alpha >= 0);
+  return respawned;
 }
 
 function movePlayers(state: OnlineAuthoritativeState): void {
@@ -230,10 +232,10 @@ function moveSnake(snake: SnakeState): void {
   }
 }
 
-function checkCollisions(state: OnlineAuthoritativeState): void {
+function checkCollisions(state: OnlineAuthoritativeState, respawned: PlayerId[]): void {
   if (samePos(state.p1.head, state.p2.head)) {
-    resetSnake(state, 'P1');
-    resetSnake(state, 'P2');
+    resetSnake(state, 'P1', respawned);
+    resetSnake(state, 'P2', respawned);
   }
   /**
    * Head-on pass-through: adjacent heads swap cells in one tick. Body checks alone would
@@ -248,8 +250,8 @@ function checkCollisions(state: OnlineAuthoritativeState): void {
     state.p1.dirWanted === 'Right' &&
     state.p2.dirWanted === 'Left'
   ) {
-    resetSnake(state, 'P1');
-    resetSnake(state, 'P2');
+    resetSnake(state, 'P1', respawned);
+    resetSnake(state, 'P2', respawned);
   }
   if (
     state.p1.head[0] === state.p2.head[0] - 1 &&
@@ -259,8 +261,8 @@ function checkCollisions(state: OnlineAuthoritativeState): void {
     state.p1.dirWanted === 'Left' &&
     state.p2.dirWanted === 'Right'
   ) {
-    resetSnake(state, 'P1');
-    resetSnake(state, 'P2');
+    resetSnake(state, 'P1', respawned);
+    resetSnake(state, 'P2', respawned);
   }
   if (
     state.p1.head[0] === state.p2.head[0] &&
@@ -270,8 +272,8 @@ function checkCollisions(state: OnlineAuthoritativeState): void {
     state.p1.dirWanted === 'Up' &&
     state.p2.dirWanted === 'Down'
   ) {
-    resetSnake(state, 'P1');
-    resetSnake(state, 'P2');
+    resetSnake(state, 'P1', respawned);
+    resetSnake(state, 'P2', respawned);
   }
   if (
     state.p1.head[0] === state.p2.head[0] &&
@@ -281,19 +283,19 @@ function checkCollisions(state: OnlineAuthoritativeState): void {
     state.p1.dirWanted === 'Down' &&
     state.p2.dirWanted === 'Up'
   ) {
-    resetSnake(state, 'P1');
-    resetSnake(state, 'P2');
+    resetSnake(state, 'P1', respawned);
+    resetSnake(state, 'P2', respawned);
   }
-  if (outOfBounds(state, state.p1.head)) resetSnake(state, 'P1');
-  if (outOfBounds(state, state.p2.head)) resetSnake(state, 'P2');
+  if (outOfBounds(state, state.p1.head)) resetSnake(state, 'P1', respawned);
+  if (outOfBounds(state, state.p2.head)) resetSnake(state, 'P2', respawned);
 
   for (const pos of state.p1.body) {
-    if (samePos(state.p1.head, pos)) resetSnake(state, 'P1');
-    if (samePos(state.p2.head, pos)) resetSnake(state, 'P2');
+    if (samePos(state.p1.head, pos)) resetSnake(state, 'P1', respawned);
+    if (samePos(state.p2.head, pos)) resetSnake(state, 'P2', respawned);
   }
   for (const pos of state.p2.body) {
-    if (samePos(state.p1.head, pos)) resetSnake(state, 'P1');
-    if (samePos(state.p2.head, pos)) resetSnake(state, 'P2');
+    if (samePos(state.p1.head, pos)) resetSnake(state, 'P1', respawned);
+    if (samePos(state.p2.head, pos)) resetSnake(state, 'P2', respawned);
   }
 }
 
@@ -422,7 +424,11 @@ export function getCaptureLabel(length: number): string {
   return `${capturePercentByLength(length)}%`;
 }
 
-function resetSnake(state: OnlineAuthoritativeState, player: PlayerId): void {
+function resetSnake(
+  state: OnlineAuthoritativeState,
+  player: PlayerId,
+  respawned: PlayerId[]
+): void {
   if (player === 'P1') {
     state.p1.head = [6, 12];
     state.p1.body = [[5, 12]];
@@ -435,6 +441,9 @@ function resetSnake(state: OnlineAuthoritativeState, player: PlayerId): void {
     state.p2.dir = '';
     state.p2.dirWanted = 'Left';
     state.currentCaptureP2 = '2%';
+  }
+  if (!respawned.includes(player)) {
+    respawned.push(player);
   }
 }
 

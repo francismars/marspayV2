@@ -641,3 +641,38 @@ export function getOnlinePostGameFromArchive(roomId: string) {
     return undefined;
   }
 }
+
+/** Resolve a finished/archived room by human code (live rooms are not included). */
+export function resolveArchivedRoomByCodeSync(roomCode: string):
+  | {
+      roomId: string;
+      roomCode: string;
+      serialized: Record<string, unknown>;
+    }
+  | undefined {
+  const code = roomCode.trim().toUpperCase();
+  if (!code) {
+    return undefined;
+  }
+  const matches = listArchivedOnlineRoomsSync().filter(
+    (row) => row.roomCode.trim().toUpperCase() === code
+  );
+  if (matches.length === 0) {
+    return undefined;
+  }
+  matches.sort((a, b) => b.finishedAt - a.finishedAt);
+  const roomId = matches[0].roomId;
+  const serialized = loadSerializedRoomFromArchiveSync(roomId);
+  if (!serialized) {
+    return undefined;
+  }
+  const wireCode =
+    typeof serialized.roomCode === 'string'
+      ? serialized.roomCode.trim().toUpperCase()
+      : matches[0].roomCode.trim().toUpperCase();
+  const phase = serialized.phase;
+  if (phase !== 'postgame' && phase !== 'finished') {
+    return undefined;
+  }
+  return { roomId, roomCode: wireCode, serialized };
+}

@@ -21,6 +21,7 @@ import type { PlayerId } from '../game/onlineEngine';
 import {
   applyInputIntent,
   applySessionSteering,
+  clearSteeringOnRespawn,
   consumePendingTurn,
   mergeSessionInput,
   type OnlineRoomInputPayload,
@@ -1295,7 +1296,14 @@ export function stepRoomSnapshot(roomId: string) {
   consumePendingTurnsForRoom(room);
   applyOnlineInputsToState(room);
 
-  stepOnlineGame(state);
+  const respawned = stepOnlineGame(state);
+  for (const player of respawned) {
+    const sessionID =
+      player === 'P1' ? p1.sessionID : player === 'P2' ? p2.sessionID : undefined;
+    if (!sessionID) continue;
+    const input = room.inputBySession.get(sessionID);
+    if (input) clearSteeringOnRespawn(input);
+  }
   room.snapshot.hud = getOnlineHudState(state);
   room.snapshot.tick += 1;
   // Record this tick before postgame: `setRoomPhase` archives replay and must run after the final frame exists.

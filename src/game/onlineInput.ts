@@ -22,6 +22,8 @@ export interface OnlineSessionInput {
   lastAxis?: OnlineInputAxis;
   latchedDir: Direction | '';
   pendingTurn: Direction | '';
+  /** After respawn, ignore held/latched steering until all direction keys are released. */
+  steerLockUntilRelease: boolean;
 }
 
 const AXIS_TO_DIR: Record<OnlineInputAxis, Exclude<Direction, ''>> = {
@@ -39,7 +41,19 @@ export function emptySessionInput(): OnlineSessionInput {
     right: false,
     latchedDir: '',
     pendingTurn: '',
+    steerLockUntilRelease: false,
   };
+}
+
+/** Clear stale turn state after genesis respawn so death direction is not reused. */
+export function clearSteeringOnRespawn(input: OnlineSessionInput): void {
+  input.latchedDir = '';
+  input.pendingTurn = '';
+  input.steerLockUntilRelease = true;
+}
+
+function hasHeldDirection(input: OnlineSessionInput): boolean {
+  return input.up || input.down || input.left || input.right;
 }
 
 export function mergeSessionInput(
@@ -57,7 +71,7 @@ export function mergeSessionInput(
   else if (payload.left) lastAxis = 'left';
   else if (payload.right) lastAxis = 'right';
 
-  return {
+  const input: OnlineSessionInput = {
     up: !!payload.up,
     down: !!payload.down,
     left: !!payload.left,
@@ -65,7 +79,14 @@ export function mergeSessionInput(
     lastAxis,
     latchedDir: base.latchedDir,
     pendingTurn: base.pendingTurn,
+    steerLockUntilRelease: base.steerLockUntilRelease,
   };
+  if (input.steerLockUntilRelease && !hasHeldDirection(input)) {
+    input.steerLockUntilRelease = false;
+    input.lastAxis = undefined;
+    input.latchedDir = '';
+  }
+  return input;
 }
 
 export function axisToDirection(axis: OnlineInputAxis): Exclude<Direction, ''> {
@@ -100,6 +121,9 @@ export function applySessionSteering(
   player: PlayerId,
   input: OnlineSessionInput
 ): void {
+  if (input.steerLockUntilRelease) {
+    return;
+  }
   const heldDir = directionFromHeld(input);
   if (heldDir) {
     applyDirection(state, player, input, heldDir);
@@ -117,6 +141,9 @@ export function applyInputIntent(
   input: OnlineSessionInput,
   axis: OnlineInputAxis
 ): void {
+  if (input.steerLockUntilRelease) {
+    return;
+  }
   const dir = axisToDirection(axis);
   input.pendingTurn = dir;
   applyDirection(state, player, input, dir);
@@ -128,6 +155,10 @@ export function consumePendingTurn(
   player: PlayerId,
   input: OnlineSessionInput
 ): void {
+  if (input.steerLockUntilRelease) {
+    input.pendingTurn = '';
+    return;
+  }
   const dir = input.pendingTurn;
   if (!dir) return;
   input.pendingTurn = '';
