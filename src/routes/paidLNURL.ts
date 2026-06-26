@@ -36,15 +36,7 @@ import {
   consumeOnlineSeatLightningAfterSuccess,
   getOnlineSeatLightningByLnurlpId,
 } from '../state/onlineSeatLightningState';
-import {
-  formatAnonSeatLabel,
-  getRoomById,
-  isRematchLoserSession,
-  listOnlineRooms,
-  seatPaidPlayer,
-  serializeRoom,
-  settleOnlineRematchPayment,
-} from '../state/onlineRoomState';
+import { getRoomById, isRematchLoserSession } from '../state/onlineRoomState';
 
 const router = Router();
 dotenv.config();
@@ -205,7 +197,7 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       return;
     }
     console.log(
-      `${dateNow()} [ONLINE_SEAT_LN] LN settled; zap invoice paid for kind1=${kind1EventId} session=${onlineRec.sessionID.slice(0, 8)}… (${isRematchPay ? 'rematch' : 'seat'})`
+      `${dateNow()} [ONLINE_SEAT_LN] LN settled; zap invoice paid for kind1=${kind1EventId} session=${onlineRec.sessionID.slice(0, 8)}… (${isRematchPay ? 'rematch — awaiting 9735 on relays' : 'seat on zap event'})`
     );
     trackOnlineOk('online.seat.paid', {
       sessionID: onlineRec.sessionID,
@@ -214,54 +206,6 @@ router.post('/', ipFilter, async (req: Request, res: Response) => {
       amountSats: zapBuyinSats,
       meta: { method: 'lightning', rematch: isRematchPay },
     });
-    if (isRematchPay) {
-      const rematch = settleOnlineRematchPayment({
-        roomId: onlineRec.roomId,
-        amount: zapBuyinSats,
-        payerPubkey: onlineRec.zapPubkeyHex,
-      });
-      if (!rematch.ok) {
-        console.error(
-          `${dateNow()} [ONLINE_SEAT_LN] rematch settle failed after LN pay roomId=${onlineRec.roomId} reason=${rematch.reason}`
-        );
-      } else {
-        io.to(onlineRec.roomId).emit('onlineRoomUpdated', serializeRoom(rematch.room));
-        io.emit('resListOnlineRooms', { rooms: listOnlineRooms() });
-        if (rematch.matchStarted) {
-          void import('../socket/onlineRoom').then(({ publishOnlineMatchStarted }) =>
-            publishOnlineMatchStarted(onlineRec.roomId, onlineRec.sessionID)
-          );
-        }
-      }
-    } else {
-      const seatResult = seatPaidPlayer({
-        roomId: onlineRec.roomId,
-        sessionID: onlineRec.sessionID,
-        socketID: onlineRec.socketID,
-        amount: zapBuyinSats,
-        name: formatAnonSeatLabel(onlineRec.zapPubkeyHex),
-        pubkey: onlineRec.zapPubkeyHex,
-        payMethod: 'lightning',
-      });
-      if (!seatResult.ok) {
-        console.error(
-          `${dateNow()} [ONLINE_SEAT_LN] seat assign failed after LN pay roomId=${onlineRec.roomId} reason=${seatResult.reason}`
-        );
-      } else {
-        io.to(onlineRec.roomId).emit('onlineSeatAssigned', {
-          roomId: onlineRec.roomId,
-          playerRole: seatResult.role,
-          sessionId: onlineRec.sessionID,
-        });
-        io.to(onlineRec.roomId).emit('onlineRoomUpdated', serializeRoom(seatResult.room));
-        io.emit('resListOnlineRooms', { rooms: listOnlineRooms() });
-        if (seatResult.matchStarted) {
-          void import('../socket/onlineRoom').then(({ publishOnlineMatchStarted }) =>
-            publishOnlineMatchStarted(onlineRec.roomId, onlineRec.sessionID)
-          );
-        }
-      }
-    }
     res.status(200).send('OK');
     return;
   }
