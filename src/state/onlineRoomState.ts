@@ -1088,7 +1088,6 @@ export function setRoomPhase(roomId: string, phase: OnlineRoom['phase']) {
       }
     }
     resetReplay(room);
-    pushReplayFrame(room);
   }
   if (phase === 'postgame') {
     ensurePostGameState(room);
@@ -1306,8 +1305,10 @@ export function stepRoomSnapshot(roomId: string) {
   }
   room.snapshot.hud = getOnlineHudState(state);
   room.snapshot.tick += 1;
-  // Record this tick before postgame: `setRoomPhase` archives replay and must run after the final frame exists.
-  pushReplayFrame(room);
+  // Record from mutual arena confirm + countdown onward (skip idle pre-start arena).
+  if (shouldRecordOnlineReplay(state)) {
+    pushReplayFrame(room);
+  }
   if (state.gameEnded) {
     setRoomPhase(roomId, 'postgame');
   }
@@ -1558,6 +1559,7 @@ export function getOnlineMatchRoundHistory(roomId: string): OnlineMatchRoundSumm
     p2Score: res.p2Score,
     netPrize: res.netPrize,
     winnerRole: res.winnerRole,
+    replayAvailable: room.replay.frames.length > 0,
   };
   return [...fromArchive, synthesized].sort((a, b) => a.matchRound - b.matchRound);
 }
@@ -2033,9 +2035,14 @@ function maybeStartOnlineCountdown(room: OnlineRoom): boolean {
     p2.startConfirmed
   ) {
     startOnlineCountdown(state);
+    pushReplayFrame(room);
     return true;
   }
   return false;
+}
+
+function shouldRecordOnlineReplay(state: OnlineRoom['snapshot']['state']): boolean {
+  return state.countdownStart || state.gameStarted;
 }
 
 function cloneSnapshot(snapshot: OnlineRoom['snapshot']): OnlineRoom['snapshot'] {

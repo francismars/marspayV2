@@ -361,15 +361,40 @@ export function loadCompactReplayFromArchiveSync(
       readArchiveJsonFile(path.join(archiveDir(), matchFileName(roomId, matchRound)))
     );
   }
-  const fromSession = loadCompactWireFromArchiveRecord(
+
+  const tryRecord = (
+    record: OnlineRoomArchiveFile | null
+  ): OnlineReplayWirePayload | undefined => {
+    const wire = loadCompactWireFromArchiveRecord(record);
+    if (wire && wire.frameCount > 0) {
+      return wire;
+    }
+    return undefined;
+  };
+
+  const fromSession = tryRecord(
     readArchiveJsonFile(path.join(archiveDir(), sessionFileName(roomId)))
   );
   if (fromSession) {
     return fromSession;
   }
-  return loadCompactWireFromArchiveRecord(
+
+  const fromLegacy = tryRecord(
     readArchiveJsonFile(path.join(archiveDir(), legacyRoomFileName(roomId)))
   );
+  if (fromLegacy) {
+    return fromLegacy;
+  }
+
+  /** Postgame per-match archives exist before withdrawal creates `session.json`. */
+  const latestRound = findLatestArchivedMatchRoundSync(roomId);
+  if (latestRound != null && latestRound >= 1) {
+    return tryRecord(
+      readArchiveJsonFile(path.join(archiveDir(), matchFileName(roomId, latestRound)))
+    );
+  }
+
+  return undefined;
 }
 
 function tryLoadSerializedFromFile(filePath: string): Record<string, unknown> | undefined {
@@ -536,6 +561,7 @@ export function listArchivedMatchRoundsForRoomSync(roomId: string): OnlineMatchR
       p2Score: item.result?.p2Score ?? 0,
       netPrize: item.result?.netPrize ?? 0,
       winnerRole: item.result?.winnerRole,
+      replayAvailable: (item.replay?.frameCount ?? 0) > 0,
     }));
   } catch {
     return [];
@@ -727,6 +753,40 @@ export function getOnlinePostGameFromArchive(roomId: string) {
 }
 
 /** Resolve a finished/archived room by human code (live rooms are not included). */
+function archivedIndexRowsMatchingPublicCode(
+  code: string
+): OnlineArchivedListItem[] {
+  const all = listArchivedOnlineRoomsSync();
+  const direct = all.filter((row) => row.roomCode.trim().toUpperCase() === code);
+  if (direct.length > 0) {
+    return direct;
+  }
+  /** Index rows may use `roomId` as `roomCode` when older archives omitted `serializedRoom.roomCode`. */
+  const seenRoomIds = new Set<string>();
+  const matched: OnlineArchivedListItem[] = [];
+  for (const row of all) {
+    if (seenRoomIds.has(row.roomId)) {
+      continue;
+    }
+    seenRoomIds.add(row.roomId);
+    const serialized = loadSerializedRoomFromArchiveSync(row.roomId);
+    const wire =
+      typeof serialized?.roomCode === 'string'
+        ? serialized.roomCode.trim().toUpperCase()
+        : '';
+    if (wire !== code) {
+      continue;
+    }
+    const rowsForRoom = all.filter((r) => r.roomId === row.roomId);
+    rowsForRoom.sort((a, b) => b.finishedAt - a.finishedAt);
+    const best = rowsForRoom[0];
+    if (best) {
+      matched.push(best);
+    }
+  }
+  return matched;
+}
+
 export function resolveArchivedRoomByCodeSync(roomCode: string):
   | {
       roomId: string;
@@ -738,9 +798,7 @@ export function resolveArchivedRoomByCodeSync(roomCode: string):
   if (!code) {
     return undefined;
   }
-  const matches = listArchivedOnlineRoomsSync().filter(
-    (row) => row.roomCode.trim().toUpperCase() === code
-  );
+  const matches = archivedIndexRowsMatchingPublicCode(code);
   if (matches.length === 0) {
     return undefined;
   }

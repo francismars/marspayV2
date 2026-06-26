@@ -113,6 +113,8 @@ export interface OnlineMatchRoundSummary {
   p2Score: number;
   netPrize: number;
   winnerRole?: PlayerRole.Player1 | PlayerRole.Player2;
+  /** False when the match archive has no recorded frames (e.g. never started). */
+  replayAvailable?: boolean;
 }
 
 export interface OnlineRoomListItem {
