@@ -107,3 +107,21 @@ export function touchAppNostrSession(sessionID: string): void {
 export function getAppNostrPubkeyForSession(sessionID: string): string | undefined {
   return getAppNostrSession(sessionID)?.pubkey;
 }
+
+/** Replace stored session profile (e.g. after a fresh kind-0 relay read). */
+export function syncAppNostrSessionProfile(
+  sessionID: string,
+  profile: AppNostrProfile
+): boolean {
+  const rec = getAppNostrSession(sessionID);
+  if (!rec) {
+    return false;
+  }
+  const pk = profile.pubkey.trim().toLowerCase();
+  if (pk !== rec.pubkey) {
+    return false;
+  }
+  rec.profile = { ...profile, pubkey: rec.pubkey };
+  appNostrBySession.set(sessionID, rec);
+  return true;
+}

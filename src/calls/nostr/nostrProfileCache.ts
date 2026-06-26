@@ -9,3 +9,7 @@ export function getCachedNostrProfile(pubkey: string): AppNostrProfile | undefin
 export function setCachedNostrProfile(profile: AppNostrProfile): void {
   profileByPubkey.set(profile.pubkey.toLowerCase(), profile);
 }
+
+export function invalidateCachedNostrProfile(pubkey: string): void {
+  profileByPubkey.delete(pubkey.trim().toLowerCase());
+}

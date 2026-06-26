@@ -7,6 +7,7 @@ import {
 import { fetchAccountAge, MIN_ACCOUNT_AGE_DAYS } from './fetchAccountAge';
 import { verifyUserLud16 } from './verifyUserLud16';
 import { fetchNostrAppProfile } from './fetchNostrAppProfile';
+import { invalidateCachedNostrProfile } from './nostrProfileCache';
 import { fetchAuthorRelayContext } from './fetchAuthorEvents';
 import { listClaimedChallengeIds } from '../../state/challengeState';
 
@@ -69,6 +70,7 @@ export async function evaluateChallengeEligibility(
 
   if (options?.forceRefresh) {
     invalidateEligibilityCache(hex);
+    invalidateCachedNostrProfile(hex);
   }
 
   const cached = cacheByPubkey.get(hex);
@@ -94,12 +96,16 @@ export async function evaluateChallengeEligibility(
   }
 
   const relayContext = await fetchAuthorRelayContext(hex);
+  const profileFetchOpts = {
+    relayContext,
+    forceRefresh: options?.forceRefresh === true,
+  };
 
   const [profile, kind3, accountAge, lud16Result] = await Promise.all([
-    fetchNostrAppProfile(hex, { relayContext }),
+    fetchNostrAppProfile(hex, profileFetchOpts),
     fetchKind3ContactList(hex, { relayContext }),
     fetchAccountAge(hex, { relayContext }),
-    verifyUserLud16(hex),
+    verifyUserLud16(hex, profileFetchOpts),
   ]);
 
   const followingCount = countKind3Follows(kind3);

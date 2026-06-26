@@ -2,7 +2,11 @@ import { SimplePool } from 'nostr-tools';
 import type { AuthorRelayContext } from './fetchAuthorEvents';
 import { fetchLatestAuthorEvent } from './fetchAuthorEvents';
 import type { AppNostrProfile } from '../../state/nostrAppSessionState';
-import { getCachedNostrProfile, setCachedNostrProfile } from './nostrProfileCache';
+import {
+  getCachedNostrProfile,
+  invalidateCachedNostrProfile,
+  setCachedNostrProfile,
+} from './nostrProfileCache';
 
 function shortPubkeyLabel(pubkey: string): string {
   if (pubkey.length <= 16) {
@@ -49,8 +53,12 @@ function profileFromKind0(pubkey: string, contentRaw: string): AppNostrProfile {
 /** Kind-0 metadata for app Nostr session (relays read on server only). */
 export async function fetchNostrAppProfile(
   pubkey: string,
-  options?: { relayContext?: AuthorRelayContext }
+  options?: { relayContext?: AuthorRelayContext; forceRefresh?: boolean }
 ): Promise<AppNostrProfile> {
+  if (options?.forceRefresh) {
+    invalidateCachedNostrProfile(pubkey);
+  }
+
   const cached = getCachedNostrProfile(pubkey);
   if (cached) {
     return cached;

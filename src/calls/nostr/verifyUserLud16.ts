@@ -1,3 +1,4 @@
+import type { AuthorRelayContext } from './fetchAuthorEvents';
 import { fetchNostrAppProfile } from './fetchNostrAppProfile';
 import { fetchLnurlPayMetadata } from './lnurlZapShared';
 
@@ -8,8 +9,11 @@ export type Lud16VerifyResult = {
   reason?: string;
 };
 
-export async function verifyUserLud16(pubkey: string): Promise<Lud16VerifyResult> {
-  const profile = await fetchNostrAppProfile(pubkey);
+export async function verifyUserLud16(
+  pubkey: string,
+  options?: { relayContext?: AuthorRelayContext; forceRefresh?: boolean }
+): Promise<Lud16VerifyResult> {
+  const profile = await fetchNostrAppProfile(pubkey, options);
   const lud16 = profile.lud16?.trim() || null;
   if (!lud16) {
     return {

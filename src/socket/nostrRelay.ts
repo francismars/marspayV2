@@ -5,12 +5,14 @@ import { fetchNostrAppProfile } from '../calls/nostr/fetchNostrAppProfile';
 import { ndkInstance, setNDKInstance } from '../calls/NDK/setNDKInstance';
 import {
   getAppNostrSession,
+  syncAppNostrSessionProfile,
   touchAppNostrSession,
 } from '../state/nostrAppSessionState';
+import { emitAppNostrSession } from './nostrAppSession';
 
 export async function getNostrProfileHandler(
   socket: Socket,
-  payload: { pubkey?: string }
+  payload: { pubkey?: string; refresh?: boolean }
 ) {
   const sessionID = socket.data.sessionID as string | undefined;
   let pubkey = typeof payload?.pubkey === 'string' ? payload.pubkey.trim().toLowerCase() : '';
@@ -22,13 +24,19 @@ export async function getNostrProfileHandler(
     return;
   }
   const appSession = sessionID ? getAppNostrSession(sessionID) : undefined;
-  if (appSession?.pubkey === pubkey && sessionID) {
+  const forceRefresh = payload?.refresh === true;
+  if (appSession?.pubkey === pubkey && sessionID && !forceRefresh) {
     touchAppNostrSession(sessionID);
     socket.emit('resNostrProfile', { ok: true, profile: appSession.profile });
     return;
   }
   try {
-    const profile = await fetchNostrAppProfile(pubkey);
+    const profile = await fetchNostrAppProfile(pubkey, { forceRefresh });
+    if (forceRefresh && appSession?.pubkey === pubkey && sessionID) {
+      if (syncAppNostrSessionProfile(sessionID, profile)) {
+        emitAppNostrSession(socket);
+      }
+    }
     socket.emit('resNostrProfile', { ok: true, profile });
   } catch (e) {
     socket.emit('resNostrProfile', {

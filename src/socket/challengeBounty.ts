@@ -2,8 +2,13 @@ import { Socket } from 'socket.io';
 import { verifyEvent, nip19, type Event } from 'nostr-tools';
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { dateNow } from '../utils/time';
-import { getAppNostrSession } from '../state/nostrAppSessionState';
+import { getCachedNostrProfile } from '../calls/nostr/nostrProfileCache';
 import { evaluateChallengeEligibility } from '../calls/nostr/challengeEligibility';
+import {
+  getAppNostrSession,
+  syncAppNostrSessionProfile,
+} from '../state/nostrAppSessionState';
+import { emitAppNostrSession } from './nostrAppSession';
 import { verifyUserLud16 } from '../calls/nostr/verifyUserLud16';
 import { ndkInstance, setNDKInstance } from '../calls/NDK/setNDKInstance';
 import { zapRecipientKind1Note } from '../calls/NDK/zapRecipientKind1Note';
@@ -93,10 +98,17 @@ export async function getChallengeEligibilityHandler(
 ) {
   const sessionID = socket.data.sessionID as string | undefined;
   const appSession = sessionID ? getAppNostrSession(sessionID) : undefined;
+  const forceRefresh = payload?.refresh === true;
   const result = await evaluateChallengeEligibility(appSession?.pubkey, Boolean(appSession), {
-    forceRefresh: payload?.refresh === true,
+    forceRefresh,
   });
-  trackEligibility(sessionID, result, { refresh: payload?.refresh === true });
+  if (forceRefresh && sessionID && appSession?.pubkey) {
+    const freshProfile = getCachedNostrProfile(appSession.pubkey);
+    if (freshProfile && syncAppNostrSessionProfile(sessionID, freshProfile)) {
+      emitAppNostrSession(socket);
+    }
+  }
+  trackEligibility(sessionID, result, { refresh: forceRefresh });
   socket.emit('resChallengeEligibility', result);
 }
 
