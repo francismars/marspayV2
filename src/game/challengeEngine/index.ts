@@ -10,6 +10,8 @@ import {
   POWERUP_FIRST_SPAWN_TICKS,
   POWERUP_SPAWN_WEIGHTS,
   STEP_SPEED_MS,
+  TEAM_2V1_P1_SPAWN_X,
+  TEAM_2V1_P1_SPAWN_Y,
   FFA_GHOST_COLOR,
   FFA_SPECTER_COLOR,
   FFA_BOT_NAMES,
@@ -330,7 +332,7 @@ export function createGameState(args: CreateStateArgs): GameState {
     const fTier = args.ffaAiTier ?? args.aiTier ?? 'sovereign';
     state.p1Name = p1HumanMeta ? args.p1Name : FFA_BOT_NAMES[0];
     state.p2Name = FFA_BOT_NAMES[1] ?? 'BigToshi 🌊';
-    const h1: GridPos = [4, 4];
+    const h1: GridPos = [TEAM_2V1_P1_SPAWN_X, TEAM_2V1_P1_SPAWN_Y];
     const h2: GridPos = [46, 4];
     const h3: GridPos = [46, 20];
     state.p1.head = h1;
@@ -1149,7 +1151,22 @@ function resetSnake(state: GameState, player: PlayerId): void {
   const sb = state.shrinkBorder;
 
   if (player === 'P1') {
-    if (teamMode === 'ffa' || teamMode === '2v1') {
+    if (teamMode === '2v1') {
+      let head: GridPos = [TEAM_2V1_P1_SPAWN_X, TEAM_2V1_P1_SPAWN_Y];
+      let body: GridPos[] = [bodySegmentBehindHead(head, 'Right')];
+      if (conv && sb) {
+        const spawnX = Math.max(TEAM_2V1_P1_SPAWN_X, sb.left + 2);
+        const centerY = Math.floor((sb.top + sb.bottom) / 2);
+        const spawnY = Math.max(
+          sb.top + 2,
+          Math.min(sb.bottom - 2, centerY)
+        );
+        head = [spawnX, spawnY];
+        body = [[Math.max(sb.left + 1, spawnX - 1), spawnY]];
+      }
+      state.p1.head = head;
+      state.p1.body = body;
+    } else if (teamMode === 'ffa') {
       let head: GridPos = [4, 4];
       let body: GridPos[] = [bodySegmentBehindHead(head, 'Right')];
       if (conv && sb) {
