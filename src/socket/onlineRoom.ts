@@ -36,7 +36,6 @@ import { onlineRoomPublicUrl } from '../consts/gamePublicUrl';
 import { GameMode, PlayerRole } from '../types/game';
 import type { OnlineRoomListItem } from '../types/online';
 import { io } from '../server';
-import { getKind1sfromSessionID } from '../state/nostrState';
 import { setIDToLNURLW, setLNURLWToID } from '../state/lnurlwState';
 import {
   archivedRowToOnlineRoomListItem,
@@ -201,14 +200,26 @@ async function publishOnlineThreadReply(
   return eventId;
 }
 
-function publishOnlineMatchStarted(roomId: string, sessionID: string) {
+/** Publish the "match started" Kind1 reply once per `matchRound` (lobby → playing). */
+export function publishOnlineMatchStarted(roomId: string, sessionID: string) {
   const room = getRoomById(roomId);
-  if (!room) {
+  if (!room || room.phase !== 'playing') {
+    return;
+  }
+  if (room.nostrMatchStartedPostedRound === room.matchRound) {
+    return;
+  }
+  if (!room.kind1EventId) {
+    logOnline(
+      sessionID,
+      `match started nostr reply deferred roomId=${roomId} reason=kind1_pending matchRound=${room.matchRound}`
+    );
     return;
   }
   const mentions = getSeatMentions(room.roomId);
   const vsLine = `${formatOnlinePlayerNostrLabel(mentions[0] ?? { name: 'Player 1' })} vs ${formatOnlinePlayerNostrLabel(mentions[1] ?? { name: 'Player 2' })}`;
   const roomUrl = onlineRoomPublicUrl(room.roomCode);
+  const matchRound = room.matchRound;
   void publishOnlineThreadReply(
     room,
     sessionID,
@@ -220,7 +231,15 @@ function publishOnlineMatchStarted(roomId: string, sessionID: string) {
       `Watch & play: ${roomUrl}`,
     ].join('\n'),
     mentions
-  );
+  ).then((eventId) => {
+    if (!eventId) {
+      return;
+    }
+    const live = getRoomById(roomId);
+    if (live && live.matchRound === matchRound) {
+      live.nostrMatchStartedPostedRound = matchRound;
+    }
+  });
 }
 
 function publishOnlineMatchResult(room: NonNullable<ReturnType<typeof getRoomById>>) {
@@ -288,7 +307,7 @@ export async function createOnlineRoomHandler(
       logOnline(sessionID, `kind1 publish flow started roomId=${room.roomId}`);
       await setNDKInstance();
       logOnline(sessionID, `ndk initialized for roomId=${room.roomId}, publishing kind1`);
-      await publishGameKind1(sessionID, {
+      const kind1 = await publishGameKind1(sessionID, {
         mode: GameMode.ONLINE,
         buyin: room.buyin,
         hostLNAddress: payload?.hostLNAddress,
@@ -297,7 +316,6 @@ export async function createOnlineRoomHandler(
         roomId: room.roomId,
       });
       logOnline(sessionID, `publishGameKind1 returned roomId=${room.roomId}`);
-      const kind1 = getKind1sfromSessionID(sessionID)?.slice(-1)[0];
       if (kind1) {
         setRoomNostrMeta(
           room.roomId,
@@ -316,6 +334,9 @@ export async function createOnlineRoomHandler(
           sessionID,
           `kind1 published roomId=${room.roomId} note=${kind1.note1}`
         );
+        if (live?.phase === 'playing') {
+          publishOnlineMatchStarted(room.roomId, sessionID);
+        }
       } else {
         logOnline(sessionID, `kind1 publish returned no local kind1 record roomId=${room.roomId}`);
       }

@@ -67,6 +67,8 @@ export interface OnlineRoom {
   kind1EventId?: string;
   /** Latest Kind1 in the room Nostr thread; next reply parents this (linear chain). */
   nostrThreadTipEventId?: string;
+  /** `matchRound` for which the "match started" thread reply was already published. */
+  nostrMatchStartedPostedRound?: number;
   phase: OnlineRoomPhase;
   nostrMeta?: OnlineRoomNostrMeta;
   members: Map<string, OnlineRoomMember>;

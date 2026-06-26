@@ -25,7 +25,10 @@ interface PublishGameKind1Opts {
   roomId?: string;
 }
 
-export async function publishGameKind1(sessionID: string, opts: PublishGameKind1Opts = {}) {
+export async function publishGameKind1(
+  sessionID: string,
+  opts: PublishGameKind1Opts = {}
+): Promise<Kind1 | undefined> {
   if (!ndkInstance) {
     try {
       await setNDKInstance();
@@ -33,7 +36,7 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
       console.log(
         `${dateNow()} [${sessionID}] NDK not initialized: ${error instanceof Error ? error.message : String(error)}`
       );
-      return;
+      return undefined;
     }
   }
   const mode = opts.mode ?? GameMode.P2PNOSTR;
@@ -163,7 +166,7 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
     console.log(
       `${dateNow()} [${sessionID}] Unable to publish Game event on Nostr: ${error}`
     );
-    return;
+    return undefined;
   }
   setKind1IDtoSessionID(ndkEvent.id, sessionID);
   const encodedEvent = nip19.noteEncode(ndkEvent.id);
@@ -177,7 +180,7 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
   const subscription = shouldSubscribe ? await subscribeEvent(9735, ndkEvent.id) : undefined;
   if (shouldSubscribe && !subscription) {
     console.log('Subscription not created');
-    return;
+    return undefined;
   }
   const eventinfo: Kind1 = {
     id: ndkEvent.id,
@@ -191,6 +194,7 @@ export async function publishGameKind1(sessionID: string, opts: PublishGameKind1
     snapshot: snapshotFromNdkEvent(ndkEvent),
   };
   appendKind1toSessionID(sessionID, eventinfo);
+  return eventinfo;
 }
 
 function getTournamentRegisteredPlayers(gameInfo?: GameInfo) {

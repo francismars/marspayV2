@@ -1753,7 +1753,8 @@ export function settleOnlineRematchPayment(params: {
   resetRoomToLobby(room);
   room.updatedAt = Date.now();
   logOnlineState(`rematch paid roomId=${params.roomId} amount=${requiredAmount}`);
-  return { ok: true as const, room, requiredAmount };
+  const matchStarted = maybeStartPaidMatch(room);
+  return { ok: true as const, room, requiredAmount, matchStarted };
 }
 
 export function voteOnlineDoubleOrNothing(roomId: string, sessionID: string) {

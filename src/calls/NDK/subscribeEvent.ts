@@ -162,6 +162,11 @@ async function listenToSubscriptions(event: NDKEvent) {
       io.emit('resListOnlineRooms', {
         rooms: listOnlineRooms(),
       });
+      if (rematch.matchStarted) {
+        void import('../../socket/onlineRoom').then(({ publishOnlineMatchStarted }) =>
+          publishOnlineMatchStarted(room.roomId, sessionID)
+        );
+      }
       return;
     }
     if (payerPubKey) {
@@ -250,6 +255,11 @@ async function listenToSubscriptions(event: NDKEvent) {
       io.emit('resListOnlineRooms', {
         rooms: listOnlineRooms(),
       });
+      if (seatResult.matchStarted) {
+        void import('../../socket/onlineRoom').then(({ publishOnlineMatchStarted }) =>
+          publishOnlineMatchStarted(room.roomId, sessionID)
+        );
+      }
       return;
     }
     if (payerPubKey) {
@@ -301,6 +311,11 @@ async function listenToSubscriptions(event: NDKEvent) {
       io.emit('resListOnlineRooms', {
         rooms: listOnlineRooms(),
       });
+      if (seatResult.matchStarted) {
+        void import('../../socket/onlineRoom').then(({ publishOnlineMatchStarted }) =>
+          publishOnlineMatchStarted(room.roomId, sessionID)
+        );
+      }
       return;
     }
     console.log(`${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=pin_missing`);
