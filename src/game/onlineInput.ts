@@ -10,7 +10,7 @@ export interface OnlineRoomInputPayload {
   right?: boolean;
   /** Keydown edge — latched and queued for the next sim tick. */
   intent?: OnlineInputAxis;
-  /** Last keydown axis while held (fixes diagonal: most recent wins). */
+  /** Last keydown axis while held (opposing keys on same axis). */
   lastAxis?: OnlineInputAxis;
 }
 
@@ -93,16 +93,47 @@ export function axisToDirection(axis: OnlineInputAxis): Exclude<Direction, ''> {
   return AXIS_TO_DIR[axis];
 }
 
-/** Direction from held keys; prefers `lastAxis` when that axis is still held. */
-export function directionFromHeld(input: OnlineSessionInput): Exclude<Direction, ''> | null {
+function isFacingHorizontal(facing: Direction): boolean {
+  return facing === 'Left' || facing === 'Right' || facing === '';
+}
+
+function collectHeldDirections(input: OnlineSessionInput): {
+  horizontal: Exclude<Direction, ''>[];
+  vertical: Exclude<Direction, ''>[];
+} {
+  const horizontal: Exclude<Direction, ''>[] = [];
+  const vertical: Exclude<Direction, ''>[] = [];
+  if (input.left) horizontal.push('Left');
+  if (input.right) horizontal.push('Right');
+  if (input.up) vertical.push('Up');
+  if (input.down) vertical.push('Down');
+  return { horizontal, vertical };
+}
+
+/** Direction from held keys; perpendicular pairs alternate via current facing. */
+export function directionFromHeld(
+  input: OnlineSessionInput,
+  facing: Direction
+): Exclude<Direction, ''> | null {
+  const { horizontal, vertical } = collectHeldDirections(input);
+  if (horizontal.length === 0 && vertical.length === 0) {
+    return null;
+  }
+
+  if (horizontal.length > 0 && vertical.length > 0) {
+    const pool = isFacingHorizontal(facing) ? vertical : horizontal;
+    return pool[0] ?? null;
+  }
+
+  const pool = horizontal.length > 0 ? horizontal : vertical;
+  if (pool.length === 1) {
+    return pool[0] ?? null;
+  }
+
   if (input.lastAxis && input[input.lastAxis]) {
     return AXIS_TO_DIR[input.lastAxis];
   }
-  if (input.up) return 'Up';
-  if (input.down) return 'Down';
-  if (input.left) return 'Left';
-  if (input.right) return 'Right';
-  return null;
+  return pool[0] ?? null;
 }
 
 function applyDirection(
@@ -124,7 +155,9 @@ export function applySessionSteering(
   if (input.steerLockUntilRelease) {
     return;
   }
-  const heldDir = directionFromHeld(input);
+  const snake = player === 'P1' ? state.p1 : state.p2;
+  const facing = snake.dir || snake.dirWanted;
+  const heldDir = directionFromHeld(input, facing);
   if (heldDir) {
     applyDirection(state, player, input, heldDir);
     return;
