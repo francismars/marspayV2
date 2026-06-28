@@ -47,6 +47,7 @@ export type OverviewData = {
   pendingZapClaims: number;
   serverUptimeSec: number;
   eventLogBytes: number;
+  sessionsWithGameActivity24h?: number;
   traffic: {
     uniqueSessions24h: number;
     uniqueVisitors24h: number;
@@ -82,6 +83,9 @@ export type FunnelsData = {
     steps: Record<string, FunnelStep>;
     uiErrors: Array<{ reason: string; count: number }>;
   };
+  p2p?: {
+    steps: Record<string, FunnelStep>;
+  };
 };
 
 export type PlayerIdentity = {
@@ -106,6 +110,7 @@ export type LiveSessionContext = {
   lastEvent?: string;
   lastOutcome?: string;
   lastEventTs?: string;
+  currentRoute?: string;
 };
 
 export type LiveData = {
@@ -156,6 +161,8 @@ export type RecentAttemptsData = {
     challengeRuns: number;
     onlineJoins: number;
     nostrLinks: number;
+    quickmatchStarts?: number;
+    p2pDeposits?: number;
     topRejectReason?: string;
     topRejectCount?: number;
   }>;
@@ -195,6 +202,7 @@ export type OnlineRoomLive = {
 
 export type ChallengesData = {
   fetchedAt: string;
+  browseFunnel?: Record<string, FunnelStep>;
   stats: {
     byChallenge: Record<
       string,
@@ -287,6 +295,83 @@ export const fetchLiveRecent = (hours = 24) =>
   apiFetch<RecentAttemptsData>(`/live/recent?hours=${hours}`);
 export const fetchLiveSession = (sessionID: string) =>
   apiFetch<LiveSessionDetail>(`/live/${encodeURIComponent(sessionID)}`);
+
+export type VisitorsData = {
+  fetchedAt: string;
+  hours: number;
+  traffic: OverviewData['traffic'];
+  sessionsWithContext: number;
+  sessionsWithGameActivity: number;
+  topReferrers: Array<{ referrer: string; count: number }>;
+  topPlatforms: Array<{ platform: string; count: number }>;
+  menuChoices: Record<string, number>;
+};
+
+export type QuickMatchData = {
+  fetchedAt: string;
+  started: number;
+  completed: number;
+  completionRate: number;
+  winRate: number;
+  avgDurationMs: number;
+  byMode: Record<string, number>;
+  byOpponentType: Record<string, number>;
+};
+
+export type P2pData = {
+  fetchedAt: string;
+  configured: number;
+  depositsPaid: number;
+  gameStarted: number;
+  gameFinished: number;
+  gameCompletedClient: number;
+  withdrawals: number;
+  doubleOrNothing: number;
+  byMode: Record<string, number>;
+};
+
+export type ReplayData = {
+  fetchedAt: string;
+  replayStarts: number;
+  replayEnds: number;
+  spectateStarts: number;
+  avgWatchDurationMs: number;
+  topRooms: Array<{ roomCode: string; count: number }>;
+};
+
+export type JourneyData = {
+  fetchedAt: string;
+  sessionIDs: string[];
+  pubkeyPrefix?: string;
+  identity?: PlayerIdentity;
+  eventCount: number;
+  timeline: Array<{
+    ts: string;
+    event: string;
+    outcome: string;
+    reason?: string;
+    sessionID?: string;
+    challengeId?: string;
+    roomCode?: string;
+    meta?: Record<string, string | number | boolean>;
+  }>;
+};
+
+export const fetchVisitors = (hours = 24) =>
+  apiFetch<VisitorsData>(`/visitors?hours=${hours}`);
+
+export const fetchQuickMatch = () => apiFetch<QuickMatchData>('/quickmatch');
+
+export const fetchP2p = () => apiFetch<P2pData>('/p2p');
+
+export const fetchReplays = () => apiFetch<ReplayData>('/replays');
+
+export const fetchJourney = (params: { sessionID?: string; pubkey?: string }) => {
+  const q = new URLSearchParams();
+  if (params.sessionID) q.set('sessionID', params.sessionID);
+  if (params.pubkey) q.set('pubkey', params.pubkey);
+  return apiFetch<JourneyData>(`/journey?${q.toString()}`);
+};
 
 /** @deprecated Use fetchLive */
 export const fetchSessions = fetchLive;

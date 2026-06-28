@@ -19,6 +19,7 @@ import {
   getFunnelCountersSnapshot,
   parseFunnelCounters,
   sumCounter,
+  topErrorReasons,
   topRejectReasons,
 } from './funnelCounters';
 import { tailChallengeClaims } from './dashboardData';
@@ -33,6 +34,7 @@ import {
 } from './eventLog';
 import { pubkeyPrefix as toPubkeyPrefix } from './trackEvent';
 import { getTrafficSnapshot } from './trafficAnalytics';
+import { getSessionsForPubkeyPrefix } from './sessionIdentity';
 import type { OnlineSeatState } from '../types/online';
 import { PlayerRole } from '../types/game';
 
@@ -92,12 +94,39 @@ function topRejectReasonsFromEvents(
     .slice(0, limit);
 }
 
+function topErrorReasonsFromEvents(
+  events: StoredTrackEvent[],
+  event: string,
+  limit = 10
+): Array<{ reason: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const e of events) {
+    if (e.event !== event || e.outcome !== 'error' || !e.reason) continue;
+    counts.set(e.reason, (counts.get(e.reason) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 function sinceHoursAgo(hours: number): string {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}
+
+function countDistinctSessionsSince(
+  sinceTs: string,
+  events: string[]
+): number {
+  const seen = new Set<string>();
+  for (const e of scanEvents(10_000, { sinceTs, events })) {
+    if (e.sessionID) seen.add(e.sessionID);
+  }
+  return seen.size;
 }
 
 function seatRoleLabel(role: OnlineSeatState['role']): 'p1' | 'p2' {
@@ -172,6 +201,13 @@ export function buildOverviewSnapshot() {
   const spentToday = dailySpend[todayKey()] ?? 0;
   const pendingZaps = listPendingZapClaims();
   const since24h = sinceHoursAgo(24);
+  const gameActivitySessions24h = countDistinctSessionsSince(since24h, [
+    'client.quickmatch.started',
+    'challenge.run',
+    'deposit.paid',
+    'p2p.game.finished',
+    'online.seat.paid',
+  ]);
 
   return {
     fetchedAt: new Date().toISOString(),
@@ -179,6 +215,7 @@ export function buildOverviewSnapshot() {
     activeOnlineRooms: activeRooms.length,
     challengeRunsTotal: sumCounter(rows, 'challenge.run', 'ok'),
     challengeRuns24h: countEventsSince(since24h, { event: 'challenge.run', outcome: 'ok' }),
+    sessionsWithGameActivity24h: gameActivitySessions24h,
     metricsWindow: {
       challengeRuns: 'lifetime' as const,
       challengeRuns24h: '24h' as const,
@@ -203,8 +240,11 @@ export type FunnelWindow = 'lifetime' | '24h' | '7d';
 
 export function buildFunnelsSnapshotForWindow(window: FunnelWindow) {
   const challengeEvents = [
+    'client.challenge.catalog_viewed',
+    'client.challenge.card_clicked',
     'challenge.eligibility',
     'challenge.run',
+    'client.challenge.completed',
     'challenge.win.submit',
     'challenge.win.replay',
     'challenge.win.token',
@@ -218,12 +258,26 @@ export function buildFunnelsSnapshotForWindow(window: FunnelWindow) {
     'online.room.cancelled',
     'online.seat.lightning.requested',
     'online.seat.paid',
+    'online.seat.ready',
+    'online.arena.confirm',
     'online.game.started',
     'online.game.finished',
     'online.payout.withdrawal',
     'online.payout.nostr',
+    'online.rematch.vote',
+    'online.nostr.link',
+  ];
+  const p2pEvents = [
+    'client.p2p.configured',
+    'deposit.paid',
+    'client.p2p.game_started',
+    'p2p.game.finished',
+    'client.p2p.game_completed',
+    'client.p2p.withdrawal_created',
   ];
   const clientEvents = [
+    'client.session.context',
+    'client.menu.selected',
     'client.page.view',
     'client.funnel.abandon',
     'client.ui.error',
@@ -251,9 +305,15 @@ export function buildFunnelsSnapshotForWindow(window: FunnelWindow) {
           gameStarted: topRejectReasons(rows, 'online.game.started'),
         },
       },
+      p2p: {
+        steps: Object.fromEntries(p2pEvents.map((e) => [e, funnelStep(rows, e)])),
+      },
       client: {
         steps: Object.fromEntries(clientEvents.map((e) => [e, funnelStep(rows, e)])),
-        uiErrors: topRejectReasons(rows, 'client.ui.error'),
+        uiErrors: [
+          ...topRejectReasons(rows, 'client.ui.error'),
+          ...topErrorReasons(rows, 'client.ui.error'),
+        ],
       },
     };
   }
@@ -284,9 +344,15 @@ export function buildFunnelsSnapshotForWindow(window: FunnelWindow) {
         gameStarted: topRejectReasonsFromEvents(events, 'online.game.started'),
       },
     },
+    p2p: {
+      steps: Object.fromEntries(p2pEvents.map((e) => [e, funnelStepFromEvents(events, e)])),
+    },
     client: {
       steps: Object.fromEntries(clientEvents.map((e) => [e, funnelStepFromEvents(events, e)])),
-      uiErrors: topRejectReasonsFromEvents(events, 'client.ui.error'),
+      uiErrors: [
+        ...topRejectReasonsFromEvents(events, 'client.ui.error'),
+        ...topErrorReasonsFromEvents(events, 'client.ui.error'),
+      ],
     },
   };
 }
@@ -326,9 +392,23 @@ export function buildChallengesSnapshot() {
     .slice(-7)
     .map(([day, sats]) => ({ day, sats }));
 
+  const browseFunnelEvents = [
+    'client.challenge.catalog_viewed',
+    'client.challenge.card_clicked',
+    'challenge.eligibility',
+    'challenge.run',
+    'client.challenge.completed',
+    'challenge.claim',
+  ];
+  const rows = parseFunnelCounters(getFunnelCountersSnapshot());
+  const browseFunnel = Object.fromEntries(
+    browseFunnelEvents.map((e) => [e, funnelStep(rows, e)])
+  );
+
   return {
     fetchedAt: new Date().toISOString(),
     stats: challenge,
+    browseFunnel,
     bountyCapSats: cap,
     bountySpentTodaySats: spentToday,
     bountyRemainingSats: getDailyZapBudgetRemaining(),
@@ -458,7 +538,17 @@ export function buildLiveSnapshot() {
       lastEvent?: string;
       lastOutcome?: string;
       lastEventTs?: string;
+      currentRoute?: string;
     };
+
+    const kind1s = kind1Map.get(sessionID);
+    const pageViewEvents = getEventsForSession(sessionID, 50).filter(
+      (e) => e.event === 'client.page.view'
+    );
+    const currentRoute =
+      typeof pageViewEvents[0]?.meta?.route === 'string'
+        ? pageViewEvents[0].meta.route
+        : undefined;
 
     if (onlineCtx) {
       context = {
@@ -468,6 +558,7 @@ export function buildLiveSnapshot() {
         lastEvent: last?.event,
         lastOutcome: last?.outcome,
         lastEventTs: last?.ts,
+        currentRoute,
       };
     } else {
       context = {
@@ -478,10 +569,11 @@ export function buildLiveSnapshot() {
         lastEvent: last?.event,
         lastOutcome: last?.outcome,
         lastEventTs: last?.ts,
+        currentRoute,
       };
     }
 
-    const kind1s = kind1Map.get(sessionID);
+    const kind1sFinal = kind1s;
     return {
       sessionID,
       connectedAtMs: now - (now - session.lastSeen),
@@ -489,7 +581,7 @@ export function buildLiveSnapshot() {
       nostrLinked: identity.kind === 'nostr',
       identity,
       context,
-      kind1Count: kind1s?.length ?? 0,
+      kind1Count: kind1sFinal?.length ?? 0,
     };
   });
 
@@ -557,6 +649,9 @@ const ATTEMPT_EVENTS = [
   'online.room.joined',
   'online.seat.paid',
   'nostr.app.link',
+  'client.quickmatch.started',
+  'deposit.paid',
+  'p2p.game.finished',
 ];
 
 export function buildRecentAttemptsSnapshot(hours = 24) {
@@ -576,6 +671,8 @@ export function buildRecentAttemptsSnapshot(hours = 24) {
     challengeRuns: number;
     onlineJoins: number;
     nostrLinks: number;
+    quickmatchStarts: number;
+    p2pDeposits: number;
     rejectReasons: Map<string, number>;
   };
 
@@ -598,6 +695,8 @@ export function buildRecentAttemptsSnapshot(hours = 24) {
         challengeRuns: 0,
         onlineJoins: 0,
         nostrLinks: 0,
+        quickmatchStarts: 0,
+        p2pDeposits: 0,
         rejectReasons: new Map(),
       };
       buckets.set(key, bucket);
@@ -613,6 +712,8 @@ export function buildRecentAttemptsSnapshot(hours = 24) {
     if (e.event === 'challenge.run' && e.outcome === 'ok') bucket.challengeRuns++;
     if (e.event === 'online.room.joined') bucket.onlineJoins++;
     if (e.event === 'nostr.app.link' && e.outcome === 'ok') bucket.nostrLinks++;
+    if (e.event === 'client.quickmatch.started') bucket.quickmatchStarts++;
+    if (e.event === 'deposit.paid' && e.outcome === 'ok') bucket.p2pDeposits++;
     if (e.outcome === 'reject' && e.reason) {
       bucket.rejectReasons.set(e.reason, (bucket.rejectReasons.get(e.reason) ?? 0) + 1);
     }
@@ -638,6 +739,8 @@ export function buildRecentAttemptsSnapshot(hours = 24) {
         challengeRuns: b.challengeRuns,
         onlineJoins: b.onlineJoins,
         nostrLinks: b.nostrLinks,
+        quickmatchStarts: b.quickmatchStarts,
+        p2pDeposits: b.p2pDeposits,
         topRejectReason: topReject?.[0],
         topRejectCount: topReject?.[1],
       };
@@ -649,5 +752,250 @@ export function buildRecentAttemptsSnapshot(hours = 24) {
     hours,
     attempts,
     total: attempts.length,
+  };
+}
+
+const QUICKMATCH_EVENTS = [
+  'client.quickmatch.configured',
+  'client.quickmatch.started',
+  'client.quickmatch.completed',
+];
+
+function countByMetaKey(
+  events: StoredTrackEvent[],
+  eventName: string,
+  metaKey: string
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const e of events) {
+    if (e.event !== eventName) continue;
+    const raw = e.meta?.[metaKey];
+    const key = raw == null ? 'unknown' : String(raw);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
+
+export function buildQuickMatchSnapshot() {
+  const events = scanEvents(10_000, { events: QUICKMATCH_EVENTS });
+  const started = events.filter((e) => e.event === 'client.quickmatch.started').length;
+  const completed = events.filter((e) => e.event === 'client.quickmatch.completed').length;
+  const wins = events.filter(
+    (e) => e.event === 'client.quickmatch.completed' && e.meta?.clientOutcome === 'win'
+  ).length;
+  const durations = events
+    .filter((e) => e.event === 'client.quickmatch.completed')
+    .map((e) => Number(e.meta?.durationMs ?? 0))
+    .filter((n) => n > 0);
+  const avgDurationMs =
+    durations.length > 0
+      ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+      : 0;
+
+  return {
+    fetchedAt: new Date().toISOString(),
+    started,
+    completed,
+    completionRate: started > 0 ? Math.round((completed / started) * 1000) / 10 : 0,
+    winRate: completed > 0 ? Math.round((wins / completed) * 1000) / 10 : 0,
+    avgDurationMs,
+    byMode: countByMetaKey(events, 'client.quickmatch.configured', 'mode'),
+    byOpponentType: countByMetaKey(events, 'client.quickmatch.configured', 'opponentType'),
+  };
+}
+
+export function buildVisitorSnapshot(hours = 24) {
+  const sinceTs = sinceHoursAgo(hours);
+  const contextEvents = scanEvents(10_000, {
+    sinceTs,
+    events: ['client.session.context'],
+  });
+  const referrers: Record<string, number> = {};
+  const platforms: Record<string, number> = {};
+  const sessionsWithContext = new Set<string>();
+  for (const e of contextEvents) {
+    if (e.sessionID) sessionsWithContext.add(e.sessionID);
+    const ref = e.meta?.referrer;
+    if (typeof ref === 'string' && ref) {
+      referrers[ref] = (referrers[ref] ?? 0) + 1;
+    }
+    const platform = e.meta?.platform;
+    if (typeof platform === 'string' && platform) {
+      platforms[platform] = (platforms[platform] ?? 0) + 1;
+    }
+  }
+
+  const menuEvents = scanEvents(10_000, {
+    sinceTs,
+    events: ['client.menu.selected'],
+  });
+  const menuChoices: Record<string, number> = {};
+  for (const e of menuEvents) {
+    const mode = e.meta?.mode;
+    if (typeof mode === 'string') {
+      menuChoices[mode] = (menuChoices[mode] ?? 0) + 1;
+    }
+  }
+
+  const traffic = getTrafficSnapshot();
+  const gameSessions = countDistinctSessionsSince(sinceTs, [
+    'client.quickmatch.started',
+    'challenge.run',
+    'deposit.paid',
+    'online.seat.paid',
+  ]);
+
+  return {
+    fetchedAt: new Date().toISOString(),
+    hours,
+    traffic,
+    sessionsWithContext: sessionsWithContext.size,
+    sessionsWithGameActivity: gameSessions,
+    topReferrers: Object.entries(referrers)
+      .map(([referrer, count]) => ({ referrer, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10),
+    topPlatforms: Object.entries(platforms)
+      .map(([platform, count]) => ({ platform, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10),
+    menuChoices,
+  };
+}
+
+export function buildP2pSnapshot() {
+  const events = scanEvents(10_000, {
+    events: [
+      'client.p2p.configured',
+      'deposit.paid',
+      'client.p2p.game_started',
+      'p2p.game.finished',
+      'client.p2p.game_completed',
+      'client.p2p.withdrawal_created',
+      'client.p2p.double_or_nothing',
+    ],
+  });
+  const step = (name: string) => events.filter((e) => e.event === name).length;
+  return {
+    fetchedAt: new Date().toISOString(),
+    configured: step('client.p2p.configured'),
+    depositsPaid: events.filter((e) => e.event === 'deposit.paid' && e.outcome === 'ok').length,
+    gameStarted: step('client.p2p.game_started'),
+    gameFinished: step('p2p.game.finished'),
+    gameCompletedClient: step('client.p2p.game_completed'),
+    withdrawals: step('client.p2p.withdrawal_created'),
+    doubleOrNothing: step('client.p2p.double_or_nothing'),
+    byMode: countByMetaKey(events, 'client.p2p.configured', 'mode'),
+  };
+}
+
+export function buildReplaySnapshot() {
+  const events = scanEvents(10_000, {
+    events: [
+      'client.online.replay_started',
+      'client.online.replay_ended',
+      'client.online.spectate_started',
+    ],
+  });
+  const started = events.filter((e) => e.event === 'client.online.replay_started');
+  const ended = events.filter((e) => e.event === 'client.online.replay_ended');
+  const durations = ended
+    .map((e) => Number(e.meta?.durationMs ?? 0))
+    .filter((n) => n > 0);
+  const byRoom: Record<string, number> = {};
+  for (const e of started) {
+    const code = e.roomCode ?? (typeof e.meta?.roomCode === 'string' ? e.meta.roomCode : undefined);
+    if (code) byRoom[code] = (byRoom[code] ?? 0) + 1;
+  }
+  return {
+    fetchedAt: new Date().toISOString(),
+    replayStarts: started.length,
+    replayEnds: ended.length,
+    spectateStarts: events.filter((e) => e.event === 'client.online.spectate_started').length,
+    avgWatchDurationMs:
+      durations.length > 0
+        ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+        : 0,
+    topRooms: Object.entries(byRoom)
+      .map(([roomCode, count]) => ({ roomCode, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15),
+  };
+}
+
+export function buildUserJourneySnapshot(params: {
+  sessionID?: string;
+  pubkey?: string;
+}) {
+  const limit = 500;
+  let sessionIDs: string[] = [];
+  let pubkeyPrefix: string | undefined;
+
+  if (params.sessionID?.trim()) {
+    sessionIDs = [params.sessionID.trim()];
+  } else if (params.pubkey?.trim()) {
+    const raw = params.pubkey.trim().toLowerCase();
+    if (raw.startsWith('npub')) {
+      try {
+        const decoded = nip19.decode(raw);
+        if (decoded.type === 'npub') {
+          pubkeyPrefix = toPubkeyPrefix(decoded.data as string);
+        }
+      } catch {
+        pubkeyPrefix = undefined;
+      }
+    } else if (/^[0-9a-f]{64}$/.test(raw)) {
+      pubkeyPrefix = toPubkeyPrefix(raw);
+    } else {
+      pubkeyPrefix = raw.slice(0, 12);
+    }
+    if (pubkeyPrefix) {
+      sessionIDs = getSessionsForPubkeyPrefix(pubkeyPrefix);
+    }
+  }
+
+  const events: StoredTrackEvent[] = [];
+  if (sessionIDs.length > 0) {
+    for (const sid of sessionIDs) {
+      events.push(...getEventsForSession(sid, 200));
+    }
+  } else if (pubkeyPrefix) {
+    events.push(
+      ...scanEvents(limit, { pubkeyPrefix }).filter(
+        (e) => e.pubkeyPrefix === pubkeyPrefix
+      )
+    );
+  }
+
+  const timeline = [...events]
+    .sort((a, b) => a.ts.localeCompare(b.ts))
+    .slice(-200)
+    .map((e) => ({
+      ts: e.ts,
+      event: e.event,
+      outcome: e.outcome,
+      reason: e.reason,
+      sessionID: e.sessionID,
+      challengeId: e.challengeId,
+      roomCode: e.roomCode,
+      meta: e.meta,
+    }));
+
+  let identity: ReturnType<typeof buildIdentity> | undefined;
+  for (const sid of sessionIDs) {
+    const live = getAllIDtoSocket().has(sid);
+    if (live) {
+      identity = buildIdentity(sid);
+      break;
+    }
+  }
+
+  return {
+    fetchedAt: new Date().toISOString(),
+    sessionIDs,
+    pubkeyPrefix,
+    identity,
+    eventCount: timeline.length,
+    timeline,
   };
 }

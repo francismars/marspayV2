@@ -10,6 +10,8 @@ import { GameMode, PlayerRole } from '../types/game';
 import { deleteLNURLPsFromSession } from '../state/lnurlpState';
 import { BUYINMINPRACTICE } from '../consts/values';
 import { publishGameKind1 } from '../calls/NDK/publishGameKind1';
+import { trackEvent } from '../telemetry/trackEvent';
+import { resolveTrackPubkeyPrefix } from '../telemetry/resolveTrackPubkeyPrefix';
 
 const GAME_INFO_MISSING_LOG_COOLDOWN_MS = 10 * 60 * 1000;
 const lastGameInfoMissingLogAt = new Map<string, number>();
@@ -89,6 +91,28 @@ export function gameFinished(socket: Socket, winnerP: PlayerRole) {
     }
   }
   appendWinnerToGameInfo(sessionID, winnerP);
+  if (
+    gameInfo.mode === GameMode.P2P ||
+    gameInfo.mode === GameMode.P2PNOSTR ||
+    gameInfo.mode === GameMode.TOURNAMENT ||
+    gameInfo.mode === GameMode.TOURNAMENTNOSTR
+  ) {
+    const buyin = gameInfo.players.get(PlayerRole.Player1)?.value;
+    trackEvent({
+      event: 'p2p.game.finished',
+      outcome: 'ok',
+      sessionID,
+      pubkeyPrefix: resolveTrackPubkeyPrefix(sessionID),
+      buyin,
+      meta: {
+        mode: gameInfo.mode,
+        winner: String(winnerP),
+        ...(gameInfo.numberOfPlayers != null
+          ? { numberOfPlayers: gameInfo.numberOfPlayers }
+          : {}),
+      },
+    });
+  }
   if (gameInfo.mode != GameMode.TOURNAMENT && gameInfo.mode != GameMode.TOURNAMENTNOSTR) {
     console.log(`${dateNow()} [${sessionID}] Deleting LNURLPs from Session.`);
     deleteLNURLPsFromSession(sessionID);

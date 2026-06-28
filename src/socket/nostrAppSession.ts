@@ -11,6 +11,7 @@ import {
   type AppNostrSignerMode,
 } from '../state/nostrAppSessionState';
 import { pubkeyPrefix, trackEvent, trackReject } from '../telemetry/trackEvent';
+import { linkSessionToPubkey } from '../telemetry/sessionIdentity';
 
 export type ResAppNostrSessionPayload = {
   ok: boolean;
@@ -118,11 +119,15 @@ export async function confirmAppNostrLinkHandler(
       ? payload.signerMode
       : null;
   const { expiresAt } = registerAppNostrSession(sessionID, event.pubkey, profile, signerMode);
+  const prefix = pubkeyPrefix(event.pubkey);
+  if (prefix) {
+    linkSessionToPubkey(sessionID, event.pubkey);
+  }
   trackEvent({
     event: 'nostr.app.link',
     outcome: 'ok',
     sessionID,
-    pubkeyPrefix: pubkeyPrefix(event.pubkey),
+    pubkeyPrefix: prefix,
     meta: { signerMode: signerMode ?? 'unknown' },
   });
   socket.emit('resAppNostrSession', {

@@ -84,6 +84,23 @@ export function sumCounter(
     .reduce((sum, r) => sum + r.count, 0);
 }
 
+export function topErrorReasons(
+  rows: ParsedCounterRow[],
+  event: string,
+  limit = 10
+): Array<{ reason: string; count: number }> {
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    if (r.challengeId) continue;
+    if (r.event !== event || r.outcome !== 'error' || !r.reason) continue;
+    map.set(r.reason, (map.get(r.reason) ?? 0) + r.count);
+  }
+  return [...map.entries()]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
 export function topRejectReasons(
   rows: ParsedCounterRow[],
   event: string,

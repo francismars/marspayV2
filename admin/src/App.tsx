@@ -8,6 +8,10 @@ import {
   fetchLiveRecent,
   fetchOnline,
   fetchOverview,
+  fetchP2p,
+  fetchQuickMatch,
+  fetchReplays,
+  fetchVisitors,
   logout,
   type ActivityFilters,
 } from './lib/api';
@@ -19,17 +23,35 @@ import { ChallengeTab } from './components/ChallengeTab';
 import { OnlineTab } from './components/OnlineTab';
 import { ActivityTab } from './components/ActivityTab';
 import { LiveTab } from './components/LiveTab';
+import { VisitorsTab } from './components/VisitorsTab';
+import { QuickMatchTab } from './components/QuickMatchTab';
+import { P2pTab } from './components/P2pTab';
+import { ExplorerTab } from './components/ExplorerTab';
 import { ErrorBanner, LoadingState } from './components/ui';
 
-type Tab = 'overview' | 'funnels' | 'challenge' | 'online' | 'activity' | 'live';
+type Tab =
+  | 'overview'
+  | 'visitors'
+  | 'funnels'
+  | 'challenge'
+  | 'quickmatch'
+  | 'p2p'
+  | 'online'
+  | 'activity'
+  | 'live'
+  | 'explorer';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: 'Overview' },
+  { id: 'visitors', label: 'Visitors' },
   { id: 'funnels', label: 'Funnels' },
   { id: 'challenge', label: 'Challenge' },
+  { id: 'quickmatch', label: 'Quick Match' },
+  { id: 'p2p', label: 'P2P' },
   { id: 'online', label: 'ONLINE' },
   { id: 'activity', label: 'Activity' },
   { id: 'live', label: 'Live' },
+  { id: 'explorer', label: 'Explorer' },
 ];
 
 function parseTabFromUrl(): Tab {
@@ -119,7 +141,23 @@ export default function App() {
     15000
   );
   const challenges = usePolling(fetchChallenges, authed === true && tab === 'challenge' && autoRefresh, 15000);
+  const visitors = usePolling(
+    () => fetchVisitors(24),
+    authed === true && tab === 'visitors' && autoRefresh,
+    15000
+  );
+  const quickmatch = usePolling(
+    fetchQuickMatch,
+    authed === true && tab === 'quickmatch' && autoRefresh,
+    15000
+  );
+  const p2p = usePolling(fetchP2p, authed === true && tab === 'p2p' && autoRefresh, 15000);
   const online = usePolling(fetchOnline, authed === true && tab === 'online' && autoRefresh, 15000);
+  const replays = usePolling(
+    fetchReplays,
+    authed === true && tab === 'online' && autoRefresh,
+    30000
+  );
   const live = usePolling(fetchLive, authed === true && tab === 'live' && autoRefresh, 15000);
   const liveRecent = usePolling(
     () => fetchLiveRecent(24),
@@ -184,10 +222,16 @@ export default function App() {
   const activePoll =
     tab === 'overview'
       ? overview
+      : tab === 'visitors'
+        ? visitors
       : tab === 'funnels'
         ? funnels
         : tab === 'challenge'
           ? challenges
+          : tab === 'quickmatch'
+            ? quickmatch
+            : tab === 'p2p'
+              ? p2p
           : tab === 'online'
             ? online
             : tab === 'activity'
@@ -280,6 +324,9 @@ export default function App() {
             {tab === 'overview' && overview.data ? (
               <OverviewTab data={overview.data} />
             ) : null}
+            {tab === 'visitors' && visitors.data ? (
+              <VisitorsTab data={visitors.data} />
+            ) : null}
             {tab === 'funnels' && funnels.data ? (
               <FunnelsTab
                 data={funnels.data}
@@ -293,8 +340,18 @@ export default function App() {
             {tab === 'challenge' && challenges.data ? (
               <ChallengeTab data={challenges.data} />
             ) : null}
+            {tab === 'quickmatch' && quickmatch.data ? (
+              <QuickMatchTab data={quickmatch.data} />
+            ) : null}
+            {tab === 'p2p' && p2p.data ? (
+              <P2pTab data={p2p.data} />
+            ) : null}
             {tab === 'online' && online.data ? (
-              <OnlineTab data={online.data} onSeatClick={goToLiveForSession} />
+              <OnlineTab
+                data={online.data}
+                replays={replays.data ?? undefined}
+                onSeatClick={goToLiveForSession}
+              />
             ) : null}
             {tab === 'activity' && activity.data ? (
               <ActivityTab
@@ -322,6 +379,7 @@ export default function App() {
                 onViewActivity={goToActivityForSession}
               />
             ) : null}
+            {tab === 'explorer' ? <ExplorerTab /> : null}
           </>
         )}
       </main>

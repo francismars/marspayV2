@@ -45,6 +45,27 @@ export function ChallengeTab({ data }: { data: ChallengesData }) {
         />
       </div>
 
+      {data.browseFunnel ? (
+        <Section title="Browse → claim funnel">
+          <DataTable
+            columns={[
+              { key: 'step', label: 'Step' },
+              { key: 'ok', label: 'OK' },
+              { key: 'total', label: 'Total' },
+              { key: 'passRate', label: 'Pass %' },
+            ]}
+            rows={Object.entries(data.browseFunnel).map(([step, row]) => ({
+              step: step.replace(/^client\.challenge\.|^challenge\./, ''),
+              ok: row.ok,
+              total: row.total,
+              passRate: row.passRate,
+            }))}
+            rowKey={(r) => String(r.step)}
+            empty="No browse funnel data"
+          />
+        </Section>
+      ) : null}
+
       {data.dailySpendSeries.length > 0 ? (
         <Section title="Bounty spend (7 days)">
           <div className="h-48 rounded-lg border border-surface-border bg-surface-raised p-2">

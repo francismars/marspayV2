@@ -80,6 +80,11 @@ export function OverviewTab({ data }: { data: OverviewData }) {
           hint={`${data.bountyRemainingSats.toLocaleString()} remaining of ${data.bountyCapSats.toLocaleString()} cap`}
           warn={bountyWarn}
         />
+        <KpiCard
+          label="Sessions w/ game (24h)"
+          value={data.sessionsWithGameActivity24h ?? 0}
+          hint="Quick match, challenge, P2P, or ONLINE seat"
+        />
         <KpiCard label="Pending zap claims" value={data.pendingZapClaims} />
         <KpiCard label="Server uptime" value={formatUptime(data.serverUptimeSec)} />
         <KpiCard label="Event log size" value={formatBytes(data.eventLogBytes)} />

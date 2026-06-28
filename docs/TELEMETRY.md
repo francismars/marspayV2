@@ -29,6 +29,11 @@ Sign in with `ADMIN_PASSWORD` from `.env` (httpOnly cookie session; no password 
 | `GET /dashboard/api/live/:sessionID` | Session detail + last 20 events |
 | `GET /dashboard/api/sessions` | Alias for `/live` (backward compatible) |
 | `GET /dashboard/api/funnels?window=lifetime\|24h\|7d` | Funnel breakdowns |
+| `GET /dashboard/api/visitors?hours=24` | Traffic + referrer/platform rollups |
+| `GET /dashboard/api/quickmatch` | Quick Match stats |
+| `GET /dashboard/api/p2p` | P2P funnel stats |
+| `GET /dashboard/api/replays` | Replay/spectate stats |
+| `GET /dashboard/api/journey?sessionID=…` or `?pubkey=…` | User timeline (Tier B) |
 | `GET /dashboard/api/debug/raw` | Legacy full in-memory dump (LNURL maps, etc.) |
 
 Legacy: `GET /dashboard?password=…` returns overview JSON with `Deprecation: true` header.
@@ -119,6 +124,7 @@ Human tags: `[SESSION_CONNECT]`, `[SESSION_DISCONNECT]`, `[NOSTR_SIGNIN]`.
 | Event | When |
 |-------|------|
 | `deposit.paid` | LNURL-pay webhook (non-ONLINE seat) |
+| `p2p.game.finished` | P2P/tournament game finished (server, `game.ts`) |
 
 ### Client beacons (`source: client`)
 
@@ -126,7 +132,27 @@ Human tags: `[SESSION_CONNECT]`, `[SESSION_DISCONNECT]`, `[NOSTR_SIGNIN]`.
 |-------|------|
 | `client.page.view` | Route change |
 | `client.funnel.abandon` | Lobby left without pay/ready |
-| `client.ui.error` | Surfaced UI error |
+| `client.ui.error` | Surfaced UI error (`outcome: error`, `reason` from detail) |
+| `client.session.context` | Once per tab session: referrer hostname, platform |
+| `client.menu.selected` | Main menu navigation (`mode` in meta) |
+| `client.practice.tab` | Practice hub tab switch (`free` / `challenges`) |
+| `client.quickmatch.configured` | Quick Match config before start |
+| `client.quickmatch.started` | Quick Match started |
+| `client.quickmatch.completed` | Local practice match ended |
+| `client.challenge.catalog_viewed` | Challenge list shown |
+| `client.challenge.card_clicked` | Challenge card selected |
+| `client.challenge.completed` | Challenge overlay shown (win/loss) |
+| `client.p2p.configured` | P2P entry configured |
+| `client.p2p.game_started` | Paid game started from menu |
+| `client.p2p.game_completed` | Winner reached post-game |
+| `client.p2p.withdrawal_created` | Withdrawal QR created |
+| `client.p2p.double_or_nothing` | Double-or-nothing clicked |
+| `client.online.replay_started` | Replay mode loaded |
+| `client.online.replay_ended` | Replay session ended |
+| `client.online.replay_speed_changed` | Replay speed changed |
+| `client.online.spectate_started` | Spectator joined a room |
+
+Client events are rate-limited (60/min per session). Events queue locally until the socket connects.
 
 ## Persistence
 
@@ -156,6 +182,15 @@ The admin dashboard (`/dashboard`, cookie auth) may show richer identity than th
 | **Activity log** | `pubkeyPrefix` (12 hex) only — same as `events.jsonl` |
 | **Recent attempts (24h)** | Aggregated by `pubkeyPrefix` or `sessionID`; full profile joined only if session still connected |
 | **Anonymous / Lightning-only** | Labelled `anon` + session ID; no cross-session tracking |
+
+### Tier B identity (no persistent visitorId)
+
+- **sessionID** — per-tab visit timeline and Live tab
+- **pubkeyPrefix** — cross-session journey for Nostr users (linked on `nostr.app.link`)
+- **ipHash aggregates** — population-level visitor counts via `trafficAnalytics` (not per-user drill-down)
+- **No** `localStorage` visitor UUID; User Explorer searches `sessionID` or `pubkey`/`npub` only
+
+In-memory map `sessionIdentity.ts` links `pubkeyPrefix` → recent `sessionID`s for admin journey queries only.
 
 **Not collected in event logs:** Raw IP addresses are not persisted in `events.jsonl` or funnel counters. App Nostr sessions expire after 24h (`APP_NOSTR_TTL_MS`).
 

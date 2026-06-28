@@ -1,6 +1,6 @@
-import type { OnlineData, OnlineRoomLive } from '../lib/api';
+import type { OnlineData, OnlineRoomLive, ReplayData } from '../lib/api';
 import { formatAge } from '../lib/hooks';
-import { DataTable, Section } from './ui';
+import { DataTable, KpiCard, Section } from './ui';
 
 function SeatCell({ seat }: { seat: OnlineRoomLive['seats'][0] }) {
   if (!seat.sessionID && seat.status === 'open') {
@@ -24,9 +24,11 @@ function SeatCell({ seat }: { seat: OnlineRoomLive['seats'][0] }) {
 
 export function OnlineTab({
   data,
+  replays,
   onSeatClick,
 }: {
   data: OnlineData;
+  replays?: ReplayData;
   onSeatClick?: (sessionID: string) => void;
 }) {
   return (
@@ -171,6 +173,33 @@ export function OnlineTab({
           empty="No match history"
         />
       </Section>
+
+      {replays ? (
+        <Section title="Replay & spectate">
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard label="Replay starts" value={replays.replayStarts} />
+            <KpiCard label="Replay ends" value={replays.replayEnds} />
+            <KpiCard label="Spectate starts" value={replays.spectateStarts} />
+            <KpiCard
+              label="Avg watch time"
+              value={
+                replays.avgWatchDurationMs > 0
+                  ? `${Math.round(replays.avgWatchDurationMs / 1000)}s`
+                  : '—'
+              }
+            />
+          </div>
+          <DataTable
+            columns={[
+              { key: 'roomCode', label: 'Room' },
+              { key: 'count', label: 'Replay views' },
+            ]}
+            rows={replays.topRooms}
+            rowKey={(r) => String(r.roomCode)}
+            empty="No replay views yet"
+          />
+        </Section>
+      ) : null}
     </div>
   );
 }

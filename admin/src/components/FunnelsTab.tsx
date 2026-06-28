@@ -127,6 +127,10 @@ export function FunnelsTab({
         <RejectTable title="Game start rejections" rows={data.online.topRejectReasons.gameStarted ?? []} />
       </div>
 
+      {data.p2p ? (
+        <FunnelChart title={`P2P funnel (${data.window})`} steps={data.p2p.steps} />
+      ) : null}
+
       <FunnelChart title={`Client beacons (${data.window})`} steps={data.client.steps} />
       <RejectTable title="UI errors" rows={data.client.uiErrors} />
     </div>

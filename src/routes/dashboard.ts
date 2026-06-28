@@ -24,7 +24,12 @@ import {
   buildLiveSnapshot,
   buildOnlineSnapshot,
   buildOverviewSnapshot,
+  buildP2pSnapshot,
+  buildQuickMatchSnapshot,
   buildRecentAttemptsSnapshot,
+  buildReplaySnapshot,
+  buildUserJourneySnapshot,
+  buildVisitorSnapshot,
   type FunnelWindow,
 } from '../telemetry/dashboardSnapshot';
 import {
@@ -160,6 +165,35 @@ router.get('/api/live/:sessionID', requireDashboardAuth, (req, res) => {
     return;
   }
   res.json(detail);
+});
+
+router.get('/api/visitors', requireDashboardAuth, (req, res) => {
+  const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 168);
+  res.json(buildVisitorSnapshot(hours));
+});
+
+router.get('/api/quickmatch', requireDashboardAuth, (_req, res) => {
+  res.json(buildQuickMatchSnapshot());
+});
+
+router.get('/api/p2p', requireDashboardAuth, (_req, res) => {
+  res.json(buildP2pSnapshot());
+});
+
+router.get('/api/replays', requireDashboardAuth, (_req, res) => {
+  res.json(buildReplaySnapshot());
+});
+
+router.get('/api/journey', requireDashboardAuth, (req, res) => {
+  const sessionID =
+    typeof req.query.sessionID === 'string' ? req.query.sessionID : undefined;
+  const pubkey =
+    typeof req.query.pubkey === 'string' ? req.query.pubkey : undefined;
+  if (!sessionID && !pubkey) {
+    res.status(400).json({ error: 'sessionID_or_pubkey_required' });
+    return;
+  }
+  res.json(buildUserJourneySnapshot({ sessionID, pubkey }));
 });
 
 router.get('/api/sessions', requireDashboardAuth, (_req, res) => {
