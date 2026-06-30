@@ -1,3 +1,5 @@
+@import './styles/chainduel-theme.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -12,7 +14,7 @@ body {
   height: 8px;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #2d3a4f;
-  border-radius: 4px;
+:focus-visible {
+  outline: 2px solid #00b7ff;
+  outline-offset: 2px;
 }

@@ -19,7 +19,12 @@ Sign in with `ADMIN_PASSWORD` from `.env` (httpOnly cookie session; no password 
 | `POST /dashboard/api/login` | `{ "password": "…" }` → session cookie |
 | `POST /dashboard/api/logout` | Clear session |
 | `GET /dashboard/api/me` | `{ authenticated: boolean }` |
-| `GET /dashboard/api/overview` | KPI cards |
+| `GET /dashboard/api/overview` | KPI cards (legacy; Home tab preferred) |
+| `GET /dashboard/api/home?window=24h\|7d` | Weekly review: activation, OMTM per mode, alerts, acquisition |
+| `GET /dashboard/api/alerts?window=24h\|7d` | Threshold alerts |
+| `GET /dashboard/api/money` | Bounty, deposits, payouts |
+| `GET /dashboard/api/funnels/:mode?window=24h\|7d` | Step-conversion funnel (`quickmatch`, `challenge`, `p2p`, `online`, `nostr`) |
+| `GET /dashboard/api/cohorts?window=7d\|24h` | Nostr player cohorts (Tier B) |
 | `GET /dashboard/api/funnels` | Challenge, ONLINE, client funnel breakdowns |
 | `GET /dashboard/api/challenges` | Win/replay stats, claims, bounty budget |
 | `GET /dashboard/api/online` | Live rooms + match history |
@@ -236,3 +241,43 @@ Restrict `/dashboard` to localhost or VPN. `ADMIN_PASSWORD` grants access to ful
 | `traffic.countrySeries7d` | 7 UTC days | `traffic_daily.jsonl` on disk |
 
 Legacy field `challengeRunsToday` was removed (it was lifetime, not today).
+
+## Dashboard product analytics
+
+### Navigation (v2)
+
+| Tab | Purpose |
+|-----|---------|
+| **Home** | North star + weekly review (default landing) |
+| **Players** | Recent attempts, live sessions, Explorer, Nostr cohorts |
+| **Modes** | Per-mode step-conversion funnels + depth stats |
+| **Money** | Bounty cap, deposits, payouts |
+| **Debug** | Activity log + advanced lifetime funnels |
+
+Legacy `?tab=overview`, `live`, `explorer`, etc. redirect to the new tabs.
+
+### North star and OMTM
+
+| Scope | Metric | Definition |
+|-------|--------|------------|
+| **North star** | Activation rate | `sessionsWithGameActivity / uniqueSessions` (24h) — any quick match, challenge run, P2P deposit, or ONLINE seat |
+| Quick Match | Start → complete % | `client.quickmatch.completed` / `client.quickmatch.started` |
+| Challenges | Eligible → claim % | `challenge.claim` ok / `challenge.eligibility` ok |
+| ONLINE | Seat paid → finished % | `online.game.finished` / `online.seat.paid` |
+| P2P | Paid → finished % | `p2p.game.finished` / `deposit.paid` |
+
+### Weekly review ritual (~2 min)
+
+1. Open **Home** — activation down? Check mode OMTM cards and alerts.
+2. Click the worst **drop-off** — opens **Modes** funnel for that mode.
+3. Read **reject reasons** at the drop step.
+4. **Players → Explorer** — inspect 1–2 journeys (from Activity session links).
+5. Ship one product fix; compare same window next week.
+
+### Tier B cohort limitations
+
+Cohort views (`/dashboard/api/cohorts`) use `pubkeyPrefix` only. Anonymous visitors remain aggregate (IP hash). Do not treat cohort data as full user tracking.
+
+### Scan limits
+
+Rolling-window metrics scan the last 10,000 lines of `events.jsonl`. Low-traffic deploys are accurate; high traffic may under-count historical windows.

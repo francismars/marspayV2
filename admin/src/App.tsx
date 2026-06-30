@@ -3,63 +3,75 @@ import {
   checkAuth,
   fetchActivity,
   fetchChallenges,
+  fetchCohorts,
   fetchFunnels,
+  fetchHome,
   fetchLive,
   fetchLiveRecent,
+  fetchModeFunnel,
+  fetchMoney,
   fetchOnline,
-  fetchOverview,
   fetchP2p,
   fetchQuickMatch,
   fetchReplays,
-  fetchVisitors,
   logout,
   type ActivityFilters,
+  type DashboardAlert,
 } from './lib/api';
 import { usePolling } from './lib/hooks';
 import { LoginScreen } from './components/LoginScreen';
-import { OverviewTab } from './components/OverviewTab';
-import { FunnelsTab } from './components/FunnelsTab';
-import { ChallengeTab } from './components/ChallengeTab';
-import { OnlineTab } from './components/OnlineTab';
-import { ActivityTab } from './components/ActivityTab';
-import { LiveTab } from './components/LiveTab';
-import { VisitorsTab } from './components/VisitorsTab';
-import { QuickMatchTab } from './components/QuickMatchTab';
-import { P2pTab } from './components/P2pTab';
-import { ExplorerTab } from './components/ExplorerTab';
+import { HomeTab } from './components/HomeTab';
+import { PlayersTab } from './components/PlayersTab';
+import { ModesTab, type ModeId } from './components/ModesTab';
+import { MoneyTab } from './components/MoneyTab';
+import { DebugTab } from './components/DebugTab';
+import { ChainDuelHeader } from './components/ChainDuelHeader';
 import { ErrorBanner, LoadingState } from './components/ui';
 
-type Tab =
-  | 'overview'
-  | 'visitors'
-  | 'funnels'
-  | 'challenge'
-  | 'quickmatch'
-  | 'p2p'
-  | 'online'
-  | 'activity'
-  | 'live'
-  | 'explorer';
+type Tab = 'home' | 'players' | 'modes' | 'money' | 'debug';
 
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'visitors', label: 'Visitors' },
-  { id: 'funnels', label: 'Funnels' },
-  { id: 'challenge', label: 'Challenge' },
-  { id: 'quickmatch', label: 'Quick Match' },
-  { id: 'p2p', label: 'P2P' },
-  { id: 'online', label: 'ONLINE' },
-  { id: 'activity', label: 'Activity' },
-  { id: 'live', label: 'Live' },
-  { id: 'explorer', label: 'Explorer' },
+  { id: 'home', label: 'Home' },
+  { id: 'players', label: 'Players' },
+  { id: 'modes', label: 'Modes' },
+  { id: 'money', label: 'Money' },
+  { id: 'debug', label: 'Debug' },
 ];
+
+const LEGACY_TAB_MAP: Record<string, Tab> = {
+  overview: 'home',
+  visitors: 'home',
+  funnels: 'debug',
+  challenge: 'modes',
+  quickmatch: 'modes',
+  p2p: 'modes',
+  online: 'modes',
+  activity: 'debug',
+  live: 'players',
+  explorer: 'players',
+};
+
+const LEGACY_MODE_MAP: Record<string, ModeId> = {
+  quickmatch: 'quickmatch',
+  challenge: 'challenge',
+  p2p: 'p2p',
+  online: 'online',
+};
 
 function parseTabFromUrl(): Tab {
   const params = new URLSearchParams(window.location.search);
   const raw = params.get('tab');
-  if (raw === 'sessions') return 'live';
   if (raw && TABS.some((t) => t.id === raw)) return raw as Tab;
-  return 'overview';
+  if (raw && LEGACY_TAB_MAP[raw]) return LEGACY_TAB_MAP[raw];
+  return 'home';
+}
+
+function parseModeFromUrl(): ModeId {
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get('mode');
+  if (mode && mode in LEGACY_MODE_MAP) return LEGACY_MODE_MAP[mode]!;
+  if (mode === 'nostr') return 'nostr';
+  return 'quickmatch';
 }
 
 function parseActivityFiltersFromUrl(): ActivityFilters {
@@ -76,7 +88,10 @@ function parseActivityFiltersFromUrl(): ActivityFilters {
   };
 }
 
-function syncUrl(tab: Tab, extras?: Record<string, string | undefined>) {
+function syncUrl(
+  tab: Tab,
+  extras?: Record<string, string | undefined>
+) {
   const params = new URLSearchParams();
   params.set('tab', tab);
   if (extras) {
@@ -91,8 +106,10 @@ function syncUrl(tab: Tab, extras?: Record<string, string | undefined>) {
 export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>(() => parseTabFromUrl());
+  const [mode, setMode] = useState<ModeId>(() => parseModeFromUrl());
+  const [debugSection, setDebugSection] = useState<'activity' | 'funnels'>('activity');
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [funnelWindow, setFunnelWindow] = useState<'lifetime' | '24h' | '7d'>('lifetime');
+  const [funnelWindow, setFunnelWindow] = useState<'lifetime' | '24h' | '7d'>('24h');
   const [activityFilters, setActivityFilters] = useState<ActivityFilters>(() =>
     parseActivityFiltersFromUrl()
   );
@@ -100,22 +117,19 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get('session');
   });
+  const [explorerQuery, setExplorerQuery] = useState<string | undefined>();
+  const [explorerKind, setExplorerKind] = useState<'sessionID' | 'pubkey'>('sessionID');
 
   useEffect(() => {
     void checkAuth().then(setAuthed);
   }, []);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const session = params.get('session');
-    if (session) setSelectedSession(session);
-  }, [tab]);
-
   const setTabWithUrl = useCallback(
     (next: Tab, extras?: Record<string, string | undefined>) => {
       setTab(next);
-      if (next === 'activity') {
+      if (next === 'debug') {
         syncUrl(next, {
+          section: debugSection,
           event: activityFilters.event,
           outcome: activityFilters.outcome,
           since: activityFilters.since,
@@ -124,72 +138,99 @@ export default function App() {
           roomCode: activityFilters.roomCode,
           ...extras,
         });
-      } else if (next === 'live') {
+      } else if (next === 'players') {
         syncUrl(next, { session: selectedSession ?? undefined, ...extras });
+      } else if (next === 'modes') {
+        syncUrl(next, { mode, ...extras });
       } else {
         syncUrl(next, extras);
       }
     },
-    [activityFilters, selectedSession]
+    [activityFilters, debugSection, mode, selectedSession]
   );
 
-  const overview = usePolling(fetchOverview, authed === true && tab === 'overview' && autoRefresh, 15000);
-  const funnelsFetcher = useCallback(() => fetchFunnels(funnelWindow), [funnelWindow]);
-  const funnels = usePolling(
-    funnelsFetcher,
-    authed === true && tab === 'funnels' && autoRefresh,
-    15000
+  const home = usePolling(fetchHome, authed === true && tab === 'home' && autoRefresh, 15000);
+  const live = usePolling(fetchLive, authed === true && tab === 'players' && autoRefresh, 15000);
+  const liveRecent = usePolling(
+    () => fetchLiveRecent(24),
+    authed === true && tab === 'players' && autoRefresh,
+    30000
   );
-  const challenges = usePolling(fetchChallenges, authed === true && tab === 'challenge' && autoRefresh, 15000);
-  const visitors = usePolling(
-    () => fetchVisitors(24),
-    authed === true && tab === 'visitors' && autoRefresh,
+  const cohorts = usePolling(
+    () => fetchCohorts('7d'),
+    authed === true && tab === 'players' && autoRefresh,
+    60000
+  );
+  const modeFunnelFetcher = useCallback(
+    () => fetchModeFunnel(mode, '24h'),
+    [mode]
+  );
+  const modeFunnel = usePolling(
+    modeFunnelFetcher,
+    authed === true && tab === 'modes' && autoRefresh,
     15000
   );
   const quickmatch = usePolling(
     fetchQuickMatch,
-    authed === true && tab === 'quickmatch' && autoRefresh,
+    authed === true && tab === 'modes' && mode === 'quickmatch' && autoRefresh,
     15000
   );
-  const p2p = usePolling(fetchP2p, authed === true && tab === 'p2p' && autoRefresh, 15000);
-  const online = usePolling(fetchOnline, authed === true && tab === 'online' && autoRefresh, 15000);
+  const challenges = usePolling(
+    fetchChallenges,
+    authed === true && (tab === 'modes' || tab === 'money') && autoRefresh,
+    15000
+  );
+  const p2p = usePolling(
+    fetchP2p,
+    authed === true && tab === 'modes' && mode === 'p2p' && autoRefresh,
+    15000
+  );
+  const online = usePolling(fetchOnline, authed === true && tab === 'modes' && mode === 'online' && autoRefresh, 15000);
   const replays = usePolling(
     fetchReplays,
-    authed === true && tab === 'online' && autoRefresh,
+    authed === true && tab === 'modes' && mode === 'online' && autoRefresh,
     30000
   );
-  const live = usePolling(fetchLive, authed === true && tab === 'live' && autoRefresh, 15000);
-  const liveRecent = usePolling(
-    () => fetchLiveRecent(24),
-    authed === true && tab === 'live' && autoRefresh,
-    30000
+  const money = usePolling(fetchMoney, authed === true && tab === 'money' && autoRefresh, 15000);
+
+  const funnelsFetcher = useCallback(() => fetchFunnels(funnelWindow), [funnelWindow]);
+  const funnels = usePolling(
+    funnelsFetcher,
+    authed === true && tab === 'debug' && debugSection === 'funnels' && autoRefresh,
+    15000
   );
 
   const activityFetcher = useCallback(
     () => fetchActivity({ limit: 100, ...activityFilters }),
     [activityFilters]
   );
-  const activity = usePolling(activityFetcher, authed === true && tab === 'activity' && autoRefresh, 10000);
+  const activity = usePolling(
+    activityFetcher,
+    authed === true && tab === 'debug' && debugSection === 'activity' && autoRefresh,
+    10000
+  );
 
   useEffect(() => {
-    if (tab === 'activity' && authed) {
-      void activity.refresh();
-    }
+    if (tab === 'debug' && authed) void activity.refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activityFilters, tab, authed]);
+  }, [activityFilters, tab, authed, debugSection]);
 
   useEffect(() => {
-    if (tab === 'funnels' && authed) {
-      void funnels.refresh();
-    }
+    if (tab === 'modes' && authed) void modeFunnel.refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [funnelWindow, tab, authed]);
+  }, [mode, tab, authed]);
+
+  useEffect(() => {
+    if (tab === 'debug' && debugSection === 'funnels' && authed) void funnels.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [funnelWindow, tab, authed, debugSection]);
 
   const handleActivityFilterChange = useCallback(
     (filters: ActivityFilters) => {
       setActivityFilters(filters);
-      if (tab === 'activity') {
-        syncUrl('activity', {
+      if (tab === 'debug') {
+        syncUrl('debug', {
+          section: 'activity',
           event: filters.event,
           outcome: filters.outcome,
           since: filters.since,
@@ -202,41 +243,68 @@ export default function App() {
     [tab]
   );
 
-  const goToActivityForSession = useCallback(
-    (sessionID: string) => {
-      const filters: ActivityFilters = { sessionID };
+  const goToActivity = useCallback(
+    (partial: Partial<ActivityFilters>) => {
+      const filters: ActivityFilters = { ...activityFilters, ...partial };
       setActivityFilters(filters);
-      setSelectedSession(null);
-      setTab('activity');
-      syncUrl('activity', { sessionID });
+      setDebugSection('activity');
+      setTab('debug');
+      syncUrl('debug', {
+        section: 'activity',
+        event: filters.event,
+        outcome: filters.outcome,
+        since: filters.since ?? '24h',
+        sessionID: filters.sessionID,
+        pubkeyPrefix: filters.pubkeyPrefix,
+        roomCode: filters.roomCode,
+      });
     },
-    []
+    [activityFilters]
   );
 
-  const goToLiveForSession = useCallback((sessionID: string) => {
-    setSelectedSession(sessionID);
-    setTab('live');
-    syncUrl('live', { session: sessionID });
+  const goToPlayers = useCallback((sessionID?: string) => {
+    if (sessionID) setSelectedSession(sessionID);
+    setTab('players');
+    syncUrl('players', { session: sessionID });
   }, []);
 
+  const goToExplorer = useCallback((query: string, kind: 'sessionID' | 'pubkey' = 'sessionID') => {
+    setExplorerQuery(query);
+    setExplorerKind(kind);
+    setTab('players');
+    syncUrl('players', { session: undefined });
+  }, []);
+
+  const goToMode = useCallback((nextMode: string) => {
+    const m = (LEGACY_MODE_MAP[nextMode] ?? nextMode) as ModeId;
+    setMode(m);
+    setTab('modes');
+    syncUrl('modes', { mode: m });
+  }, []);
+
+  const handleAlertClick = useCallback(
+    (alert: DashboardAlert) => {
+      const d = alert.drillDown;
+      if (!d) return;
+      if (d.tab === 'money') setTabWithUrl('money');
+      else if (d.tab === 'modes' && d.mode) goToMode(d.mode);
+      else if (d.tab === 'debug' && d.event) goToActivity({ event: d.event, since: '24h' });
+    },
+    [goToActivity, goToMode, setTabWithUrl]
+  );
+
   const activePoll =
-    tab === 'overview'
-      ? overview
-      : tab === 'visitors'
-        ? visitors
-      : tab === 'funnels'
-        ? funnels
-        : tab === 'challenge'
-          ? challenges
-          : tab === 'quickmatch'
-            ? quickmatch
-            : tab === 'p2p'
-              ? p2p
-          : tab === 'online'
-            ? online
-            : tab === 'activity'
+    tab === 'home'
+      ? home
+      : tab === 'players'
+        ? live
+        : tab === 'modes'
+          ? modeFunnel
+          : tab === 'money'
+            ? money
+            : debugSection === 'activity'
               ? activity
-              : live;
+              : funnels;
 
   const handleLogout = async () => {
     await logout();
@@ -245,7 +313,7 @@ export default function App() {
 
   if (authed === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-slate-500">
+      <div className="flex min-h-screen items-center justify-center text-white/50">
         <LoadingState />
       </div>
     );
@@ -257,14 +325,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-surface-border bg-surface/95 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-surface-border bg-black/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3">
           <div>
-            <h1 className="text-lg font-semibold text-slate-100">Chain Duel Ops</h1>
-            <p className="text-xs text-slate-500">marspay telemetry dashboard</p>
+            <ChainDuelHeader subtitle="Telemetry" />
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <label className="flex items-center gap-2 text-slate-400">
+            <label className="flex items-center gap-2 text-white/45">
               <input
                 type="checkbox"
                 checked={autoRefresh}
@@ -273,9 +340,9 @@ export default function App() {
               />
               Live refresh
             </label>
-            <span className="flex items-center gap-1.5 text-slate-500">
+            <span className="flex items-center gap-1.5 text-white/40">
               <span
-                className={`h-2 w-2 rounded-full ${autoRefresh ? 'bg-emerald-400' : 'bg-slate-600'}`}
+                className={`h-2 w-2 rounded-full ${autoRefresh ? 'bg-emerald-400' : 'bg-white/30'}`}
               />
               {activePoll.data?.fetchedAt
                 ? `Updated ${new Date(activePoll.data.fetchedAt).toLocaleTimeString()}`
@@ -284,14 +351,14 @@ export default function App() {
             <button
               type="button"
               onClick={() => void activePoll.refresh()}
-              className="rounded border border-surface-border px-2 py-1 text-slate-300 hover:bg-surface-raised"
+              className="rounded border border-surface-border px-2 py-1 text-white/80 hover:border-accent/50"
             >
               Refresh
             </button>
             <button
               type="button"
               onClick={() => void handleLogout()}
-              className="rounded border border-surface-border px-2 py-1 text-slate-400 hover:text-slate-200"
+              className="rounded border border-surface-border px-2 py-1 text-white/50 hover:text-white/90"
             >
               Log out
             </button>
@@ -303,10 +370,10 @@ export default function App() {
               key={t.id}
               type="button"
               onClick={() => setTabWithUrl(t.id)}
-              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              className={`whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
                 tab === t.id
-                  ? 'bg-accent/20 text-accent'
-                  : 'text-slate-400 hover:bg-surface-raised hover:text-slate-200'
+                  ? 'nav-pill-active border-accent/40'
+                  : 'border-transparent text-white/50 hover:border-surface-border hover:text-white/80'
               }`}
             >
               {t.label}
@@ -321,65 +388,60 @@ export default function App() {
           <LoadingState />
         ) : (
           <>
-            {tab === 'overview' && overview.data ? (
-              <OverviewTab data={overview.data} />
-            ) : null}
-            {tab === 'visitors' && visitors.data ? (
-              <VisitorsTab data={visitors.data} />
-            ) : null}
-            {tab === 'funnels' && funnels.data ? (
-              <FunnelsTab
-                data={funnels.data}
-                window={funnelWindow}
-                onWindowChange={(w) => {
-                  setFunnelWindow(w);
-                  syncUrl('funnels', { window: w });
-                }}
+            {tab === 'home' && home.data ? (
+              <HomeTab
+                data={home.data}
+                onModeClick={goToMode}
+                onAlertClick={handleAlertClick}
               />
             ) : null}
-            {tab === 'challenge' && challenges.data ? (
-              <ChallengeTab data={challenges.data} />
-            ) : null}
-            {tab === 'quickmatch' && quickmatch.data ? (
-              <QuickMatchTab data={quickmatch.data} />
-            ) : null}
-            {tab === 'p2p' && p2p.data ? (
-              <P2pTab data={p2p.data} />
-            ) : null}
-            {tab === 'online' && online.data ? (
-              <OnlineTab
-                data={online.data}
-                replays={replays.data ?? undefined}
-                onSeatClick={goToLiveForSession}
-              />
-            ) : null}
-            {tab === 'activity' && activity.data ? (
-              <ActivityTab
-                data={activity.data}
-                filters={activityFilters}
-                onFilterChange={handleActivityFilterChange}
-                onSessionClick={goToLiveForSession}
-              />
-            ) : null}
-            {tab === 'live' && live.data ? (
-              <LiveTab
+            {tab === 'players' && live.data ? (
+              <PlayersTab
                 live={live.data}
                 recent={liveRecent.data}
+                cohorts={cohorts.data}
                 selectedSession={selectedSession}
+                explorerQuery={explorerQuery}
+                explorerKind={explorerKind}
                 onSelectSession={setSelectedSession}
-                onFilterActivity={(f) => {
-                  const next = { ...activityFilters, ...f };
-                  setActivityFilters(next);
-                  setTab('activity');
-                  syncUrl('activity', {
-                    sessionID: next.sessionID,
-                    pubkeyPrefix: next.pubkeyPrefix,
-                  });
-                }}
-                onViewActivity={goToActivityForSession}
+                onFilterActivity={(f) => goToActivity(f)}
+                onViewActivity={(sid) => goToActivity({ sessionID: sid })}
+                onExplorePlayer={(pk) => goToExplorer(pk, 'pubkey')}
               />
             ) : null}
-            {tab === 'explorer' ? <ExplorerTab /> : null}
+            {tab === 'modes' ? (
+              <ModesTab
+                mode={mode}
+                onModeChange={(m) => {
+                  setMode(m);
+                  syncUrl('modes', { mode: m });
+                }}
+                funnel={modeFunnel.data ?? null}
+                quickmatch={quickmatch.data ?? undefined}
+                challenges={challenges.data ?? undefined}
+                p2p={p2p.data ?? undefined}
+                online={online.data ?? undefined}
+                replays={replays.data ?? undefined}
+                onStepClick={(event) => goToActivity({ event, since: '24h' })}
+                onSeatClick={goToPlayers}
+              />
+            ) : null}
+            {tab === 'money' && money.data ? (
+              <MoneyTab data={money.data} challenges={challenges.data ?? undefined} />
+            ) : null}
+            {tab === 'debug' ? (
+              <DebugTab
+                section={debugSection}
+                onSectionChange={setDebugSection}
+                activity={activity.data ?? { fetchedAt: '', events: [] }}
+                activityFilters={activityFilters}
+                onActivityFilterChange={handleActivityFilterChange}
+                onSessionClick={goToPlayers}
+                funnels={funnels.data ?? { fetchedAt: '', window: '24h', challenge: { steps: {}, topRejectReasons: {} }, online: { steps: {}, topRejectReasons: {} }, client: { steps: {}, uiErrors: [] } }}
+                funnelWindow={funnelWindow}
+                onFunnelWindowChange={setFunnelWindow}
+              />
+            ) : null}
           </>
         )}
       </main>

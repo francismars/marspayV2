@@ -1,0 +1,61 @@
+@font-face {
+  font-family: 'BureauGrotesque';
+  src: url('/dashboard/fonts/BureauGrotesque/BureauGrotesque.woff2') format('woff2'),
+    url('/dashboard/fonts/BureauGrotesque/BureauGrotesque.woff') format('woff'),
+    url('/dashboard/fonts/BureauGrotesque/BureauGrotesque.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --cd-font-display: 'BureauGrotesque', sans-serif;
+  --cd-font-body: 'Inter', sans-serif;
+  --cd-cyan: #00b7ff;
+  --cd-purple: #9b59b6;
+  --cd-panel-bg: rgba(0, 0, 0, 0.55);
+  --cd-panel-border: rgba(255, 255, 255, 0.22);
+  --cd-text-muted: rgba(255, 255, 255, 0.5);
+  --cd-chart-grid: rgba(255, 255, 255, 0.08);
+  --cd-chart-tooltip-bg: rgba(0, 0, 0, 0.85);
+}
+
+body {
+  font-family: var(--cd-font-body);
+  color: #fff;
+  background-color: #000;
+  background-image:
+    linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.72)),
+    url('/dashboard/images/chainduel_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.font-display {
+  font-family: var(--cd-font-display);
+}
+
+.glass-panel {
+  background: var(--cd-panel-bg);
+  border: 1px solid var(--cd-panel-border);
+  backdrop-filter: blur(8px);
+}
+
+.nav-pill-active {
+  color: var(--cd-cyan);
+  border-color: rgba(0, 183, 255, 0.45);
+  box-shadow: 0 0 12px rgba(0, 183, 255, 0.25);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

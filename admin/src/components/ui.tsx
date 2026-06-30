@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import type { TrendValue } from '../lib/api';
 
 type KpiCardProps = {
   label: string;
@@ -6,20 +7,51 @@ type KpiCardProps = {
   hint?: string;
   accent?: boolean;
   warn?: boolean;
+  window?: '24h' | '7d' | 'lifetime' | 'today';
+  trend?: TrendValue | null;
 };
 
-export function KpiCard({ label, value, hint, accent, warn }: KpiCardProps) {
+function TrendBadge({ trend }: { trend: TrendValue }) {
+  if (trend.prior < 5 && trend.value < 5) return null;
+  const delta = trend.deltaPct;
+  if (delta == null) return null;
+  const up = delta > 0;
+  const flat = delta === 0;
   return (
-    <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
-      <div
-        className={`mt-1 text-2xl font-semibold ${
-          warn ? 'text-amber-400' : accent ? 'text-accent' : 'text-slate-100'
-        }`}
-      >
-        {value}
+    <span
+      className={`text-xs font-medium ${
+        flat ? 'text-white/40' : up ? 'text-emerald-400' : 'text-amber-400'
+      }`}
+    >
+      {up ? '▲' : flat ? '—' : '▼'} {Math.abs(delta)}%
+    </span>
+  );
+}
+
+export function KpiCard({ label, value, hint, accent, warn, window, trend }: KpiCardProps) {
+  return (
+    <div className="glass-panel rounded-lg p-4 backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-display text-xs font-medium uppercase tracking-widest text-white/50">
+          {label}
+        </div>
+        {window ? (
+          <span className="rounded border border-surface-border px-1.5 py-0.5 text-[10px] uppercase text-white/40">
+            {window}
+          </span>
+        ) : null}
       </div>
-      {hint ? <div className="mt-1 text-xs text-slate-500">{hint}</div> : null}
+      <div className="mt-1 flex items-baseline gap-2">
+        <div
+          className={`text-2xl font-semibold ${
+            warn ? 'text-amber-400' : accent ? 'text-accent' : 'text-white'
+          }`}
+        >
+          {value}
+        </div>
+        {trend ? <TrendBadge trend={trend} /> : null}
+      </div>
+      {hint ? <div className="mt-1 text-xs text-white/45">{hint}</div> : null}
     </div>
   );
 }
@@ -112,11 +144,11 @@ export function DataTable({
           setPage(0);
         }}
         placeholder={filterPlaceholder}
-        className="w-full max-w-xs rounded border border-surface-border bg-surface px-2 py-1.5 text-sm text-slate-200"
+        className="w-full max-w-xs rounded border border-surface-border bg-black/40 px-2 py-1.5 text-sm text-white/90 backdrop-blur-sm"
       />
-      <div className="overflow-x-auto rounded-lg border border-surface-border">
+      <div className="glass-panel overflow-x-auto rounded-lg backdrop-blur-sm">
         <table className="w-full min-w-[480px] text-left text-sm">
-          <thead className="bg-surface-raised text-xs uppercase text-slate-400">
+          <thead className="bg-black/30 text-xs uppercase tracking-wide text-white/50">
             <tr>
               {columns.map((col) => (
                 <th key={col.key} className="px-3 py-2 font-medium">
@@ -140,11 +172,11 @@ export function DataTable({
             {pageRows.map((row, i) => (
               <tr
                 key={rowKey ? rowKey(row, safePage * pageSize + i) : String(safePage * pageSize + i)}
-                className={`hover:bg-surface-raised/50 ${onRowClick ? 'cursor-pointer' : ''}`}
+                className={`hover:bg-white/5 ${onRowClick ? 'cursor-pointer' : ''}`}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className="px-3 py-2 text-slate-300">
+                  <td key={col.key} className="px-3 py-2 text-white/80">
                     {col.render ? col.render(row) : String(row[col.key] ?? '—')}
                   </td>
                 ))}
@@ -185,7 +217,9 @@ export function DataTable({
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold text-slate-200">{title}</h2>
+      <h2 className="font-display text-lg font-medium uppercase tracking-wide text-white/90">
+        {title}
+      </h2>
       {children}
     </section>
   );
@@ -238,10 +272,10 @@ export function CollapsibleSection({
 }) {
   return (
     <details
-      className="group rounded-lg border border-surface-border bg-surface-raised"
+      className="glass-panel group rounded-lg backdrop-blur-sm"
       open={defaultOpen}
     >
-      <summary className="cursor-pointer list-none px-4 py-3 text-lg font-semibold text-slate-200 marker:content-none [&::-webkit-details-marker]:hidden">
+      <summary className="cursor-pointer list-none px-4 py-3 font-display text-lg font-medium uppercase tracking-wide text-white/90 marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="flex items-center justify-between gap-2">
           {title}
           <span className="text-sm font-normal text-slate-500 group-open:rotate-180">▼</span>

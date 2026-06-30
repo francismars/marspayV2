@@ -33,6 +33,15 @@ import {
   type FunnelWindow,
 } from '../telemetry/dashboardSnapshot';
 import {
+  buildAlertsSnapshot,
+  buildCohortSnapshot,
+  buildHomeSnapshot,
+  buildModeFunnelSnapshot,
+  buildMoneySnapshot,
+  type AnalyticsWindow,
+  type FunnelMode,
+} from '../telemetry/dashboardAnalytics';
+import {
   handleDashboardLogin,
   handleDashboardLogout,
   isDashboardAuthenticated,
@@ -94,6 +103,40 @@ router.get('/api/me', (req, res) => {
 
 router.get('/api/overview', requireDashboardAuth, (_req, res) => {
   res.json(buildOverviewSnapshot());
+});
+
+router.get('/api/home', requireDashboardAuth, (req, res) => {
+  const window =
+    req.query.window === '7d' ? ('7d' as AnalyticsWindow) : ('24h' as AnalyticsWindow);
+  res.json(buildHomeSnapshot(window));
+});
+
+router.get('/api/alerts', requireDashboardAuth, (req, res) => {
+  const window =
+    req.query.window === '7d' ? ('7d' as AnalyticsWindow) : ('24h' as AnalyticsWindow);
+  res.json(buildAlertsSnapshot(window));
+});
+
+router.get('/api/money', requireDashboardAuth, (_req, res) => {
+  res.json(buildMoneySnapshot());
+});
+
+router.get('/api/cohorts', requireDashboardAuth, (req, res) => {
+  const window = req.query.window === '24h' ? '24h' : '7d';
+  res.json(buildCohortSnapshot(window as '24h' | '7d'));
+});
+
+const FUNNEL_MODES: FunnelMode[] = ['quickmatch', 'challenge', 'p2p', 'online', 'nostr'];
+
+router.get('/api/funnels/:mode', requireDashboardAuth, (req, res) => {
+  const mode = req.params.mode as FunnelMode;
+  if (!FUNNEL_MODES.includes(mode)) {
+    res.status(400).json({ error: 'invalid_mode' });
+    return;
+  }
+  const window =
+    req.query.window === '7d' ? ('7d' as AnalyticsWindow) : ('24h' as AnalyticsWindow);
+  res.json(buildModeFunnelSnapshot(mode, window));
 });
 
 router.get('/api/funnels', requireDashboardAuth, (req, res) => {

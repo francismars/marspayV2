@@ -3,15 +3,20 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        display: ['BureauGrotesque', 'sans-serif'],
+        body: ['Inter', 'sans-serif'],
+      },
       colors: {
         surface: {
-          DEFAULT: '#0f1419',
-          raised: '#1a2332',
-          border: '#2d3a4f',
+          DEFAULT: '#0a0a0a',
+          raised: 'rgba(0, 0, 0, 0.5)',
+          border: 'rgba(255, 255, 255, 0.22)',
         },
         accent: {
-          DEFAULT: '#38bdf8',
-          muted: '#0ea5e9',
+          DEFAULT: '#00b7ff',
+          muted: '#0099d6',
+          purple: '#9b59b6',
         },
       },
     },

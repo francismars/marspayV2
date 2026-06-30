@@ -35,6 +35,7 @@ import {
 import { pubkeyPrefix as toPubkeyPrefix } from './trackEvent';
 import { getTrafficSnapshot } from './trafficAnalytics';
 import { getSessionsForPubkeyPrefix } from './sessionIdentity';
+import { buildChallengeDifficultySnapshot } from './dashboardAnalytics';
 import type { OnlineSeatState } from '../types/online';
 import { PlayerRole } from '../types/game';
 
@@ -405,10 +406,13 @@ export function buildChallengesSnapshot() {
     browseFunnelEvents.map((e) => [e, funnelStep(rows, e)])
   );
 
+  const difficulty = buildChallengeDifficultySnapshot();
+
   return {
     fetchedAt: new Date().toISOString(),
     stats: challenge,
     browseFunnel,
+    difficulty,
     bountyCapSats: cap,
     bountySpentTodaySats: spentToday,
     bountyRemainingSats: getDailyZapBudgetRemaining(),

@@ -203,6 +203,20 @@ export type OnlineRoomLive = {
 export type ChallengesData = {
   fetchedAt: string;
   browseFunnel?: Record<string, FunnelStep>;
+  difficulty?: {
+    fetchedAt: string;
+    challenges: Array<{
+      challengeId: string;
+      views: number;
+      clicks: number;
+      runs: number;
+      completions: number;
+      claims: number;
+      completionRate: number | null;
+      claimRate: number | null;
+    }>;
+    minRunsThreshold: number;
+  };
   stats: {
     byChallenge: Record<
       string,
@@ -268,6 +282,120 @@ export type ActivityFilters = {
   pubkeyPrefix?: string;
   roomCode?: string;
 };
+
+export type TrendValue = {
+  value: number;
+  prior: number;
+  deltaPct: number | null;
+  window: '24h' | '7d';
+};
+
+export type DashboardAlert = {
+  id: string;
+  severity: 'warn' | 'error' | 'info';
+  message: string;
+  drillDown?: { tab: string; mode?: string; event?: string };
+};
+
+export type StepConversionStep = {
+  key: string;
+  event: string;
+  label: string;
+  count: number;
+  pctOfFirst: number;
+  pctOfPrevious: number;
+  dropFromPrevious: number;
+};
+
+export type ModeFunnelData = {
+  mode: string;
+  window: '24h' | '7d';
+  steps: StepConversionStep[];
+  biggestDropIndex: number;
+  fetchedAt: string;
+  rejectReasons?: Record<string, Array<{ reason: string; count: number }>>;
+  derived?: {
+    paymentAbandoned?: { requested: number; abandoned: number; abandonRate: number };
+    lobbyAbandonRate?: number;
+    midGameDisconnects?: { totalDisconnects: number; midGameDisconnects: number };
+  };
+};
+
+export type HomeData = {
+  fetchedAt: string;
+  window: '24h' | '7d';
+  activation: {
+    rate: number;
+    sessionsWithGame: number;
+    uniqueSessions: number;
+    trend: TrendValue | null;
+  };
+  modeMetrics: Array<{
+    mode: string;
+    label: string;
+    rate: number;
+    numerator: number;
+    denominator: number;
+    trend: TrendValue | null;
+    topDropOff: { stepKey: string; stepLabel: string; dropPct: number } | null;
+  }>;
+  alerts: DashboardAlert[];
+  acquisition: {
+    menuChoices: Record<string, number>;
+    topReferrers: Array<{ referrer: string; count: number }>;
+    topPlatforms: Array<{ platform: string; count: number }>;
+    sessionsWithContext: number;
+  };
+  system: {
+    connectedSessions: number;
+    activeOnlineRooms: number;
+    serverUptimeSec: number;
+    eventLogBytes: number;
+    geoCoveragePct: number;
+    geoWarning: boolean;
+  };
+  traffic: OverviewData['traffic'];
+};
+
+export type CohortData = {
+  fetchedAt: string;
+  window: string;
+  tierBNote: string;
+  newNostrPlayers: number;
+  returnRate: number;
+  returningPlayers: number;
+  firstGameModeDistribution: Record<string, number>;
+};
+
+export type MoneyData = {
+  fetchedAt: string;
+  bountyCapSats: number;
+  bountySpentTodaySats: number;
+  bountyRemainingSats: number;
+  bountyCapPct: number;
+  dailySpendSeries: Array<{ day: string; sats: number }>;
+  pendingZapClaims: number;
+  p2pDeposits: number;
+  p2pWithdrawals: number;
+  onlinePayouts: number;
+  challengeStats: { totalWins: number; totalReplayFailed: number };
+};
+
+export const fetchHome = (window: '24h' | '7d' = '24h') =>
+  apiFetch<HomeData>(`/home?window=${window}`);
+
+export const fetchAlerts = (window: '24h' | '7d' = '24h') =>
+  apiFetch<{ fetchedAt: string; window: string; alerts: DashboardAlert[] }>(
+    `/alerts?window=${window}`
+  );
+
+export const fetchModeFunnel = (mode: string, window: '24h' | '7d' = '24h') =>
+  apiFetch<ModeFunnelData>(`/funnels/${mode}?window=${window}`);
+
+export const fetchCohorts = (window: '7d' | '24h' = '7d') =>
+  apiFetch<CohortData>(`/cohorts?window=${window}`);
+
+export const fetchMoney = () => apiFetch<MoneyData>('/money');
 
 export const fetchOverview = () => apiFetch<OverviewData>('/overview');
 

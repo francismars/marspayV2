@@ -7,12 +7,19 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { CHART_COLORS, CHART_TOOLTIP_STYLE } from '../lib/chartTheme';
 import type { ChallengesData } from '../lib/api';
 import { formatTs } from '../lib/hooks';
 import { DataTable, KpiCard, Section } from './ui';
 import { NpubLink } from './PlayerIdentityCell';
 
-export function ChallengeTab({ data }: { data: ChallengesData }) {
+export function ChallengeTab({
+  data,
+  hideBrowseFunnel,
+}: {
+  data: ChallengesData;
+  hideBrowseFunnel?: boolean;
+}) {
   const byChallenge = Object.entries(data.stats.byChallenge).map(([id, row]) => ({
     challengeId: id,
     wins: row.wins,
@@ -45,7 +52,7 @@ export function ChallengeTab({ data }: { data: ChallengesData }) {
         />
       </div>
 
-      {data.browseFunnel ? (
+      {data.browseFunnel && !hideBrowseFunnel ? (
         <Section title="Browse → claim funnel">
           <DataTable
             columns={[
@@ -68,19 +75,38 @@ export function ChallengeTab({ data }: { data: ChallengesData }) {
 
       {data.dailySpendSeries.length > 0 ? (
         <Section title="Bounty spend (7 days)">
-          <div className="h-48 rounded-lg border border-surface-border bg-surface-raised p-2">
+          <div className="glass-panel h-48 rounded-lg p-2 backdrop-blur-sm">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.dailySpendSeries}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2d3a4f" />
-                <XAxis dataKey="day" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <Tooltip
-                  contentStyle={{ background: '#1a2332', border: '1px solid #2d3a4f', borderRadius: 8 }}
-                />
-                <Bar dataKey="sats" fill="#38bdf8" name="sats" />
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+                <XAxis dataKey="day" tick={{ fill: CHART_COLORS.muted, fontSize: 11 }} />
+                <YAxis tick={{ fill: CHART_COLORS.muted, fontSize: 11 }} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <Bar dataKey="sats" fill={CHART_COLORS.primary} name="sats" />
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </Section>
+      ) : null}
+
+      {data.difficulty && data.difficulty.challenges.length > 0 ? (
+        <Section title={`Challenge difficulty (≥${data.difficulty.minRunsThreshold} runs)`}>
+          <DataTable
+            columns={[
+              { key: 'challengeId', label: 'Challenge' },
+              { key: 'runs', label: 'Runs' },
+              { key: 'completions', label: 'Completions' },
+              { key: 'completionRate', label: 'Complete %' },
+              { key: 'claimRate', label: 'Claim %' },
+            ]}
+            rows={data.difficulty.challenges.map((c) => ({
+              ...c,
+              completionRate: c.completionRate != null ? `${c.completionRate}%` : '—',
+              claimRate: c.claimRate != null ? `${c.claimRate}%` : '—',
+            }))}
+            rowKey={(r) => String(r.challengeId)}
+            empty="Not enough runs per challenge"
+          />
         </Section>
       ) : null}
 

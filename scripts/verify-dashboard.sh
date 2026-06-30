@@ -26,18 +26,37 @@ curl -sf -c "$COOKIE" -X POST "${BASE}/dashboard/api/login" \
   -d "{\"password\":\"${PASSWORD}\"}" | jq .
 
 echo ""
-echo "== Overview =="
-curl -sf -b "$COOKIE" "${BASE}/dashboard/api/overview" | jq .
+echo "== Home (weekly review) =="
+curl -sf -b "$COOKIE" "${BASE}/dashboard/api/home?window=24h" | jq '{activation: .activation, alertCount: (.alerts | length), modes: [.modeMetrics[].mode]}'
 
 echo ""
-echo "== Funnels (challenge steps) =="
-curl -sf -b "$COOKIE" "${BASE}/dashboard/api/funnels" | jq '.challenge.steps | keys'
+echo "== Mode funnel (quickmatch) =="
+curl -sf -b "$COOKIE" "${BASE}/dashboard/api/funnels/quickmatch?window=24h" | jq '{steps: [.steps[].label], biggestDropIndex}'
+
+echo ""
+echo "== Cohorts =="
+curl -sf -b "$COOKIE" "${BASE}/dashboard/api/cohorts?window=7d" | jq '{newNostrPlayers, returnRate}'
+
+echo ""
+echo "== Alerts =="
+curl -sf -b "$COOKIE" "${BASE}/dashboard/api/alerts?window=24h" | jq '.alerts | length'
+
+echo ""
+echo "== Overview (legacy) =="
+curl -sf -b "$COOKIE" "${BASE}/dashboard/api/overview" | jq '.connectedSessions, .sessionsWithGameActivity24h'
+
+echo ""
+echo "== Funnels (advanced) =="
+curl -sf -b "$COOKIE" "${BASE}/dashboard/api/funnels?window=24h" | jq '.challenge.steps | keys | length'
 
 echo ""
 echo "== Recent activity =="
 curl -sf -b "$COOKIE" "${BASE}/dashboard/api/activity?limit=5" | jq '.events | length'
 
 if [[ -f data/telemetry/events.jsonl ]]; then
+  echo ""
+  echo "== events.jsonl client events =="
+  grep -c 'client\.' data/telemetry/events.jsonl 2>/dev/null || echo "0"
   echo ""
   echo "== events.jsonl tail =="
   tail -1 data/telemetry/events.jsonl | jq -r '.event' 2>/dev/null || echo "(empty or invalid)"
