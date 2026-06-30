@@ -1,25 +1,19 @@
-import type { OnlineData, OnlineRoomLive, ReplayData } from '../lib/api';
+import type { OnlineData, OnlineRoomLive, PlayerIdentity, ReplayData } from '../lib/api';
 import { formatAge } from '../lib/hooks';
 import { DataTable, KpiCard, Section } from './ui';
+import { PlayerIdentityCell } from './PlayerIdentityCell';
 
-function SeatCell({ seat }: { seat: OnlineRoomLive['seats'][0] }) {
-  if (!seat.sessionID && seat.status === 'open') {
-    return <span className="text-slate-500">open</span>;
+function seatIdentity(seat: OnlineRoomLive['seats'][0]): PlayerIdentity {
+  if (seat.npub || seat.name || seat.picture || seat.pubkeyPrefix) {
+    return {
+      kind: 'nostr',
+      npub: seat.npub,
+      name: seat.name,
+      picture: seat.picture,
+      pubkeyPrefix: seat.pubkeyPrefix,
+    };
   }
-  return (
-    <div className="flex items-center gap-2">
-      {seat.picture ? (
-        <img src={seat.picture} alt="" className="h-6 w-6 rounded-full object-cover" />
-      ) : null}
-      <div className="min-w-0 text-xs">
-        <div className="truncate text-slate-300">{seat.name ?? seat.pubkeyPrefix ?? '—'}</div>
-        <div className="text-slate-500">
-          {seat.status}
-          {seat.payMethod ? ` · ${seat.payMethod}` : ''}
-        </div>
-      </div>
-    </div>
-  );
+  return { kind: 'anon' };
 }
 
 export function OnlineTab({
@@ -46,7 +40,20 @@ export function OnlineTab({
               render: (r) => {
                 const room = r as unknown as OnlineRoomLive;
                 const p1 = room.seats?.find((s) => s.role === 'p1');
-                return p1 ? <SeatCell seat={p1} /> : '—';
+                if (!p1?.sessionID && p1?.status === 'open') {
+                  return <span className="text-zinc-500">open</span>;
+                }
+                return p1 ? (
+                  <div>
+                    <PlayerIdentityCell identity={seatIdentity(p1)} size="sm" />
+                    <div className="mt-0.5 text-[10px] text-zinc-500">
+                      {p1.status}
+                      {p1.payMethod ? ` · ${p1.payMethod}` : ''}
+                    </div>
+                  </div>
+                ) : (
+                  '—'
+                );
               },
             },
             {
@@ -56,7 +63,20 @@ export function OnlineTab({
               render: (r) => {
                 const room = r as unknown as OnlineRoomLive;
                 const p2 = room.seats?.find((s) => s.role === 'p2');
-                return p2 ? <SeatCell seat={p2} /> : '—';
+                if (!p2?.sessionID && p2?.status === 'open') {
+                  return <span className="text-zinc-500">open</span>;
+                }
+                return p2 ? (
+                  <div>
+                    <PlayerIdentityCell identity={seatIdentity(p2)} size="sm" />
+                    <div className="mt-0.5 text-[10px] text-zinc-500">
+                      {p2.status}
+                      {p2.payMethod ? ` · ${p2.payMethod}` : ''}
+                    </div>
+                  </div>
+                ) : (
+                  '—'
+                );
               },
             },
             {

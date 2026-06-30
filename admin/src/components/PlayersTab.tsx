@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import type { CohortData, JourneyData, LiveData, RecentAttemptsData } from '../lib/api';
+import type { CohortData, JourneyData, LiveData, PlayerIdentity, RecentAttemptsData } from '../lib/api';
 import { fetchJourney } from '../lib/api';
 import { formatTs } from '../lib/hooks';
 import { LiveTab } from './LiveTab';
 import { DataTable, KpiCard, Section } from './ui';
 import { PlayerIdentityCell } from './PlayerIdentityCell';
+import { SubNav } from './SubNav';
 
 function ExplorerPanel({
   initialQuery,
@@ -43,18 +44,18 @@ function ExplorerPanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-white/45">
+        <label className="flex flex-col gap-1 text-xs text-zinc-400">
           Search by
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as 'sessionID' | 'pubkey')}
-            className="rounded border border-surface-border bg-black/40 px-2 py-1.5 text-sm text-white/90"
+            className="rounded border border-surface-border bg-surface-raised px-2 py-1.5 text-sm text-zinc-200"
           >
             <option value="sessionID">sessionID</option>
             <option value="pubkey">pubkey / npub / prefix</option>
           </select>
         </label>
-        <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-xs text-white/45">
+        <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-xs text-zinc-400">
           Query
           <input
             value={query}
@@ -63,20 +64,26 @@ function ExplorerPanel({
               if (e.key === 'Enter') void search();
             }}
             placeholder={kind === 'sessionID' ? 'session id…' : 'npub1… or prefix'}
-            className="rounded border border-surface-border bg-black/40 px-2 py-1.5 text-sm text-white/90"
+            className="rounded border border-surface-border bg-surface-raised px-2 py-1.5 text-sm text-zinc-200"
           />
         </label>
         <button
           type="button"
           onClick={() => void search()}
           disabled={loading}
-          className="rounded border border-surface-border px-3 py-2 text-sm text-white/90 hover:border-accent/50 disabled:opacity-50"
+          className="rounded border border-surface-border px-3 py-2 text-sm text-zinc-200 hover:border-accent disabled:opacity-50"
         >
           {loading ? 'Searching…' : 'Search'}
         </button>
       </div>
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
       {data ? (
+        <>
+          {data.identity ? (
+            <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
+              <PlayerIdentityCell identity={data.identity} />
+            </div>
+          ) : null}
         <DataTable
           columns={[
             { key: 'ts', label: 'Time', render: (r) => formatTs(String(r.ts)) },
@@ -88,6 +95,7 @@ function ExplorerPanel({
           rowKey={(r, i) => `${r.ts}-${i}`}
           empty="No events"
         />
+        </>
       ) : null}
     </div>
   );
@@ -120,27 +128,17 @@ export function PlayersTab({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ['recent', 'Recent (24h)'],
-            ['live', 'Connected now'],
-            ['explorer', 'Explorer'],
-            ['cohorts', 'Cohorts'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setSection(id)}
-            className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
-              section === id ? 'nav-pill-active border-accent/40' : 'border-surface-border text-white/50'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SubNav
+        items={[
+          { id: 'recent', label: 'Recent (24h)' },
+          { id: 'live', label: 'Connected now' },
+          { id: 'explorer', label: 'Explorer' },
+          { id: 'cohorts', label: 'Cohorts' },
+        ]}
+        active={section}
+        onChange={setSection}
+        breadcrumb="Players"
+      />
 
       {section === 'recent' && recent ? (
         <Section title="Recent attempts (24h)">
@@ -150,14 +148,15 @@ export function PlayersTab({
                 key: 'identity',
                 label: 'Player',
                 sortable: false,
-                render: (r) =>
-                  r.identity ? (
-                    <PlayerIdentityCell
-                      identity={r.identity as NonNullable<RecentAttemptsData['attempts'][0]['identity']>}
-                    />
-                  ) : (
-                    String(r.pubkeyPrefix ?? r.sessionID ?? '—')
-                  ),
+                render: (r) => (
+                  <PlayerIdentityCell
+                    identity={
+                      (r.identity as PlayerIdentity | undefined) ?? {
+                        kind: 'anon',
+                      }
+                    }
+                  />
+                ),
               },
               { key: 'lastEvent', label: 'Last event' },
               { key: 'lastOutcome', label: 'Outcome' },
@@ -208,7 +207,7 @@ export function PlayersTab({
 
       {section === 'cohorts' && cohorts ? (
         <div className="space-y-6">
-          <p className="text-xs text-white/45">{cohorts.tierBNote}</p>
+          <p className="text-xs text-zinc-500">{cohorts.tierBNote}</p>
           <div className="grid gap-4 sm:grid-cols-3">
             <KpiCard label="Nostr players" value={cohorts.newNostrPlayers} window="7d" />
             <KpiCard label="Return rate" value={`${cohorts.returnRate}%`} window="7d" />

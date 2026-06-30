@@ -8,10 +8,10 @@ import {
   YAxis,
 } from 'recharts';
 import { CHART_COLORS, CHART_TOOLTIP_STYLE } from '../lib/chartTheme';
-import type { ChallengesData } from '../lib/api';
+import type { ChallengesData, PlayerIdentity } from '../lib/api';
 import { formatTs } from '../lib/hooks';
 import { DataTable, KpiCard, Section } from './ui';
-import { NpubLink } from './PlayerIdentityCell';
+import { PlayerIdentityCell } from './PlayerIdentityCell';
 
 export function ChallengeTab({
   data,
@@ -75,7 +75,7 @@ export function ChallengeTab({
 
       {data.dailySpendSeries.length > 0 ? (
         <Section title="Bounty spend (7 days)">
-          <div className="glass-panel h-48 rounded-lg p-2 backdrop-blur-sm">
+          <div className="panel h-48 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.dailySpendSeries}>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -140,10 +140,15 @@ export function ChallengeTab({
         <DataTable
           columns={[
             {
-              key: 'npub',
+              key: 'identity',
               label: 'Player',
               sortable: false,
-              render: (r) => <NpubLink npub={r.npub as string} />,
+              render: (r) =>
+                r.identity ? (
+                  <PlayerIdentityCell identity={r.identity as PlayerIdentity} />
+                ) : (
+                  '—'
+                ),
             },
             { key: 'challengeId', label: 'Challenge' },
             { key: 'bountySats', label: 'Sats' },
@@ -163,10 +168,15 @@ export function ChallengeTab({
         <DataTable
           columns={[
             {
-              key: 'npub',
+              key: 'identity',
               label: 'Player',
               sortable: false,
-              render: (r) => <NpubLink npub={r.npub as string | undefined} />,
+              render: (r) =>
+                r.identity ? (
+                  <PlayerIdentityCell identity={r.identity as PlayerIdentity} />
+                ) : (
+                  '—'
+                ),
             },
             { key: 'challengeId', label: 'Challenge' },
             { key: 'bountySats', label: 'Sats' },

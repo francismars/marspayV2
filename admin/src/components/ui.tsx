@@ -20,7 +20,7 @@ function TrendBadge({ trend }: { trend: TrendValue }) {
   return (
     <span
       className={`text-xs font-medium ${
-        flat ? 'text-white/40' : up ? 'text-emerald-400' : 'text-amber-400'
+        flat ? 'text-zinc-500' : up ? 'text-emerald-400' : 'text-amber-400'
       }`}
     >
       {up ? '▲' : flat ? '—' : '▼'} {Math.abs(delta)}%
@@ -30,28 +30,26 @@ function TrendBadge({ trend }: { trend: TrendValue }) {
 
 export function KpiCard({ label, value, hint, accent, warn, window, trend }: KpiCardProps) {
   return (
-    <div className="glass-panel rounded-lg p-4 backdrop-blur-sm">
+    <div className="panel rounded-lg p-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="font-display text-xs font-medium uppercase tracking-widest text-white/50">
-          {label}
-        </div>
+        <div className="text-xs font-medium text-zinc-400">{label}</div>
         {window ? (
-          <span className="rounded border border-surface-border px-1.5 py-0.5 text-[10px] uppercase text-white/40">
+          <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
             {window}
           </span>
         ) : null}
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <div
-          className={`text-2xl font-semibold ${
-            warn ? 'text-amber-400' : accent ? 'text-accent' : 'text-white'
+          className={`text-2xl font-semibold tabular-nums ${
+            warn ? 'text-amber-400' : accent ? 'text-accent' : 'text-zinc-100'
           }`}
         >
           {value}
         </div>
         {trend ? <TrendBadge trend={trend} /> : null}
       </div>
-      {hint ? <div className="mt-1 text-xs text-white/45">{hint}</div> : null}
+      {hint ? <div className="mt-1 text-xs text-zinc-500">{hint}</div> : null}
     </div>
   );
 }
@@ -131,7 +129,7 @@ export function DataTable({
   };
 
   if (rows.length === 0) {
-    return <p className="text-sm text-slate-500">{empty}</p>;
+    return <p className="text-sm text-zinc-500">{empty}</p>;
   }
 
   return (
@@ -144,19 +142,19 @@ export function DataTable({
           setPage(0);
         }}
         placeholder={filterPlaceholder}
-        className="w-full max-w-xs rounded border border-surface-border bg-black/40 px-2 py-1.5 text-sm text-white/90 backdrop-blur-sm"
+        className="w-full max-w-xs rounded border border-surface-border bg-surface-raised px-2 py-1.5 text-sm text-zinc-200 focus:border-accent focus:outline-none"
       />
-      <div className="glass-panel overflow-x-auto rounded-lg backdrop-blur-sm">
+      <div className="panel overflow-x-auto rounded-lg">
         <table className="w-full min-w-[480px] text-left text-sm">
-          <thead className="bg-black/30 text-xs uppercase tracking-wide text-white/50">
+          <thead className="sticky top-0 bg-zinc-900/95 text-xs font-medium text-zinc-400">
             <tr>
               {columns.map((col) => (
-                <th key={col.key} className="px-3 py-2 font-medium">
+                <th key={col.key} className="px-3 py-2">
                   {col.sortable !== false ? (
                     <button
                       type="button"
                       onClick={() => toggleSort(col.key)}
-                      className="hover:text-slate-200"
+                      className="hover:text-zinc-200"
                     >
                       {col.label}
                       {sortKey === col.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
@@ -172,11 +170,11 @@ export function DataTable({
             {pageRows.map((row, i) => (
               <tr
                 key={rowKey ? rowKey(row, safePage * pageSize + i) : String(safePage * pageSize + i)}
-                className={`hover:bg-white/5 ${onRowClick ? 'cursor-pointer' : ''}`}
+                className={`hover:bg-zinc-800/50 ${onRowClick ? 'cursor-pointer' : ''}`}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className="px-3 py-2 text-white/80">
+                  <td key={col.key} className="px-3 py-2 text-zinc-300">
                     {col.render ? col.render(row) : String(row[col.key] ?? '—')}
                   </td>
                 ))}
@@ -186,7 +184,7 @@ export function DataTable({
         </table>
       </div>
       {sorted.length > pageSize ? (
-        <div className="flex items-center justify-between text-xs text-slate-500">
+        <div className="flex items-center justify-between text-xs text-zinc-500">
           <span>
             {sorted.length} rows · page {safePage + 1} / {totalPages}
           </span>
@@ -214,12 +212,21 @@ export function DataTable({
   );
 }
 
-export function Section({ title, children }: { title: string; children: ReactNode }) {
+export function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
   return (
     <section className="space-y-3">
-      <h2 className="font-display text-lg font-medium uppercase tracking-wide text-white/90">
-        {title}
-      </h2>
+      <div>
+        <h2 className="text-base font-semibold text-zinc-100">{title}</h2>
+        {description ? <p className="mt-0.5 text-sm text-zinc-500">{description}</p> : null}
+      </div>
       {children}
     </section>
   );
@@ -227,21 +234,21 @@ export function Section({ title, children }: { title: string; children: ReactNod
 
 export function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-red-900/50 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+    <div className="rounded-lg border border-red-900/50 border-l-4 border-l-red-500 bg-red-950/40 px-4 py-3 text-sm text-red-300">
       {message}
     </div>
   );
 }
 
 export function LoadingState() {
-  return <div className="text-sm text-slate-500">Loading…</div>;
+  return <div className="text-sm text-zinc-500">Loading…</div>;
 }
 
 export function SnapshotAge({ fetchedAt }: { fetchedAt: string }) {
   const ageSec = Math.max(0, Math.floor((Date.now() - new Date(fetchedAt).getTime()) / 1000));
   const stale = ageSec > 60;
   return (
-    <span className={stale ? 'text-amber-400' : 'text-slate-400'}>
+    <span className={`text-sm ${stale ? 'text-amber-400' : 'text-zinc-500'}`}>
       Updated {ageSec}s ago
       {stale ? ' (stale)' : ''}
     </span>
@@ -252,7 +259,7 @@ export function ProgressBar({ pct, warnAt = 80 }: { pct: number; warnAt?: number
   const clamped = Math.min(100, Math.max(0, pct));
   const warn = clamped >= warnAt;
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-border">
+    <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
       <div
         className={`h-full transition-all ${warn ? 'bg-amber-500' : 'bg-accent'}`}
         style={{ width: `${clamped}%` }}
@@ -271,14 +278,11 @@ export function CollapsibleSection({
   children: ReactNode;
 }) {
   return (
-    <details
-      className="glass-panel group rounded-lg backdrop-blur-sm"
-      open={defaultOpen}
-    >
-      <summary className="cursor-pointer list-none px-4 py-3 font-display text-lg font-medium uppercase tracking-wide text-white/90 marker:content-none [&::-webkit-details-marker]:hidden">
+    <details className="panel group rounded-lg" open={defaultOpen}>
+      <summary className="cursor-pointer list-none px-4 py-3 text-base font-semibold text-zinc-100 marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="flex items-center justify-between gap-2">
           {title}
-          <span className="text-sm font-normal text-slate-500 group-open:rotate-180">▼</span>
+          <span className="text-sm font-normal text-zinc-500 group-open:rotate-180">▼</span>
         </span>
       </summary>
       <div className="space-y-4 border-t border-surface-border px-4 py-4">{children}</div>

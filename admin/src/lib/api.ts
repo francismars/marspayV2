@@ -1,3 +1,5 @@
+import { displayName } from './playerDisplay';
+
 const API_BASE = '/dashboard/api';
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -233,6 +235,7 @@ export type ChallengesData = {
     pubkey: string;
     npub: string;
     pubkeyPrefix?: string;
+    identity?: PlayerIdentity;
     challengeId: string;
     runId: string;
     bountySats: number;
@@ -242,6 +245,7 @@ export type ChallengesData = {
     pubkey?: string;
     npub?: string;
     pubkeyPrefix?: string;
+    identity?: PlayerIdentity;
     challengeId?: unknown;
     runId?: unknown;
     bountySats?: unknown;
@@ -265,6 +269,7 @@ export type ActivityData = {
     reason?: string;
     sessionID?: string;
     pubkeyPrefix?: string;
+    player?: PlayerIdentity;
     challengeId?: string;
     roomId?: string;
     roomCode?: string;
@@ -523,18 +528,40 @@ export async function exportActivity(params: ActivityFilters, format: 'csv' | 'j
     downloadBlob(blob, `activity-${Date.now()}.json`);
     return;
   }
-  const headers = ['ts', 'event', 'outcome', 'reason', 'sessionID', 'pubkeyPrefix', 'challengeId', 'roomCode', 'source'];
+  const headers = [
+    'ts',
+    'event',
+    'outcome',
+    'reason',
+    'sessionID',
+    'playerName',
+    'pubkeyPrefix',
+    'challengeId',
+    'roomCode',
+    'source',
+  ];
   const lines = [
     headers.join(','),
-    ...data.events.map((e) =>
-      headers
+    ...data.events.map((e) => {
+      const row: Record<string, string> = {
+        ts: e.ts,
+        event: e.event,
+        outcome: e.outcome,
+        reason: e.reason ?? '',
+        sessionID: e.sessionID ?? '',
+        playerName: e.player ? displayName(e.player) : '',
+        pubkeyPrefix: e.pubkeyPrefix ?? '',
+        challengeId: e.challengeId ?? '',
+        roomCode: e.roomCode ?? '',
+        source: e.source ?? '',
+      };
+      return headers
         .map((h) => {
-          const v = e[h as keyof typeof e];
-          const s = v == null ? '' : String(v);
+          const s = row[h] ?? '';
           return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
         })
-        .join(',')
-    ),
+        .join(',');
+    }),
   ];
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
   downloadBlob(blob, `activity-${Date.now()}.csv`);

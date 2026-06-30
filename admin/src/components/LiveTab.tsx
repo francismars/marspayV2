@@ -111,15 +111,15 @@ export function LiveTab({
                 key: 'identity',
                 label: 'Identity',
                 sortable: false,
-                render: (r) => {
-                  const identity = r.identity as RecentAttemptsData['attempts'][0]['identity'];
-                  if (identity) return <PlayerIdentityCell identity={identity} />;
-                  return (
-                    <span className="font-mono text-xs text-slate-400">
-                      {String(r.pubkeyPrefix ?? r.key)}
-                    </span>
-                  );
-                },
+                render: (r) => (
+                  <PlayerIdentityCell
+                    identity={
+                      (r.identity as RecentAttemptsData['attempts'][0]['identity']) ?? {
+                        kind: 'anon',
+                      }
+                    }
+                  />
+                ),
               },
               { key: 'challengeRuns', label: 'Runs' },
               { key: 'onlineJoins', label: 'Joins' },

@@ -13,3 +13,12 @@ export function setCachedNostrProfile(profile: AppNostrProfile): void {
 export function invalidateCachedNostrProfile(pubkey: string): void {
   profileByPubkey.delete(pubkey.trim().toLowerCase());
 }
+
+export function findCachedProfileByPrefix(prefix: string): AppNostrProfile | undefined {
+  const normalized = prefix.trim().toLowerCase();
+  if (!normalized) return undefined;
+  for (const [pk, profile] of profileByPubkey) {
+    if (pk.startsWith(normalized)) return profile;
+  }
+  return undefined;
+}

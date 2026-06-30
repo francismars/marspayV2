@@ -54,9 +54,9 @@ export function HomeTab({
                 key={m.mode}
                 type="button"
                 onClick={() => onModeClick?.(m.mode)}
-                className="glass-panel flex w-full items-center justify-between rounded-lg px-4 py-2 text-left text-sm backdrop-blur-sm hover:border-accent/40"
+                className="panel flex w-full items-center justify-between rounded-lg px-4 py-2 text-left text-sm hover:border-accent/50"
               >
-                <span className="text-white/80">{m.label}</span>
+                <span className="text-zinc-300">{m.label}</span>
                 <span className="text-amber-300">
                   {m.topDropOff.stepLabel} (−{m.topDropOff.dropPct}%)
                 </span>

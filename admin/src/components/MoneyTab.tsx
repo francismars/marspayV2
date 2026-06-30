@@ -1,4 +1,4 @@
-import type { ChallengesData, MoneyData } from '../lib/api';
+import type { ChallengesData, MoneyData, PlayerIdentity } from '../lib/api';
 import {
   Bar,
   BarChart,
@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { CHART_TOOLTIP_STYLE, CHART_COLORS } from '../lib/chartTheme';
 import { DataTable, KpiCard, ProgressBar, Section } from './ui';
+import { PlayerIdentityCell } from './PlayerIdentityCell';
 
 export function MoneyTab({ data, challenges }: { data: MoneyData; challenges?: ChallengesData }) {
   const capWarn = data.bountyCapPct >= 80;
@@ -30,13 +31,13 @@ export function MoneyTab({ data, challenges }: { data: MoneyData; challenges?: C
       </div>
 
       <Section title="Bounty cap">
-        <div className="glass-panel space-y-2 rounded-lg p-4 backdrop-blur-sm">
-          <div className="flex justify-between text-sm text-white/50">
+        <div className="panel space-y-2 rounded-lg p-4">
+          <div className="flex justify-between text-sm text-zinc-500">
             <span>
               {data.bountySpentTodaySats.toLocaleString()} / {data.bountyCapSats.toLocaleString()}{' '}
               sats
             </span>
-            <span className={capWarn ? 'text-amber-400' : 'text-white/80'}>
+            <span className={capWarn ? 'text-amber-400' : 'text-zinc-300'}>
               {data.bountyCapPct}%
             </span>
           </div>
@@ -46,7 +47,7 @@ export function MoneyTab({ data, challenges }: { data: MoneyData; challenges?: C
 
       {data.dailySpendSeries.length > 0 ? (
         <Section title="Bounty spend (7 days)">
-          <div className="glass-panel h-48 rounded-lg p-2 backdrop-blur-sm">
+          <div className="panel h-48 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.dailySpendSeries}>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -70,9 +71,19 @@ export function MoneyTab({ data, challenges }: { data: MoneyData; challenges?: C
         <Section title="Pending zap claims">
           <DataTable
             columns={[
+              {
+                key: 'identity',
+                label: 'Player',
+                sortable: false,
+                render: (r) =>
+                  r.identity ? (
+                    <PlayerIdentityCell identity={r.identity as PlayerIdentity} />
+                  ) : (
+                    '—'
+                  ),
+              },
               { key: 'challengeId', label: 'Challenge' },
               { key: 'bountySats', label: 'Sats' },
-              { key: 'pubkeyPrefix', label: 'Player' },
             ]}
             rows={challenges.pendingZaps as unknown as Array<Record<string, unknown>>}
             rowKey={(r) => `${r.challengeId}-${r.runId}`}

@@ -125,3 +125,16 @@ export function syncAppNostrSessionProfile(
   appNostrBySession.set(sessionID, rec);
   return true;
 }
+
+export function findAppNostrSessionByPubkeyPrefix(
+  prefix: string
+): AppNostrSessionRecord | undefined {
+  const normalized = prefix.trim().toLowerCase();
+  if (!normalized) return undefined;
+  const now = Date.now();
+  for (const rec of appNostrBySession.values()) {
+    if (rec.expiresAt <= now) continue;
+    if (rec.pubkey.toLowerCase().startsWith(normalized)) return rec;
+  }
+  return undefined;
+}

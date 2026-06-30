@@ -1,7 +1,6 @@
 import { nip19 } from 'nostr-tools';
 import { getAllIDtoSocket } from '../state/sessionState';
 import { getAllsessionIDtoKind1s } from '../state/nostrState';
-import { getAppNostrSession } from '../state/nostrAppSessionState';
 import { getChallengeTelemetrySnapshot } from '../state/challengeTelemetry';
 import {
   getDailyZapBudgetRemaining,
@@ -36,6 +35,7 @@ import { pubkeyPrefix as toPubkeyPrefix } from './trackEvent';
 import { getTrafficSnapshot } from './trafficAnalytics';
 import { getSessionsForPubkeyPrefix } from './sessionIdentity';
 import { buildChallengeDifficultySnapshot } from './dashboardAnalytics';
+import { resolvePlayerIdentity, type PlayerIdentity } from './playerIdentity';
 import type { OnlineSeatState } from '../types/online';
 import { PlayerRole } from '../types/game';
 
@@ -165,25 +165,8 @@ function resolveSessionOnlineContext(sessionID: string) {
   };
 }
 
-function buildIdentity(sessionID: string) {
-  const app = getAppNostrSession(sessionID);
-  if (app) {
-    return {
-      kind: 'nostr' as const,
-      pubkey: app.pubkey,
-      npub: nip19.npubEncode(app.pubkey),
-      name: app.profile.name,
-      picture: app.profile.picture,
-      nip05: app.profile.nip05,
-      lud16: app.profile.lud16,
-      signerMode: app.signerMode,
-      pubkeyPrefix: toPubkeyPrefix(app.pubkey),
-    };
-  }
-  return {
-    kind: 'anon' as const,
-    pubkeyPrefix: undefined,
-  };
+function buildIdentity(sessionID: string): PlayerIdentity {
+  return resolvePlayerIdentity({ sessionID });
 }
 
 function inferModeFromLastEvent(last?: StoredTrackEvent): 'challenge' | 'online' | 'idle' | undefined {
@@ -367,6 +350,7 @@ export function buildChallengesSnapshot() {
     pubkey: c.pubkey,
     npub: nip19.npubEncode(c.pubkey),
     pubkeyPrefix: toPubkeyPrefix(c.pubkey),
+    identity: resolvePlayerIdentity({ pubkey: c.pubkey }),
     challengeId: c.challengeId,
     runId: c.runId,
     bountySats: c.bountySats,
@@ -380,6 +364,7 @@ export function buildChallengesSnapshot() {
       pubkey: pubkeyHex,
       npub: pubkeyHex ? nip19.npubEncode(pubkeyHex) : undefined,
       pubkeyPrefix: pubkeyHex ? toPubkeyPrefix(pubkeyHex) : undefined,
+      identity: pubkeyHex ? resolvePlayerIdentity({ pubkey: pubkeyHex }) : undefined,
       challengeId: r.challengeId,
       runId: r.runId,
       bountySats: r.bountySats,
@@ -512,6 +497,10 @@ export function buildActivitySnapshot(params?: {
       reason: e.reason,
       sessionID: e.sessionID,
       pubkeyPrefix: e.pubkeyPrefix,
+      player: resolvePlayerIdentity({
+        sessionID: e.sessionID,
+        pubkeyPrefix: e.pubkeyPrefix,
+      }),
       challengeId: e.challengeId,
       roomId: e.roomId,
       roomCode: e.roomCode,
@@ -667,7 +656,7 @@ export function buildRecentAttemptsSnapshot(hours = 24) {
     key: string;
     pubkeyPrefix?: string;
     sessionID?: string;
-    identity?: ReturnType<typeof buildIdentity>;
+    identity?: PlayerIdentity;
     lastTs: string;
     lastEvent: string;
     lastOutcome: string;
@@ -691,7 +680,10 @@ export function buildRecentAttemptsSnapshot(hours = 24) {
         key,
         pubkeyPrefix: e.pubkeyPrefix,
         sessionID: liveSessionID ?? e.sessionID,
-        identity: liveSessionID ? buildIdentity(liveSessionID) : undefined,
+        identity: resolvePlayerIdentity({
+          sessionID: liveSessionID ?? e.sessionID,
+          pubkeyPrefix: e.pubkeyPrefix,
+        }),
         lastTs: e.ts,
         lastEvent: e.event,
         lastOutcome: e.outcome,
@@ -724,7 +716,10 @@ export function buildRecentAttemptsSnapshot(hours = 24) {
 
     if (e.sessionID && sessions.has(e.sessionID)) {
       bucket.sessionID = e.sessionID;
-      bucket.identity = buildIdentity(e.sessionID);
+      bucket.identity = resolvePlayerIdentity({
+        sessionID: e.sessionID,
+        pubkeyPrefix: e.pubkeyPrefix ?? bucket.pubkeyPrefix,
+      });
     }
   }
 
@@ -735,7 +730,10 @@ export function buildRecentAttemptsSnapshot(hours = 24) {
         key: b.key,
         pubkeyPrefix: b.pubkeyPrefix,
         sessionID: b.sessionID,
-        identity: b.identity,
+        identity: resolvePlayerIdentity({
+          sessionID: b.sessionID,
+          pubkeyPrefix: b.pubkeyPrefix,
+        }),
         lastTs: b.lastTs,
         lastEvent: b.lastEvent,
         lastOutcome: b.lastOutcome,
@@ -985,13 +983,20 @@ export function buildUserJourneySnapshot(params: {
       meta: e.meta,
     }));
 
-  let identity: ReturnType<typeof buildIdentity> | undefined;
-  for (const sid of sessionIDs) {
-    const live = getAllIDtoSocket().has(sid);
-    if (live) {
-      identity = buildIdentity(sid);
-      break;
+  let identity: PlayerIdentity | undefined;
+  if (sessionIDs.length > 0) {
+    for (const sid of sessionIDs) {
+      const resolved = resolvePlayerIdentity({ sessionID: sid });
+      if (resolved.kind === 'nostr') {
+        identity = resolved;
+        break;
+      }
     }
+    if (!identity) {
+      identity = resolvePlayerIdentity({ sessionID: sessionIDs[0] });
+    }
+  } else if (pubkeyPrefix) {
+    identity = resolvePlayerIdentity({ pubkeyPrefix });
   }
 
   return {

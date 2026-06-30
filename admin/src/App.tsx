@@ -325,13 +325,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-surface-border bg-black/70 backdrop-blur-md">
+      <header className="sticky top-0 z-10 border-b border-surface-border bg-surface">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3">
           <div>
             <ChainDuelHeader subtitle="Telemetry" />
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <label className="flex items-center gap-2 text-white/45">
+            <label className="flex items-center gap-2 text-zinc-400">
               <input
                 type="checkbox"
                 checked={autoRefresh}
@@ -340,9 +340,9 @@ export default function App() {
               />
               Live refresh
             </label>
-            <span className="flex items-center gap-1.5 text-white/40">
+            <span className="flex items-center gap-1.5 text-zinc-500">
               <span
-                className={`h-2 w-2 rounded-full ${autoRefresh ? 'bg-emerald-400' : 'bg-white/30'}`}
+                className={`h-2 w-2 rounded-full ${autoRefresh ? 'bg-emerald-400' : 'bg-zinc-600'}`}
               />
               {activePoll.data?.fetchedAt
                 ? `Updated ${new Date(activePoll.data.fetchedAt).toLocaleTimeString()}`
@@ -351,29 +351,29 @@ export default function App() {
             <button
               type="button"
               onClick={() => void activePoll.refresh()}
-              className="rounded border border-surface-border px-2 py-1 text-white/80 hover:border-accent/50"
+              className="rounded border border-surface-border px-2 py-1 text-zinc-300 hover:border-accent hover:text-accent"
             >
               Refresh
             </button>
             <button
               type="button"
               onClick={() => void handleLogout()}
-              className="rounded border border-surface-border px-2 py-1 text-white/50 hover:text-white/90"
+              className="rounded border border-surface-border px-2 py-1 text-zinc-500 hover:text-zinc-300"
             >
               Log out
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-2">
+        <nav className="mx-auto flex max-w-7xl gap-6 overflow-x-auto px-4">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTabWithUrl(t.id)}
-              className={`whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+              className={`whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition ${
                 tab === t.id
-                  ? 'nav-pill-active border-accent/40'
-                  : 'border-transparent text-white/50 hover:border-surface-border hover:text-white/80'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
               }`}
             >
               {t.label}

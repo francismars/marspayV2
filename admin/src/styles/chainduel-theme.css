@@ -11,45 +11,39 @@
 :root {
   --cd-font-display: 'BureauGrotesque', sans-serif;
   --cd-font-body: 'Inter', sans-serif;
-  --cd-cyan: #00b7ff;
+  --cd-accent: #00b7ff;
   --cd-purple: #9b59b6;
-  --cd-panel-bg: rgba(0, 0, 0, 0.55);
-  --cd-panel-border: rgba(255, 255, 255, 0.22);
-  --cd-text-muted: rgba(255, 255, 255, 0.5);
+  --cd-bg: #0c0c0e;
+  --cd-raised: #16161a;
+  --cd-border: #2a2a32;
+  --cd-text: #f4f4f5;
+  --cd-text-muted: #a1a1aa;
   --cd-chart-grid: rgba(255, 255, 255, 0.08);
-  --cd-chart-tooltip-bg: rgba(0, 0, 0, 0.85);
+  --cd-chart-tooltip-bg: #16161a;
 }
 
 body {
   font-family: var(--cd-font-body);
-  color: #fff;
-  background-color: #000;
-  background-image:
-    linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.72)),
-    url('/dashboard/images/chainduel_bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
+  color: var(--cd-text);
+  background-color: var(--cd-bg);
 }
 
 .font-display {
   font-family: var(--cd-font-display);
 }
 
-.glass-panel {
-  background: var(--cd-panel-bg);
-  border: 1px solid var(--cd-panel-border);
-  backdrop-filter: blur(8px);
+.panel {
+  background: var(--cd-raised);
+  border: 1px solid var(--cd-border);
 }
 
-.nav-pill-active {
-  color: var(--cd-cyan);
-  border-color: rgba(0, 183, 255, 0.45);
-  box-shadow: 0 0 12px rgba(0, 183, 255, 0.25);
+.tab-active {
+  color: var(--cd-accent);
+  border-bottom: 2px solid var(--cd-accent);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: #3f3f46;
   border-radius: 4px;
 }
 

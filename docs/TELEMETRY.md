@@ -182,11 +182,13 @@ The admin dashboard (`/dashboard`, cookie auth) may show richer identity than th
 
 | Surface | What is shown |
 |---------|----------------|
-| **Live tab** | Avatar, display name, nip05, lud16, full npub/hex pubkey — only when the player has an active app Nostr session (`getAppNostrSession`) or ONLINE seat profile |
-| **Challenge claims** | Full pubkey + npub + njump.me links (from `claims.jsonl`, admin API only) |
-| **Activity log** | `pubkeyPrefix` (12 hex) only — same as `events.jsonl` |
-| **Recent attempts (24h)** | Aggregated by `pubkeyPrefix` or `sessionID`; full profile joined only if session still connected |
-| **Anonymous / Lightning-only** | Labelled `anon` + session ID; no cross-session tracking |
+| **Player columns** (Live, Recent, Activity, Challenge/Money claims, ONLINE seats) | Avatar + display name linked to [njump.me](https://njump.me) when `npub` is known; nip05 handle as name fallback; **no npub/hex in table cells** |
+| **Identity resolution** | `resolvePlayerIdentity` — live app session → profile cache by pubkey → prefix scan (`nostrProfileCache` + active `appNostrBySession`) → ONLINE seat name/picture → generic “Nostr player” / “Anonymous” |
+| **Profile cache** | In-memory kind-0 metadata from Nostr sign-in, ONLINE seat pay, and relay reads (`nostrProfileCache.ts`). **Lost on server restart** until players re-sign-in or profiles are re-fetched |
+| **Challenge claims** | Full pubkey resolved to identity via cache; admin API only |
+| **Activity log** | `pubkeyPrefix` in raw event data; UI shows resolved `player` identity; CSV export includes `playerName` not npub |
+| **Session drawer / Debug** | Technical IDs (sessionID, npub) in collapsible block only |
+| **Anonymous / Lightning-only** | Labelled “Anonymous”; session ID stays in its own column |
 
 ### Tier B identity (no persistent visitorId)
 

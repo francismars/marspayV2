@@ -9,9 +9,9 @@ export default {
       },
       colors: {
         surface: {
-          DEFAULT: '#0a0a0a',
-          raised: 'rgba(0, 0, 0, 0.5)',
-          border: 'rgba(255, 255, 255, 0.22)',
+          DEFAULT: '#0c0c0e',
+          raised: '#16161a',
+          border: '#2a2a32',
         },
         accent: {
           DEFAULT: '#00b7ff',

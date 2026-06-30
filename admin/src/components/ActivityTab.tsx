@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ActivityFilters, ActivityData } from '../lib/api';
+import type { ActivityFilters, ActivityData, PlayerIdentity } from '../lib/api';
 import { exportActivity } from '../lib/api';
 import { formatTs } from '../lib/hooks';
 import { DataTable, Section } from './ui';
+import { PlayerIdentityCell } from './PlayerIdentityCell';
 
 const EVENT_FAMILIES = [
   { value: '', label: 'All events' },
@@ -179,7 +180,17 @@ export function ActivityTab({
             },
             { key: 'reason', label: 'Reason' },
             { key: 'sessionID', label: 'Session' },
-            { key: 'pubkeyPrefix', label: 'Pubkey' },
+            {
+              key: 'player',
+              label: 'Player',
+              sortable: false,
+              render: (r) =>
+                r.player ? (
+                  <PlayerIdentityCell identity={r.player as PlayerIdentity} />
+                ) : (
+                  '—'
+                ),
+            },
             { key: 'roomCode', label: 'Room' },
             { key: 'challengeId', label: 'Challenge' },
             { key: 'source', label: 'Source' },

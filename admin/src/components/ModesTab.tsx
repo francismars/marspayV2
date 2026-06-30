@@ -12,6 +12,7 @@ import { P2pTab } from './P2pTab';
 import { QuickMatchTab } from './QuickMatchTab';
 import { StepConversionFunnel } from './StepConversionFunnel';
 import { DataTable, Section } from './ui';
+import { SubNav } from './SubNav';
 
 export type ModeId = 'quickmatch' | 'challenge' | 'p2p' | 'online' | 'nostr';
 
@@ -48,20 +49,15 @@ export function ModesTab({
 }) {
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap gap-2">
-        {(Object.keys(MODE_LABELS) as ModeId[]).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => onModeChange(m)}
-            className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
-              mode === m ? 'nav-pill-active border-accent/40' : 'border-surface-border text-white/50'
-            }`}
-          >
-            {MODE_LABELS[m]}
-          </button>
-        ))}
-      </div>
+      <SubNav
+        items={(Object.keys(MODE_LABELS) as ModeId[]).map((m) => ({
+          id: m,
+          label: MODE_LABELS[m],
+        }))}
+        active={mode}
+        onChange={onModeChange}
+        breadcrumb="Modes"
+      />
 
       {funnel ? (
         <>
@@ -76,7 +72,7 @@ export function ModesTab({
           />
           {funnel.derived?.paymentAbandoned ? (
             <Section title="Payment abandon (derived)">
-              <p className="text-sm text-white/70">
+              <p className="text-sm text-zinc-400">
                 {funnel.derived.paymentAbandoned.abandoned} /{' '}
                 {funnel.derived.paymentAbandoned.requested} seat requests without pay within 15m (
                 {funnel.derived.paymentAbandoned.abandonRate}%)
@@ -108,7 +104,7 @@ export function ModesTab({
         <OnlineTab data={online} replays={replays} onSeatClick={onSeatClick} />
       ) : null}
       {mode === 'nostr' ? (
-        <p className="text-sm text-white/50">
+        <p className="text-sm text-zinc-500">
           Nostr sign-in funnel tracks app link → eligibility → run. See rejections above.
         </p>
       ) : null}

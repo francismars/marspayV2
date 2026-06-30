@@ -13,7 +13,7 @@ export function StepConversionFunnel({
   compact?: boolean;
 }) {
   if (steps.length === 0) {
-    return <p className="text-sm text-white/45">No funnel data yet</p>;
+    return <p className="text-sm text-zinc-500">No funnel data yet</p>;
   }
 
   if (compact) {
@@ -27,11 +27,11 @@ export function StepConversionFunnel({
             className={`rounded border px-2 py-1 text-left text-xs ${
               i === biggestDropIndex && biggestDropIndex > 0
                 ? 'border-amber-500/60 bg-amber-950/30 text-amber-200'
-                : 'border-surface-border bg-black/30 text-white/70 hover:border-accent/40'
+                : 'border-surface-border bg-surface-raised text-zinc-300 hover:border-accent/50'
             } ${onStepClick ? 'cursor-pointer' : ''}`}
           >
             <div className="font-medium">{step.label}</div>
-            <div className="text-white/50">
+            <div className="text-zinc-500">
               {step.count}
               {i > 0 ? ` · ${step.pctOfPrevious}% prev` : ''}
             </div>
