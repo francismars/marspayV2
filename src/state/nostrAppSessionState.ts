@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto';
+import { setCachedNostrProfile } from '../calls/nostr/nostrProfileCache';
 
 /** App-wide Nostr identity bound to socket session (longer than per-room link). */
 const APP_NOSTR_TTL_MS = 24 * 60 * 60 * 1000;
@@ -73,6 +74,7 @@ export function registerAppNostrSession(
     signerMode,
     profile: { ...profile, pubkey: pk },
   });
+  setCachedNostrProfile({ ...profile, pubkey: pk });
   clearPendingAppNostrChallenge(sessionID);
   return { expiresAt };
 }

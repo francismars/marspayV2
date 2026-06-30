@@ -10,6 +10,7 @@ import {
   type AppNostrSessionRecord,
 } from '../state/nostrAppSessionState';
 import { pubkeyPrefix as toPubkeyPrefix } from './trackEvent';
+import { getFullPubkeyForPrefix } from './pubkeyPrefixLookup';
 
 export type PlayerIdentity = {
   kind: 'nostr' | 'anon';
@@ -85,6 +86,18 @@ export function resolvePlayerIdentity(input: {
     if (cached) return nostrFromProfile(cached);
     const app = findAppNostrSessionByPubkeyPrefix(prefix);
     if (app) return nostrFromApp(app);
+    const fullPk = getFullPubkeyForPrefix(prefix);
+    if (fullPk) {
+      const cachedFull = getCachedNostrProfile(fullPk);
+      if (cachedFull) return nostrFromProfile(cachedFull);
+      return {
+        kind: 'nostr',
+        pubkey: fullPk,
+        npub: nip19.npubEncode(fullPk),
+        name: 'Nostr player',
+        pubkeyPrefix: toPubkeyPrefix(fullPk),
+      };
+    }
   }
 
   if (input.name || input.picture) {

@@ -522,6 +522,15 @@ export const fetchJourney = (params: { sessionID?: string; pubkey?: string }) =>
   return apiFetch<JourneyData>(`/journey?${q.toString()}`);
 };
 
+export async function resolvePlayerIdentities(
+  items: Array<{ pubkey?: string; pubkeyPrefix?: string }>
+): Promise<{ identities: PlayerIdentity[] }> {
+  return apiFetch('/players/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ items: items.slice(0, 20) }),
+  });
+}
+
 /** @deprecated Use fetchLive */
 export const fetchSessions = fetchLive;
 

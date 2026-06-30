@@ -36,3 +36,10 @@ export function initials(identity: PlayerIdentity): string {
 export function technicalId(identity: PlayerIdentity): string | undefined {
   return identity.npub ?? identity.pubkeyPrefix ?? identity.pubkey;
 }
+
+export function needsProfileHydration(identity: PlayerIdentity): boolean {
+  if (identity.kind !== 'nostr') return false;
+  if (identity.picture?.startsWith('http')) return false;
+  if (displayName(identity) !== 'Nostr player') return false;
+  return !!(identity.pubkey || identity.pubkeyPrefix);
+}

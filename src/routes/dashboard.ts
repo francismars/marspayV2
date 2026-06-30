@@ -41,6 +41,9 @@ import {
   type AnalyticsWindow,
   type FunnelMode,
 } from '../telemetry/dashboardAnalytics';
+import { fetchNostrAppProfile } from '../calls/nostr/fetchNostrAppProfile';
+import { resolvePlayerIdentity } from '../telemetry/playerIdentity';
+import { rememberPubkeyPrefix } from '../telemetry/pubkeyPrefixLookup';
 import {
   handleDashboardLogin,
   handleDashboardLogout,
@@ -225,6 +228,56 @@ router.get('/api/p2p', requireDashboardAuth, (_req, res) => {
 
 router.get('/api/replays', requireDashboardAuth, (_req, res) => {
   res.json(buildReplaySnapshot());
+});
+
+const resolveRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+router.post('/api/players/resolve', requireDashboardAuth, async (req, res) => {
+  const rlKey = req.ip ?? 'dashboard';
+  const now = Date.now();
+  let bucket = resolveRateBuckets.get(rlKey);
+  if (!bucket || now >= bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + 60_000 };
+    resolveRateBuckets.set(rlKey, bucket);
+  }
+  if (bucket.count >= 30) {
+    res.status(429).json({ error: 'rate_limited' });
+    return;
+  }
+  bucket.count++;
+
+  const items = req.body?.items;
+  if (!Array.isArray(items) || items.length === 0 || items.length > 20) {
+    res.status(400).json({ error: 'invalid_items' });
+    return;
+  }
+
+  const identities = [];
+  for (const item of items) {
+    const pubkey =
+      typeof item?.pubkey === 'string' ? item.pubkey.trim().toLowerCase() : undefined;
+    const pubkeyPrefix =
+      typeof item?.pubkeyPrefix === 'string' ? item.pubkeyPrefix.trim().toLowerCase() : undefined;
+    const fullPk =
+      pubkey && /^[0-9a-f]{64}$/.test(pubkey) ? pubkey : undefined;
+    if (fullPk) {
+      rememberPubkeyPrefix(fullPk);
+      try {
+        await fetchNostrAppProfile(fullPk);
+      } catch {
+        // keep cached / fallback identity
+      }
+      identities.push(resolvePlayerIdentity({ pubkey: fullPk, pubkeyPrefix }));
+      continue;
+    }
+    if (pubkeyPrefix) {
+      identities.push(resolvePlayerIdentity({ pubkeyPrefix }));
+      continue;
+    }
+    identities.push({ kind: 'anon' as const });
+  }
+
+  res.json({ identities });
 });
 
 router.get('/api/journey', requireDashboardAuth, (req, res) => {

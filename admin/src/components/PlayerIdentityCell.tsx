@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import type { PlayerIdentity } from '../lib/api';
+import { hydrateIdentity } from '../lib/identityHydration';
 import {
   displayName,
   initials,
@@ -16,22 +18,35 @@ export function PlayerIdentityCell({
   size?: 'sm' | 'md';
   showTechnicalId?: boolean;
 }) {
+  const [shown, setShown] = useState(identity);
+
+  useEffect(() => {
+    setShown(identity);
+    let cancelled = false;
+    void hydrateIdentity(identity).then((resolved) => {
+      if (!cancelled) setShown(resolved);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [identity]);
+
   const avatarSize = size === 'sm' ? 'h-6 w-6 text-[10px]' : 'h-8 w-8 text-xs';
   const nameClass = size === 'sm' ? 'text-xs' : 'text-sm';
 
-  if (identity.kind === 'anon') {
+  if (shown.kind === 'anon') {
     return <span className={`text-zinc-400 ${nameClass}`}>Anonymous</span>;
   }
 
-  const name = displayName(identity);
-  const url = profileUrl(identity);
-  const nipUrl = nip05Url(identity);
-  const tech = technicalId(identity);
+  const name = displayName(shown);
+  const url = profileUrl(shown);
+  const nipUrl = nip05Url(shown);
+  const tech = technicalId(shown);
 
   const avatar =
-    identity.picture && identity.picture.startsWith('http') ? (
+    shown.picture && shown.picture.startsWith('http') ? (
       <img
-        src={identity.picture}
+        src={shown.picture}
         alt=""
         className={`${avatarSize} shrink-0 rounded-full bg-zinc-800 object-cover`}
       />
@@ -39,7 +54,7 @@ export function PlayerIdentityCell({
       <div
         className={`${avatarSize} flex shrink-0 items-center justify-center rounded-full bg-zinc-800 font-medium text-zinc-400`}
       >
-        {initials(identity)}
+        {initials(shown)}
       </div>
     );
 

@@ -3,14 +3,19 @@
  * In-memory only; not written to events.jsonl as a separate store.
  */
 
+import { rememberPubkeyPrefix } from './pubkeyPrefixLookup';
+
 const pubkeyToSessions = new Map<string, Set<string>>();
 const sessionToPubkey = new Map<string, string>();
 
 const MAX_SESSIONS_PER_PUBKEY = 50;
 
 export function linkSessionToPubkey(sessionID: string, pubkey: string): void {
-  const prefix = pubkey.trim().toLowerCase().slice(0, 12);
+  const pk = pubkey.trim().toLowerCase();
+  const prefix = pk.slice(0, 12);
   if (!/^[0-9a-f]{12}$/.test(prefix)) return;
+
+  rememberPubkeyPrefix(pk);
 
   const prev = sessionToPubkey.get(sessionID);
   if (prev === prefix) return;
