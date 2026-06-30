@@ -149,16 +149,25 @@ export default function App() {
     [activityFilters, debugSection, mode, selectedSession]
   );
 
-  const home = usePolling(fetchHome, authed === true && tab === 'home' && autoRefresh, 15000);
-  const live = usePolling(fetchLive, authed === true && tab === 'players' && autoRefresh, 15000);
+  const poll = autoRefresh;
+  const onHome = authed === true && tab === 'home';
+  const onPlayers = authed === true && tab === 'players';
+  const onModes = authed === true && tab === 'modes';
+  const onMoney = authed === true && tab === 'money';
+  const onDebug = authed === true && tab === 'debug';
+
+  const home = usePolling(fetchHome, onHome, onHome && poll, 20000);
+  const live = usePolling(fetchLive, onPlayers, onPlayers && poll, 20000);
   const liveRecent = usePolling(
     () => fetchLiveRecent(24),
-    authed === true && tab === 'players' && autoRefresh,
+    onPlayers,
+    onPlayers && poll,
     30000
   );
   const cohorts = usePolling(
     () => fetchCohorts('7d'),
-    authed === true && tab === 'players' && autoRefresh,
+    onPlayers,
+    onPlayers && poll,
     60000
   );
   const modeFunnelFetcher = useCallback(
@@ -167,37 +176,48 @@ export default function App() {
   );
   const modeFunnel = usePolling(
     modeFunnelFetcher,
-    authed === true && tab === 'modes' && autoRefresh,
-    15000
+    onModes,
+    onModes && poll,
+    20000
   );
   const quickmatch = usePolling(
     fetchQuickMatch,
-    authed === true && tab === 'modes' && mode === 'quickmatch' && autoRefresh,
-    15000
+    onModes && mode === 'quickmatch',
+    onModes && mode === 'quickmatch' && poll,
+    20000
   );
   const challenges = usePolling(
     fetchChallenges,
-    authed === true && (tab === 'modes' || tab === 'money') && autoRefresh,
-    15000
+    (onModes && mode === 'challenge') || onMoney,
+    ((onModes && mode === 'challenge') || onMoney) && poll,
+    20000
   );
   const p2p = usePolling(
     fetchP2p,
-    authed === true && tab === 'modes' && mode === 'p2p' && autoRefresh,
-    15000
+    onModes && mode === 'p2p',
+    onModes && mode === 'p2p' && poll,
+    20000
   );
-  const online = usePolling(fetchOnline, authed === true && tab === 'modes' && mode === 'online' && autoRefresh, 15000);
+  const online = usePolling(
+    fetchOnline,
+    onModes && mode === 'online',
+    onModes && mode === 'online' && poll,
+    20000
+  );
   const replays = usePolling(
     fetchReplays,
-    authed === true && tab === 'modes' && mode === 'online' && autoRefresh,
+    onModes && mode === 'online',
+    onModes && mode === 'online' && poll,
     30000
   );
-  const money = usePolling(fetchMoney, authed === true && tab === 'money' && autoRefresh, 15000);
+  const money = usePolling(fetchMoney, onMoney, onMoney && poll, 20000);
 
   const funnelsFetcher = useCallback(() => fetchFunnels(funnelWindow), [funnelWindow]);
   const funnels = usePolling(
     funnelsFetcher,
-    authed === true && tab === 'debug' && debugSection === 'funnels' && autoRefresh,
-    15000
+    onDebug && debugSection === 'funnels',
+    onDebug && debugSection === 'funnels' && poll,
+    20000
   );
 
   const activityFetcher = useCallback(
@@ -206,8 +226,9 @@ export default function App() {
   );
   const activity = usePolling(
     activityFetcher,
-    authed === true && tab === 'debug' && debugSection === 'activity' && autoRefresh,
-    10000
+    onDebug && debugSection === 'activity',
+    onDebug && debugSection === 'activity' && poll,
+    15000
   );
 
   useEffect(() => {

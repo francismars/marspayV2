@@ -2,6 +2,16 @@ import { displayName } from './playerDisplay';
 
 const API_BASE = '/dashboard/api';
 
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
@@ -10,7 +20,13 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    const message =
+      res.status === 429
+        ? 'Too many requests — try again in a minute or disable live refresh.'
+        : text.startsWith('<')
+          ? `HTTP ${res.status}`
+          : text || `HTTP ${res.status}`;
+    throw new ApiError(message, res.status);
   }
   return res.json() as Promise<T>;
 }

@@ -1,37 +1,66 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ApiError } from './api';
 
+const RATE_LIMIT_BACKOFF_MS = 60_000;
+
+function formatFetchError(e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  if (e instanceof Error) return e.message;
+  return 'Failed to load';
+}
+
+/**
+ * Fetch when `active` is true; poll on an interval when `active && poll`.
+ * Skips the request burst from mounting inactive tabs.
+ */
 export function usePolling<T>(
   fetcher: () => Promise<T>,
-  enabled: boolean,
+  active: boolean,
+  poll: boolean,
   intervalMs = 15000
 ) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  const backoffUntilRef = useRef(0);
+  const loadedRef = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (!active) return;
+    if (Date.now() < backoffUntilRef.current) return;
+
+    if (!loadedRef.current) setLoading(true);
     try {
       setError(null);
       const result = await fetcherRef.current();
       setData(result);
+      loadedRef.current = true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      if (e instanceof ApiError && e.status === 429) {
+        backoffUntilRef.current = Date.now() + RATE_LIMIT_BACKOFF_MS;
+        setError(
+          'Too many requests — live refresh paused for 1 minute. Disable live refresh or wait.'
+        );
+      } else {
+        setError(formatFetchError(e));
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [active]);
 
   useEffect(() => {
+    if (!active) return;
     void refresh();
-  }, [refresh]);
+  }, [active, refresh]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!active || !poll) return;
     const id = setInterval(() => void refresh(), intervalMs);
     return () => clearInterval(id);
-  }, [enabled, intervalMs, refresh]);
+  }, [active, poll, intervalMs, refresh]);
 
   return { data, error, loading, refresh };
 }
