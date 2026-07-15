@@ -26,6 +26,7 @@ import {
 } from '../calls/nostr/lnurlZapShared';
 import { ZAP_RECEIPT_RELAYS } from '../consts/nostrRelays';
 import { setNDKInstance } from '../calls/NDK/setNDKInstance';
+import { backfillZapReceiptsForKind1 } from '../calls/NDK/subscribeEvent';
 import createLNURLW from '../calls/LNBits/createLNURLW';
 import createLNURLP from '../calls/LNBits/createLNURLP';
 import getLNURLCallback from '../calls/LNAddress/getLNURLCallback';
@@ -80,6 +81,7 @@ import {
   peekPendingNostrChallenge,
   clearPendingNostrChallenge,
   registerNostrLink,
+  registerPendingSeatPayment,
   removeNostrLinkRegistrationForPubkey,
   leaveRoom,
   listOnlineHistoryMerged,
@@ -396,6 +398,18 @@ export function joinOnlineRoomHandler(socket: Socket, payload: { roomId: string 
   );
   if (matchStarted) {
     publishOnlineMatchStarted(room.roomId, sessionID);
+  }
+  if (room.phase === 'lobby') {
+    const kind1Ids = new Set<string>();
+    if (room.kind1EventId) {
+      kind1Ids.add(room.kind1EventId);
+    }
+    if (room.postGame.rematchEventId) {
+      kind1Ids.add(room.postGame.rematchEventId);
+    }
+    for (const kind1Id of kind1Ids) {
+      void backfillZapReceiptsForKind1(kind1Id);
+    }
   }
   const roomState = serializeRoom(room);
   io.to(room.roomId).emit('onlineRoomUpdated', roomState);
@@ -1411,6 +1425,13 @@ export function confirmOnlineSeatZapPayHandler(
         buyinSats * 1000
       );
       forgetOnlineSeatZapContext(sessionID, roomId);
+      registerPendingSeatPayment(
+        roomId,
+        sessionID,
+        socket.id,
+        linkedPk,
+        kind1EventId
+      );
       const lightningUri = pr.startsWith('lightning:') ? pr : `lightning:${pr}`;
       socket.emit('resOnlineSeatZapPayInvoice', {
         roomId,

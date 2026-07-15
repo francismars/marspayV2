@@ -9,6 +9,8 @@ import {
   setGameInfoByID,
 } from '../../state/gameState';
 import { BUYINMIN, ONLINE_BUYIN_MIN } from '../../consts/values';
+import { ZAP_RECEIPT_RELAYS } from '../../consts/nostrRelays';
+import { fetchZapReceiptsForKind1 } from '../nostr/fetchZapReceiptsForKind1';
 import { io } from '../../server';
 import {
   GameInfo,
@@ -20,6 +22,7 @@ import {
 import { ndkInstance } from '../../calls/NDK/setNDKInstance';
 import {
   consumeNostrLinkForZap,
+  consumePendingSeatPayment,
   consumePin,
   firstNonEmptyLabel,
   formatAnonSeatLabel,
@@ -41,14 +44,43 @@ export async function subscribeEvent(eventType: number, eventID: string) {
     console.log('NDK not initialized');
     return;
   }
-  const subscription = ndkInstance.subscribe({
-    kinds: [eventType],
-    '#e': [eventID],
+  const subscription = ndkInstance.subscribe(
+    {
+      kinds: [eventType],
+      '#e': [eventID],
+    },
+    { relayUrls: [...ZAP_RECEIPT_RELAYS] }
+  );
+  subscription.on('event', (event: NDKEvent) => {
+    void listenToSubscriptions(event);
   });
-  subscription.on('event', async (event: NDKEvent) => {
-    listenToSubscriptions(event);
-  });
+  void backfillZapReceiptsForKind1(eventID);
   return subscription;
+}
+
+/** Fetch cached kind-9735 receipts from relays and process any not yet seen. */
+export async function backfillZapReceiptsForKind1(kind1EventId: string) {
+  if (!ndkInstance) {
+    return;
+  }
+  try {
+    const events = await fetchZapReceiptsForKind1(kind1EventId);
+    if (events.length > 0) {
+      console.log(
+        `${dateNow()} [ZAP_BACKFILL] kind1=${kind1EventId.slice(0, 8)}? found ${events.length} receipt(s) on relays`
+      );
+    }
+    for (const raw of events) {
+      const ndkEvent = new NDKEvent(ndkInstance, raw);
+      await listenToSubscriptions(ndkEvent);
+    }
+  } catch (error) {
+    console.log(
+      `${dateNow()} [ZAP_BACKFILL] kind1=${kind1EventId.slice(0, 8)}? failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
 }
 
 async function listenToSubscriptions(event: NDKEvent) {
@@ -263,49 +295,77 @@ async function listenToSubscriptions(event: NDKEvent) {
       return;
     }
     if (payerPubKey) {
+      type OnlinePayRecord = {
+        sessionID: string;
+        socketID: string;
+        payMethod: 'lightning' | 'nostr_web';
+        seatMetaMethod: 'nostr_link' | 'nostr_pending_pay';
+      };
+      let payRecord: OnlinePayRecord | undefined;
       const nostrConsumed = consumeNostrLinkForZap(room.roomId, payerPubKey);
-      if (!nostrConsumed.ok) {
-        console.log(
-          `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=${nostrConsumed.reason}`
+      if (nostrConsumed.ok) {
+        payRecord = {
+          sessionID: nostrConsumed.record.sessionID,
+          socketID: nostrConsumed.record.socketID,
+          payMethod:
+            nostrConsumed.record.linkPayMethod === 'lightning' ? 'lightning' : 'nostr_web',
+          seatMetaMethod: 'nostr_link',
+        };
+      } else {
+        const pendingConsumed = consumePendingSeatPayment(
+          room.roomId,
+          payerPubKey,
+          eventID[1]
         );
-        io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: nostrConsumed.reason });
-        return;
+        if (pendingConsumed.ok) {
+          payRecord = {
+            sessionID: pendingConsumed.record.sessionID,
+            socketID: pendingConsumed.record.socketID,
+            payMethod: 'nostr_web',
+            seatMetaMethod: 'nostr_pending_pay',
+          };
+        } else {
+          console.log(
+            `${dateNow()} [${sessionID}] [ONLINE] zap rejected roomId=${room.roomId} reason=${pendingConsumed.reason}`
+          );
+          io.to(hostSessionRoom).emit('onlinePinInvalid', { reason: pendingConsumed.reason });
+          return;
+        }
       }
       const seatResult = seatPaidPlayer({
         roomId: room.roomId,
-        sessionID: nostrConsumed.record.sessionID,
-        socketID: nostrConsumed.record.socketID,
+        sessionID: payRecord.sessionID,
+        socketID: payRecord.socketID,
         amount: zapAmount,
         name: zapperName,
         picture: avatar,
         pubkey: payerPubKey,
         lnAddress,
-        payMethod:
-          nostrConsumed.record.linkPayMethod === 'lightning' ? 'lightning' : 'nostr_web',
+        payMethod: payRecord.payMethod,
       });
       if (!seatResult.ok) {
         console.log(
           `${dateNow()} [${sessionID}] [ONLINE] seat assignment failed roomId=${room.roomId} reason=${seatResult.reason}`
         );
-        io.to(sessionSocketRoomName(nostrConsumed.record.sessionID)).emit('onlinePinInvalid', {
+        io.to(sessionSocketRoomName(payRecord.sessionID)).emit('onlinePinInvalid', {
           reason: seatResult.reason,
         });
         return;
       }
       console.log(
-        `${dateNow()} [${sessionID}] [ONLINE] seat assigned (nostr link) roomId=${room.roomId} role=${seatResult.role} session=${nostrConsumed.record.sessionID}`
+        `${dateNow()} [${sessionID}] [ONLINE] seat assigned (${payRecord.seatMetaMethod === 'nostr_pending_pay' ? 'pending pay' : 'nostr link'}) roomId=${room.roomId} role=${seatResult.role} session=${payRecord.sessionID}`
       );
       trackOnlineOk('online.seat.paid', {
-        sessionID: nostrConsumed.record.sessionID,
-        pubkeyPrefix: resolveTrackPubkeyPrefix(nostrConsumed.record.sessionID, room.roomId),
+        sessionID: payRecord.sessionID,
+        pubkeyPrefix: resolveTrackPubkeyPrefix(payRecord.sessionID, room.roomId),
         roomId: room.roomId,
         amountSats: zapAmount,
-        meta: { method: 'nostr_link' },
+        meta: { method: payRecord.seatMetaMethod },
       });
       io.to(room.roomId).emit('onlineSeatAssigned', {
         roomId: room.roomId,
         playerRole: seatResult.role,
-        sessionId: nostrConsumed.record.sessionID,
+        sessionId: payRecord.sessionID,
       });
       io.to(room.roomId).emit('onlineRoomUpdated', serializeRoom(seatResult.room));
       io.emit('resListOnlineRooms', {

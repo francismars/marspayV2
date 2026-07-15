@@ -11,7 +11,10 @@ export const NOSTR_RELAYS = [
   'wss://relay.ditto.pub',
 ];
 
-/** Relays listed in kind-9734 `relays` tag — where the LNURL server publishes kind-9735 receipts. */
+/**
+ * Relays listed in kind-9734 `relays` tag — where the LNURL server publishes kind-9735 receipts.
+ * Must stay in sync with kind-9735 subscriptions (`subscribeEvent` relayUrls + backfill queries).
+ */
 export const ZAP_RECEIPT_RELAYS = [
   'wss://relay.primal.net',
   'wss://premium.primal.net',

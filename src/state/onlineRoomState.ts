@@ -50,6 +50,8 @@ import { getAppNostrPubkeyForSession } from './nostrAppSessionState';
 const PIN_TTL_MS = 2 * 60 * 1000;
 /** Home / NIP-07 path: pubkey linked to session before zap (no PIN in comment). */
 const NOSTR_LINK_TTL_MS = 15 * 60 * 1000;
+/** Invoice issued via nostr_web prepare — survives lobby leave/rejoin until seated or TTL. */
+const PENDING_SEAT_PAYMENT_TTL_MS = 2 * 60 * 60 * 1000;
 const NOSTR_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const ROOM_IDLE_TTL_MS = 20 * 60 * 1000;
 const ROOM_CLEANUP_MS = 15 * 1000;
@@ -80,6 +82,17 @@ export type OnlineNostrLinkRecord = {
 };
 
 const nostrLinkByRoomPubkey = new Map<string, OnlineNostrLinkRecord>();
+
+type PendingSeatPaymentRecord = {
+  roomId: string;
+  sessionID: string;
+  socketID: string;
+  pubkey: string;
+  kind1EventId: string;
+  expiresAt: number;
+};
+
+const pendingSeatPaymentByRoomPubkey = new Map<string, PendingSeatPaymentRecord>();
 
 function nostrLinkKey(roomId: string, pubkey: string) {
   return `${roomId}:${pubkey.toLowerCase()}`;
@@ -511,6 +524,7 @@ export function joinRoom(
   room.updatedAt = now;
   roomIdBySession.set(sessionID, roomId);
   refreshNostrLinkSocket(roomId, sessionID, socketID);
+  refreshPendingSeatPaymentSocket(roomId, sessionID, socketID);
   refreshOnlineSeatLightningSocket(sessionID, socketID);
   logOnlineState(`join roomId=${roomId} session=${sessionID} socket=${socketID}`);
   if (room.phase === 'postgame' || room.phase === 'finished') {
@@ -615,6 +629,12 @@ export function deleteRoom(roomId: string) {
     const rec = nostrLinkByRoomPubkey.get(key);
     if (rec?.roomId === roomId) {
       nostrLinkByRoomPubkey.delete(key);
+    }
+  }
+  for (const key of [...pendingSeatPaymentByRoomPubkey.keys()]) {
+    const rec = pendingSeatPaymentByRoomPubkey.get(key);
+    if (rec?.roomId === roomId) {
+      pendingSeatPaymentByRoomPubkey.delete(key);
     }
   }
   for (const sid of [...pendingNostrChallengeBySession.keys()]) {
@@ -899,7 +919,8 @@ export function clearNostrSessionStateOnLeave(
   opts: { releaseSeat: boolean; hasPaidSeat: boolean }
 ) {
   pendingNostrChallengeBySession.delete(sessionID);
-  if (!opts.hasPaidSeat || opts.releaseSeat) {
+  const keepLinkForPendingPay = hasPendingSeatPaymentForSession(sessionID, roomId);
+  if ((!opts.hasPaidSeat || opts.releaseSeat) && !keepLinkForPendingPay) {
     for (const key of [...nostrLinkByRoomPubkey.keys()]) {
       const rec = nostrLinkByRoomPubkey.get(key);
       if (rec && rec.roomId === roomId && rec.sessionID === sessionID) {
@@ -907,6 +928,83 @@ export function clearNostrSessionStateOnLeave(
       }
     }
   }
+}
+
+export function registerPendingSeatPayment(
+  roomId: string,
+  sessionID: string,
+  socketID: string,
+  pubkeyHex: string,
+  kind1EventId: string
+): { ok: true; expiresAt: number } | { ok: false; reason: string } {
+  const room = roomById.get(roomId);
+  if (!room) {
+    return { ok: false, reason: 'room_not_found' };
+  }
+  const pk = pubkeyHex.toLowerCase();
+  const expiresAt = Date.now() + PENDING_SEAT_PAYMENT_TTL_MS;
+  pendingSeatPaymentByRoomPubkey.set(nostrLinkKey(roomId, pk), {
+    roomId,
+    sessionID,
+    socketID,
+    pubkey: pk,
+    kind1EventId,
+    expiresAt,
+  });
+  logOnlineState(
+    `registered pending seat payment roomId=${roomId} session=${sessionID} pubkey=${pk.slice(0, 8)}? kind1=${kind1EventId.slice(0, 8)}?`
+  );
+  return { ok: true, expiresAt };
+}
+
+export function consumePendingSeatPayment(
+  roomId: string,
+  pubkeyHex: string,
+  kind1EventId: string
+):
+  | { ok: true; record: { sessionID: string; socketID: string } }
+  | { ok: false; reason: string } {
+  const pk = pubkeyHex.toLowerCase();
+  const key = nostrLinkKey(roomId, pk);
+  const rec = pendingSeatPaymentByRoomPubkey.get(key);
+  if (!rec || rec.roomId !== roomId) {
+    return { ok: false, reason: 'nostr_link_not_found' };
+  }
+  if (rec.kind1EventId !== kind1EventId) {
+    return { ok: false, reason: 'nostr_link_not_found' };
+  }
+  if (rec.expiresAt <= Date.now()) {
+    pendingSeatPaymentByRoomPubkey.delete(key);
+    return { ok: false, reason: 'nostr_link_expired' };
+  }
+  const sessionID = rec.sessionID;
+  const sid = rec.socketID;
+  pendingSeatPaymentByRoomPubkey.delete(key);
+  logOnlineState(`consumed pending seat payment roomId=${roomId} session=${sessionID}`);
+  return { ok: true, record: { sessionID, socketID: sid } };
+}
+
+export function refreshPendingSeatPaymentSocket(
+  roomId: string,
+  sessionID: string,
+  socketID: string
+) {
+  for (const [key, rec] of pendingSeatPaymentByRoomPubkey.entries()) {
+    if (rec.roomId === roomId && rec.sessionID === sessionID) {
+      rec.socketID = socketID;
+      pendingSeatPaymentByRoomPubkey.set(key, rec);
+    }
+  }
+}
+
+export function hasPendingSeatPaymentForSession(sessionID: string, roomId: string): boolean {
+  const now = Date.now();
+  for (const rec of pendingSeatPaymentByRoomPubkey.values()) {
+    if (rec.roomId === roomId && rec.sessionID === sessionID && rec.expiresAt > now) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function consumePin(pinRaw: string, roomId: string) {
